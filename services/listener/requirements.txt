@@ -1,0 +1,31 @@
+# Telegram Listener Service Dependencies
+# Updated 2025-12-27 for security patches
+
+# Shared dependencies (installed separately in Dockerfile)
+# -r ../../shared/python/requirements.txt
+
+# Telegram client
+# Pin to latest stable to stay current with Telegram API changes
+# Check for updates: pip index versions telethon
+telethon>=1.42.0
+cryptg>=0.4.0  # Speed up encryption
+
+# Translation services
+deepl>=1.21.0                 # DeepL Pro API (free tier: 500K chars/month)
+deep-translator>=1.11.4       # Google Translate fallback (no API key needed)
+langdetect>=1.0.9             # Language detection
+
+# Redis (async client for message queue)
+redis[hiredis]>=5.2.0
+
+# Monitoring
+prometheus-client>=0.21.0
+
+# Logging
+structlog>=24.4.0
+
+# HTTP server for health checks
+aiohttp>=3.11.0  # CVE-2024-52304, CVE-2024-42367 fixed
+
+# Async utilities
+asyncio-throttle>=1.0.2

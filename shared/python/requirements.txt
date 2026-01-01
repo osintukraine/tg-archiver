@@ -1,0 +1,25 @@
+# Shared Python dependencies for tg-archiver
+# These are installed in all Python services
+
+# Core
+python-dotenv>=1.0.0
+
+# Configuration management
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30.0
+alembic>=1.14.0
+# Note: pgvector removed - not needed without AI/semantic search
+
+# Redis
+redis[hiredis]>=5.2.0
+
+# MinIO (S3)
+minio>=7.2.10
+
+# Utilities
+python-dateutil>=2.9.0
+pytz>=2024.2

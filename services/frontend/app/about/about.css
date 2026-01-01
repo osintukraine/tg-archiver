@@ -1,0 +1,9 @@
+/* Override ReactFlow's z-index for hovered nodes */
+.react-flow__node.hover-active {
+  z-index: 9999 !important;
+  isolation: isolate;
+}
+
+.react-flow__node.hover-active > div {
+  z-index: 9999 !important;
+}

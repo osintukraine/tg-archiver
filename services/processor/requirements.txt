@@ -1,0 +1,33 @@
+# Message Processor Service Dependencies (No AI)
+# tg-archiver - Simplified version without LLM/embeddings
+
+# Shared dependencies (installed separately in Dockerfile)
+# -r ../../shared/python/requirements.txt
+
+# Redis Streams consumer (message queue)
+redis[asyncio]>=5.2.0
+
+# Object storage for media archival
+minio>=7.2.10
+
+# Telegram client (for media download)
+telethon>=1.42.0
+
+# Translation
+deepl>=1.21.0
+deep-translator>=1.11.4  # Google Translate fallback (no API key needed)
+
+# Language detection (lightweight, no ML models)
+langdetect>=1.0.9
+
+# YAML parsing for configuration
+PyYAML>=6.0.2
+
+# Monitoring
+prometheus-client>=0.21.0
+
+# Logging
+structlog>=24.4.0
+
+# HTTP server for health checks
+aiohttp>=3.11.0

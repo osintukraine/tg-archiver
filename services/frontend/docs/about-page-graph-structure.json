@@ -1,0 +1,182 @@
+{
+  "meta": {
+    "purpose": "JSON representation of About page graph structure for architectural review",
+    "views": ["pipeline", "infrastructure"],
+    "generated": "2025-11-13",
+    "total_nodes": {
+      "pipeline": 16,
+      "infrastructure": 28
+    },
+    "total_edges": {
+      "pipeline": 21,
+      "infrastructure": 32
+    }
+  },
+  "pipeline_view": {
+    "description": "Data flow from Telegram sources through processing to user interfaces",
+    "nodes": [
+      {"id": "telegram", "position": {"x": 50, "y": 200}, "label": "Telegram Sources", "description": "Monitoring 254 Telegram channels (92 UA + 162 RU)"},
+      {"id": "listener", "position": {"x": 300, "y": 200}, "label": "Listener Service", "description": "Lightweight Telethon-based listener pushing to Redis"},
+      {"id": "redis", "position": {"x": 550, "y": 200}, "label": "Redis Queue", "description": "Redis 7 Streams with consumer groups"},
+      {"id": "processor", "position": {"x": 800, "y": 200}, "label": "Processor Workers", "description": "CPU-intensive enrichment worker pool. Contains spam filter, OSINT scorer, entity extractor, media archiver"},
+      {"id": "spam-filter", "position": {"x": 1050, "y": 50}, "label": "Spam Filter", "description": "Battle-tested spam detection rules"},
+      {"id": "osint-scorer", "position": {"x": 1050, "y": 150}, "label": "OSINT Scorer", "description": "Self-hosted LLM for OSINT value scoring"},
+      {"id": "entity-extractor", "position": {"x": 1050, "y": 250}, "label": "Entity Extractor", "description": "Extract hashtags, mentions, coordinates, military units"},
+      {"id": "media-archiver", "position": {"x": 1050, "y": 350}, "label": "Media Archiver", "description": "Content-addressed storage with deduplication"},
+      {"id": "minio", "position": {"x": 1300, "y": 350}, "label": "MinIO Storage", "description": "Self-hosted object storage"},
+      {"id": "postgresql", "position": {"x": 1300, "y": 200}, "label": "PostgreSQL", "description": "PostgreSQL 16 with pgvector for semantic search"},
+      {"id": "api", "position": {"x": 1550, "y": 200}, "label": "API Service", "description": "REST API with 15+ search filters"},
+      {"id": "frontend", "position": {"x": 1800, "y": 150}, "label": "Frontend", "description": "React 18 frontend with React Query", "audience": "End Users"},
+      {"id": "rss", "position": {"x": 1800, "y": 250}, "label": "RSS Feeds", "description": "Subscribe to any search query", "audience": "RSS Readers"},
+      {"id": "enricher", "position": {"x": 1300, "y": 50}, "label": "Enricher", "description": "AI embeddings and semantic tagging"},
+      {"id": "notifier", "position": {"x": 1550, "y": 350}, "label": "Notifier", "description": "Notification aggregation via ntfy"},
+      {"id": "nocodb", "position": {"x": 1800, "y": 350}, "label": "NocoDB", "description": "Database admin interface", "audience": "Database Admins"},
+      {"id": "ollama", "position": {"x": 900, "y": 50}, "label": "Ollama", "description": "Self-hosted AI models"}
+    ],
+    "edges": [
+      {"source": "telegram", "target": "listener", "animated": true, "description": "Real-time channel monitoring"},
+      {"source": "listener", "target": "redis", "animated": true, "description": "Push to queue"},
+      {"source": "redis", "target": "processor", "animated": true, "description": "Consumer group processing"},
+      {"source": "processor", "target": "spam-filter", "description": "Route through spam filter"},
+      {"source": "processor", "target": "osint-scorer", "description": "OSINT value scoring"},
+      {"source": "processor", "target": "entity-extractor", "description": "Entity extraction"},
+      {"source": "processor", "target": "media-archiver", "description": "Media archiving"},
+      {"source": "processor", "target": "enricher", "description": "AI enrichment"},
+      {"source": "ollama", "target": "osint-scorer", "description": "LLM scoring"},
+      {"source": "media-archiver", "target": "minio", "description": "Store media"},
+      {"source": "spam-filter", "target": "postgresql", "description": "Persist results"},
+      {"source": "osint-scorer", "target": "postgresql", "description": "Persist scores"},
+      {"source": "entity-extractor", "target": "postgresql", "description": "Persist entities"},
+      {"source": "enricher", "target": "postgresql", "description": "Persist embeddings"},
+      {"source": "postgresql", "target": "notifier", "description": "Event notifications"},
+      {"source": "postgresql", "target": "api", "animated": true, "description": "Data access"},
+      {"source": "redis", "target": "api", "description": "Queue monitoring"},
+      {"source": "minio", "target": "api", "description": "Media serving"},
+      {"source": "api", "target": "frontend", "description": "Web UI"},
+      {"source": "api", "target": "rss", "description": "RSS feeds"},
+      {"source": "api", "target": "nocodb", "description": "Admin UI"}
+    ],
+    "issues": [
+      "Sub-components (spam-filter, osint-scorer, entity-extractor, media-archiver) shown as separate nodes but are actually internal to processor",
+      "Confuses mental model - looks like 4 separate services when it's 1 service with 4 stages",
+      "Order is correct left-to-right but sub-component branching makes it unclear that processing is sequential within processor"
+    ]
+  },
+  "infrastructure_view": {
+    "description": "Service dependency graph organized by layer (Infrastructure → Services → UI) + Monitoring/Auth columns",
+    "layers": {
+      "layer_1": {
+        "name": "Infrastructure",
+        "y_position": 550,
+        "services": ["postgresql", "redis", "minio", "ollama"],
+        "description": "Core data and AI infrastructure"
+      },
+      "layer_2": {
+        "name": "Services",
+        "y_position": 350,
+        "services": ["listener", "processor", "enricher", "api", "notifier", "rss-ingestor", "opensanctions", "entity-ingestion"],
+        "description": "Application processing services"
+      },
+      "layer_3": {
+        "name": "User Interfaces",
+        "y_position": 150,
+        "services": ["frontend", "nocodb", "dashy"],
+        "description": "User-facing interfaces"
+      }
+    },
+    "nodes": [
+      {"id": "postgresql", "layer": 1, "x": 400, "y": 550, "label": "PostgreSQL", "service_name": "postgres"},
+      {"id": "redis", "layer": 1, "x": 600, "y": 550, "label": "Redis", "service_name": "redis"},
+      {"id": "minio", "layer": 1, "x": 800, "y": 550, "label": "MinIO", "service_name": "minio"},
+      {"id": "ollama", "layer": 1, "x": 1000, "y": 550, "label": "Ollama", "service_name": "ollama"},
+      {"id": "listener", "layer": 2, "x": 250, "y": 350, "label": "Listener", "service_name": "listener"},
+      {"id": "processor", "layer": 2, "x": 450, "y": 350, "label": "Processor", "service_name": "processor-worker"},
+      {"id": "enricher", "layer": 2, "x": 650, "y": 350, "label": "Enricher", "service_name": "enricher"},
+      {"id": "api", "layer": 2, "x": 850, "y": 350, "label": "API", "service_name": "api"},
+      {"id": "notifier", "layer": 2, "x": 1050, "y": 350, "label": "Notifier", "service_name": "notifier"},
+      {"id": "rss-ingestor", "layer": 2, "x": 1250, "y": 350, "label": "RSS Ingestor", "service_name": "rss-ingestor"},
+      {"id": "opensanctions", "layer": 2, "x": 1450, "y": 350, "label": "OpenSanctions", "service_name": "opensanctions"},
+      {"id": "entity-ingestion", "layer": 2, "x": 1650, "y": 350, "label": "Entity Ingestion", "service_name": "entity-ingestion"},
+      {"id": "frontend", "layer": 3, "x": 400, "y": 150, "label": "Frontend", "service_name": "frontend", "audience": "End Users"},
+      {"id": "nocodb", "layer": 3, "x": 650, "y": 150, "label": "NocoDB", "service_name": "nocodb", "audience": "Database Admins"},
+      {"id": "dashy", "layer": 3, "x": 900, "y": 150, "label": "Dashy", "service_name": "dashy", "audience": "System Admins"},
+      {"id": "prometheus", "column": "monitoring", "x": 1950, "y": 150, "label": "Prometheus", "service_name": "prometheus"},
+      {"id": "grafana", "column": "monitoring", "x": 1950, "y": 250, "label": "Grafana", "service_name": "grafana"},
+      {"id": "alertmanager", "column": "monitoring", "x": 1950, "y": 350, "label": "AlertManager", "service_name": "alertmanager"},
+      {"id": "postgres-exporter", "column": "monitoring", "x": 1950, "y": 450, "label": "PostgreSQL Exporter", "service_name": "postgres-exporter"},
+      {"id": "redis-exporter", "column": "monitoring", "x": 1950, "y": 550, "label": "Redis Exporter", "service_name": "redis-exporter"},
+      {"id": "cadvisor", "column": "monitoring", "x": 1950, "y": 650, "label": "cAdvisor", "service_name": "cadvisor"},
+      {"id": "node-exporter", "column": "monitoring", "x": 1950, "y": 750, "label": "Node Exporter", "service_name": "node-exporter"},
+      {"id": "ory-kratos", "column": "auth", "x": 50, "y": 150, "label": "Ory Kratos", "service_name": "ory-kratos"},
+      {"id": "ory-oathkeeper", "column": "auth", "x": 50, "y": 250, "label": "Ory Oathkeeper", "service_name": "ory-oathkeeper"},
+      {"id": "caddy", "column": "auth", "x": 50, "y": 350, "label": "Caddy", "service_name": "caddy"},
+      {"id": "ntfy", "column": "auth", "x": 50, "y": 450, "label": "ntfy", "service_name": "ntfy"},
+      {"id": "watchtower", "column": "auth", "x": 50, "y": 550, "label": "Watchtower", "service_name": "watchtower"}
+    ],
+    "edges": [
+      {"source": "postgresql", "target": "redis", "description": "Data layer interconnection"},
+      {"source": "listener", "target": "redis", "description": "Queue messages"},
+      {"source": "processor", "target": "postgresql", "description": "Persist enriched data"},
+      {"source": "processor", "target": "redis", "description": "Consume queue"},
+      {"source": "processor", "target": "minio", "description": "Archive media"},
+      {"source": "processor", "target": "ollama", "description": "LLM scoring"},
+      {"source": "enricher", "target": "postgresql", "description": "Store embeddings"},
+      {"source": "enricher", "target": "ollama", "description": "Generate embeddings"},
+      {"source": "notifier", "target": "postgresql", "description": "Read events"},
+      {"source": "notifier", "target": "ntfy", "description": "Send notifications"},
+      {"source": "rss-ingestor", "target": "postgresql", "description": "Store RSS data"},
+      {"source": "opensanctions", "target": "postgresql", "description": "Entity enrichment"},
+      {"source": "entity-ingestion", "target": "postgresql", "description": "Import entities"},
+      {"source": "api", "target": "postgresql", "description": "Query data"},
+      {"source": "api", "target": "redis", "description": "Cache & queue status"},
+      {"source": "api", "target": "minio", "description": "Serve media"},
+      {"source": "frontend", "target": "api", "description": "Web UI calls"},
+      {"source": "nocodb", "target": "postgresql", "description": "Direct DB access"},
+      {"source": "prometheus", "target": "postgresql", "description": "Scrape metrics"},
+      {"source": "prometheus", "target": "redis", "description": "Scrape metrics"},
+      {"source": "prometheus", "target": "api", "description": "Scrape metrics"},
+      {"source": "prometheus", "target": "listener", "description": "Scrape metrics"},
+      {"source": "prometheus", "target": "processor", "description": "Scrape metrics"},
+      {"source": "grafana", "target": "prometheus", "description": "Visualize metrics"},
+      {"source": "alertmanager", "target": "prometheus", "description": "Alert routing"},
+      {"source": "postgres-exporter", "target": "postgresql", "description": "Export DB metrics"},
+      {"source": "redis-exporter", "target": "redis", "description": "Export queue metrics"},
+      {"source": "ory-kratos", "target": "postgresql", "description": "Identity database"},
+      {"source": "ory-oathkeeper", "target": "ory-kratos", "description": "Identity validation"},
+      {"source": "ory-oathkeeper", "target": "api", "description": "Protect API"},
+      {"source": "caddy", "target": "frontend", "description": "Reverse proxy"},
+      {"source": "caddy", "target": "api", "description": "Reverse proxy"}
+    ],
+    "issues": [
+      "Docker Compose has 28 services but graph may not show all (need to verify against system health endpoint)",
+      "Missing services from docker-compose.yml: minio-init, ollama-init, enrichment(?)",
+      "Unclear if service groupings match docker-compose labels/networks",
+      "No visual distinction between 'required' services and optional ones (profiles)",
+      "Layer hierarchy doesn't match actual startup dependencies (e.g., ollama-init depends on ollama + postgres)"
+    ]
+  },
+  "docker_compose_services": {
+    "total": 28,
+    "core_infrastructure": ["postgres", "redis", "minio", "minio-init", "ollama", "ollama-init"],
+    "application_services": ["listener", "processor-worker", "enricher", "opensanctions", "entity-ingestion", "api", "frontend", "nocodb", "enrichment", "notifier", "rss-ingestor"],
+    "monitoring": ["prometheus", "grafana", "alertmanager", "postgres-exporter", "redis-exporter", "cadvisor", "node-exporter"],
+    "infrastructure_support": ["watchtower", "ntfy"],
+    "authentication": ["ory-kratos", "ory-oathkeeper", "caddy"],
+    "dashboard": ["dashy"],
+    "missing_from_graph": [
+      {"service": "minio-init", "reason": "Init container, not persistent service"},
+      {"service": "ollama-init", "reason": "Init container, not persistent service"},
+      {"service": "enrichment", "reason": "Not represented in current graph"}
+    ]
+  },
+  "recommendations_for_architect": [
+    "Should docker-compose services have labels that map to graph node IDs?",
+    "How should init containers (minio-init, ollama-init) be represented?",
+    "Should we consolidate processor sub-components (spam-filter, osint-scorer, etc.) into single composite node?",
+    "How to visually distinguish required vs optional (profile) services?",
+    "Should layer/tier be based on docker-compose 'depends_on' chains?",
+    "How to represent replicated services (processor-worker has replicas: 2)?",
+    "Should we add network grouping (all services in 'backend' network)?",
+    "How to handle service name mismatches (processor-worker in compose vs processor in graph)?"
+  ]
+}

@@ -810,3 +810,202 @@ async def delete_import_job(
     await db.commit()
     logger.info(f"Deleted import job {job_id}")
     return {"message": "Import job deleted", "job_id": job_id}
+
+
+class ValidateResponse(BaseModel):
+    """Response after triggering validation."""
+
+    job_id: str
+    status: str
+    message: str
+    channels_to_validate: int
+
+
+class StartResponse(BaseModel):
+    """Response after starting import processing."""
+
+    job_id: str
+    status: str
+    message: str
+    channels_to_process: int
+
+
+@router.post("/{job_id}/validate", response_model=ValidateResponse)
+async def trigger_validation(
+    job_id: str,
+    admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> ValidateResponse:
+    """
+    Trigger validation of channels in an import job.
+
+    Validation checks:
+    - Channel exists and is accessible
+    - Channel is public (not private invite-only)
+    - Gets channel metadata (title, subscriber count, etc.)
+
+    The validation runs asynchronously in the listener service.
+    Poll GET /{job_id} to check validation progress.
+    """
+    try:
+        job_uuid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job ID format")
+
+    result = await db.execute(select(ImportJob).where(ImportJob.id == job_uuid))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    if job.status not in ("uploading", "ready"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot validate job in '{job.status}' state. Must be 'uploading' or 'ready'.",
+        )
+
+    # Count pending channels
+    count_result = await db.execute(
+        select(func.count(ImportJobChannel.id)).where(
+            and_(
+                ImportJobChannel.import_job_id == job_uuid,
+                ImportJobChannel.status == "pending",
+            )
+        )
+    )
+    pending_count = count_result.scalar() or 0
+
+    if pending_count == 0:
+        raise HTTPException(
+            status_code=400, detail="No pending channels to validate"
+        )
+
+    # Update job status
+    await db.execute(
+        update(ImportJob)
+        .where(ImportJob.id == job_uuid)
+        .values(status="validating")
+    )
+
+    await add_job_log(
+        db,
+        job_uuid,
+        event_type="info",
+        event_code="VALIDATION_STARTED",
+        message=f"Validation triggered for {pending_count} channels",
+    )
+
+    # Publish validation request to Redis stream
+    try:
+        import redis.asyncio as redis
+        from config.settings import settings
+
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        await redis_client.xadd(
+            "import:validate",
+            {"job_id": str(job_uuid), "timestamp": datetime.utcnow().isoformat()},
+        )
+        await redis_client.close()
+        logger.info(f"Published validation request for job {job_id} to Redis")
+    except Exception as e:
+        logger.warning(f"Failed to publish to Redis (listener may poll DB instead): {e}")
+
+    await db.commit()
+
+    return ValidateResponse(
+        job_id=job_id,
+        status="validating",
+        message="Validation started. Poll job status for progress.",
+        channels_to_validate=pending_count,
+    )
+
+
+@router.post("/{job_id}/start", response_model=StartResponse)
+async def start_import(
+    job_id: str,
+    admin: AdminUser,
+    db: AsyncSession = Depends(get_db),
+) -> StartResponse:
+    """
+    Start the import process to join selected channels.
+
+    Prerequisites:
+    - Job must be in 'ready' state (validation complete)
+    - At least one channel must be selected
+
+    The import runs asynchronously with rate limiting (1 channel per 30-60s).
+    Poll GET /{job_id} to check progress.
+    """
+    try:
+        job_uuid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid job ID format")
+
+    result = await db.execute(select(ImportJob).where(ImportJob.id == job_uuid))
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    if job.status != "ready":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot start job in '{job.status}' state. Must be 'ready'.",
+        )
+
+    # Count selected channels with validated status
+    count_result = await db.execute(
+        select(func.count(ImportJobChannel.id)).where(
+            and_(
+                ImportJobChannel.import_job_id == job_uuid,
+                ImportJobChannel.selected == True,
+                ImportJobChannel.status == "validated",
+            )
+        )
+    )
+    selected_count = count_result.scalar() or 0
+
+    if selected_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No validated channels selected. Select channels and ensure validation is complete.",
+        )
+
+    # Update job status
+    await db.execute(
+        update(ImportJob)
+        .where(ImportJob.id == job_uuid)
+        .values(status="processing", started_at=datetime.utcnow())
+    )
+
+    await add_job_log(
+        db,
+        job_uuid,
+        event_type="info",
+        event_code="PROCESSING_STARTED",
+        message=f"Import started for {selected_count} channels",
+    )
+
+    # Publish start request to Redis stream
+    try:
+        import redis.asyncio as redis
+        from config.settings import settings
+
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        await redis_client.xadd(
+            "import:start",
+            {"job_id": str(job_uuid), "timestamp": datetime.utcnow().isoformat()},
+        )
+        await redis_client.close()
+        logger.info(f"Published start request for job {job_id} to Redis")
+    except Exception as e:
+        logger.warning(f"Failed to publish to Redis (listener may poll DB instead): {e}")
+
+    await db.commit()
+
+    return StartResponse(
+        job_id=job_id,
+        status="processing",
+        message=f"Import started. {selected_count} channels queued for joining (rate limited).",
+        channels_to_process=selected_count,
+    )

@@ -140,15 +140,20 @@ User ID: 123456789
 3. Name it exactly: `tg-archiver` (or match your `FOLDER_ARCHIVE_ALL_PATTERN` in `.env`)
 4. Add channels you want to archive to this folder
 
-### Step 4: Start the Platform
+### Step 4: Build and Start the Platform
 
 ```bash
+# Build all container images (first time or after updates)
+docker-compose build
+
 # Start all services
 docker-compose up -d
 
 # Watch logs to verify startup
 docker-compose logs -f
 ```
+
+**Note:** The build step compiles the Python services and Next.js frontend. First build takes 3-5 minutes.
 
 ### Step 5: Access the Interface
 

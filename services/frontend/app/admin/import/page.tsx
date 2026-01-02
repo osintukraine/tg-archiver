@@ -94,6 +94,10 @@ export default function ImportPage() {
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set());
   const [showLogs, setShowLogs] = useState(false);
 
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,8 +119,9 @@ export default function ImportPage() {
 
       // Initialize selection from job data
       const selected = new Set<string>();
-      Object.values(data.channels_by_folder || {}).forEach((channels: ImportChannel[]) => {
-        channels.forEach((ch: ImportChannel) => {
+      const folderData = data.channels_by_folder || {};
+      (Object.values(folderData) as ImportChannel[][]).forEach((channels) => {
+        channels.forEach((ch) => {
           if (ch.selected) selected.add(ch.id);
         });
       });
@@ -160,11 +165,8 @@ export default function ImportPage() {
     return () => clearInterval(interval);
   }, [fetchJobs, fetchJobDetails, fetchLogs, activeJob, showLogs]);
 
-  // Handle file upload
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  // Upload file to server
+  const uploadFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
       setError('Only CSV files are supported');
       return;
@@ -189,8 +191,8 @@ export default function ImportPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(error.detail || 'Upload failed');
+        const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        throw new Error(errorData.detail || 'Upload failed');
       }
 
       const data: UploadResponse = await response.json();
@@ -206,6 +208,48 @@ export default function ImportPage() {
       setUploading(false);
       // Reset file input
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle file input change
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) await uploadFile(file);
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await uploadFile(files[0]);
     }
   };
 
@@ -351,7 +395,26 @@ export default function ImportPage() {
   const canStart = activeJob && activeJob.status === 'ready' && selectedChannels.size > 0;
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6 relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 bg-bg-primary/90 backdrop-blur-sm flex items-center justify-center">
+          <div className="border-4 border-dashed border-blue-500 rounded-2xl p-16 bg-blue-500/10">
+            <div className="text-center">
+              <div className="text-6xl mb-4">📁</div>
+              <h2 className="text-2xl font-bold text-text-primary mb-2">Drop your CSV file here</h2>
+              <p className="text-text-secondary">Release to upload and start importing channels</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
@@ -360,28 +423,51 @@ export default function ImportPage() {
             Import channels from CSV files with validation and rate-limited joining
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => fetchJobs()}
-            className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
-          >
-            Refresh
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 transition-colors"
-          >
-            {uploading ? 'Uploading...' : 'Upload CSV'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+        <button
+          onClick={() => fetchJobs()}
+          className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Drop Zone */}
+      <div
+        onClick={() => fileInputRef.current?.click()}
+        className={`
+          border-2 border-dashed rounded-xl p-8 cursor-pointer transition-all
+          ${uploading
+            ? 'border-blue-500/50 bg-blue-500/5'
+            : 'border-border-subtle hover:border-blue-500 hover:bg-blue-500/5'
+          }
+        `}
+      >
+        <div className="flex flex-col items-center justify-center text-center">
+          {uploading ? (
+            <>
+              <div className="animate-spin text-4xl mb-3">⏳</div>
+              <h3 className="text-lg font-medium text-text-primary">Uploading...</h3>
+              <p className="text-text-tertiary mt-1">Processing your CSV file</p>
+            </>
+          ) : (
+            <>
+              <div className="text-4xl mb-3">📤</div>
+              <h3 className="text-lg font-medium text-text-primary">
+                Drop a CSV file here or click to upload
+              </h3>
+              <p className="text-text-tertiary mt-1">
+                Supports files with Channel, Name, and Folder columns
+              </p>
+            </>
+          )}
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
       </div>
 
       {/* Error Alert */}

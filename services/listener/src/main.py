@@ -1,9 +1,9 @@
 """
 Telegram Listener Service - Entry Point
 
-This service is the critical first component in the OSINT Intelligence Platform's
+This service is the critical first component in the Telegram Archiver's
 message processing pipeline. It serves as the bridge between Telegram and the
-platform's processing infrastructure.
+archiver's processing infrastructure.
 
 Core Responsibilities
 --------------------
@@ -43,7 +43,6 @@ Key Components
 - **BackfillService**: Historical message retrieval for gap filling
 - **MediaArchiver**: S3-compatible media storage with deduplication
 - **RedisQueue**: Message queue interface for downstream processing
-- **NotificationClient**: Cross-service notifications via Redis pub/sub
 
 Initialization Sequence
 -----------------------
@@ -101,8 +100,7 @@ Notes
 -----
 - This service OWNS the Telegram session. Never create standalone TelegramClient
   instances elsewhere in the codebase.
-- Translation was removed from listener (v0.1.0) and moved to processor for
-  80-90% cost savings (only translate messages passing spam filter).
+- Translation is handled by the processor service.
 - Media archival happens in listener to ensure Telegram URLs don't expire before
   processing (URLs expire after ~1 hour).
 
@@ -124,18 +122,23 @@ from telethon import TelegramClient
 
 from config.settings import settings
 from media_archiver import MediaArchiver
-from notifications import NotificationClient
 
 # Structured logging for Loki aggregation
 from observability import setup_logging, get_logger
 
 from .backfill_service import BackfillService
 from .channel_discovery import ChannelDiscovery
+from .import_worker import create_import_worker
 from .metrics import metrics_server, mark_listener_started
 from .redis_queue import redis_queue
 from .telegram_listener import TelegramListener
+
 # Translation service removed - now in processor
 # from .translation import TranslationService
+
+# Import audit logger for platform events
+from audit.audit_logger import AuditLogger
+audit = AuditLogger("listener")
 
 # Initialize structured logging
 setup_logging(service_name="listener")
@@ -289,6 +292,8 @@ async def main() -> NoReturn:
     telegram_client = None
     listener = None
     discovery_task = None
+    import_worker = None
+    import_worker_task = None
 
     try:
         # 1. Start Prometheus metrics server
@@ -299,18 +304,13 @@ async def main() -> NoReturn:
         logger.info("Connecting to Redis queue...")
         await redis_queue.connect()
 
-        # 3. Initialize NotificationClient
-        logger.info("Initializing notification client...")
-        notifier = NotificationClient(service_name="listener", redis_url=settings.REDIS_URL)
+        # Translation handled by processor service
+        logger.info("Translation handled by processor service")
 
-        # Translation service removed from listener
-        # Now handled in processor (after spam filter) for 80-90% cost savings
-        logger.info("Translation disabled in listener (moved to processor)")
-
-        # 4. Initialize Telethon client for ChannelDiscovery
+        # 3. Initialize Telethon client for ChannelDiscovery
         logger.info("Initializing Telegram client for channel discovery...")
         telegram_client = TelegramClient(
-            session=str(settings.TELEGRAM_SESSION_PATH / "discovery"),
+            session=str(settings.TELEGRAM_SESSION_PATH / settings.TELEGRAM_SESSION_NAME),
             api_id=settings.TELEGRAM_API_ID,
             api_hash=settings.TELEGRAM_API_HASH,
             connection_retries=5,
@@ -329,7 +329,7 @@ async def main() -> NoReturn:
 
         logger.info("Telegram client connected successfully")
 
-        # 5. Initialize MinIO client for media archival
+        # 4. Initialize MinIO client for media archival
         logger.info("Initializing MinIO client...")
         minio_client = Minio(
             endpoint=settings.MINIO_ENDPOINT,
@@ -338,11 +338,11 @@ async def main() -> NoReturn:
             secure=settings.MINIO_SECURE,
         )
 
-        # 6. Initialize media archiver
+        # 5. Initialize media archiver
         media_archiver = MediaArchiver(minio_client)
         logger.info("MediaArchiver initialized")
 
-        # 7. Initialize BackfillService (if enabled)
+        # 6. Initialize BackfillService (if enabled)
         backfill_service = None
         if settings.BACKFILL_ENABLED:
             logger.info("Initializing backfill service...")
@@ -354,21 +354,19 @@ async def main() -> NoReturn:
                 db=None,  # Creates own sessions via AsyncSessionLocal()
                 redis_queue=redis_queue,
                 media_archiver=media_archiver,  # Enable media download during backfill
-                notifier=notifier,
             )
             logger.info(f"Backfill service initialized (mode: {settings.BACKFILL_MODE})")
         else:
             logger.info("Backfill disabled")
 
-        # 8. Initialize ChannelDiscovery
+        # 7. Initialize ChannelDiscovery
         logger.info("Initializing channel discovery...")
         channel_discovery = ChannelDiscovery(
             client=telegram_client,
             backfill_service=backfill_service,
-            notifier=notifier,
         )
 
-        # 9. Perform initial channel discovery
+        # 8. Perform initial channel discovery
         logger.info("Performing initial channel discovery...")
         channels = await channel_discovery.discover_channels()
 
@@ -395,20 +393,29 @@ async def main() -> NoReturn:
             else:
                 logger.info("Startup gap detection: disabled or backfill service unavailable")
 
-        # 10. Start background folder sync task (every 5 minutes)
+        # 9. Start background folder sync task (every 5 minutes)
         logger.info("Starting background folder sync task...")
         discovery_task = asyncio.create_task(
             channel_discovery.start_background_sync(interval_seconds=300)
         )
 
-        # 11. Initialize TelegramListener
+        # 9b. Initialize and start import worker (channel import from CSV)
+        logger.info("Initializing import worker...")
+        import_worker = await create_import_worker(
+            telegram_client=telegram_client,
+            db_session_factory=AsyncSessionLocal,
+        )
+        import_worker_task = asyncio.create_task(import_worker.start())
+        logger.info("Import worker started (listening for import jobs)")
+
+        # 10. Initialize TelegramListener (share the existing telegram_client to avoid session lock)
         logger.info("Initializing Telegram Listener...")
         listener = TelegramListener(
             redis_queue=redis_queue,
-            notifier=notifier,
+            telegram_client=telegram_client,
         )
 
-        # 12. Start listening for messages
+        # 11. Start listening for messages
         logger.info("Starting message monitoring...")
 
         # Mark listener as started for health check grace period
@@ -418,6 +425,19 @@ async def main() -> NoReturn:
 
         # Service is now running - wait for shutdown signal
         logger.info("Telegram Listener Service running - press Ctrl+C to stop")
+
+        # Log service startup to audit
+        async with AsyncSessionLocal() as session:
+            await audit.log_service_started(
+                session=session,
+                version="1.0.0",
+                config={
+                    "backfill_enabled": settings.BACKFILL_ENABLED,
+                    "gap_detection_enabled": settings.GAP_DETECTION_ENABLED,
+                    "active_channels": stats["total_active"],
+                },
+            )
+
         await shutdown_event.wait()
 
     except KeyboardInterrupt:
@@ -428,6 +448,12 @@ async def main() -> NoReturn:
     finally:
         # Graceful shutdown
         logger.info("Shutting down gracefully...")
+
+        if import_worker_task and not import_worker_task.done():
+            import_worker_task.cancel()
+
+        if import_worker:
+            await import_worker.stop()
 
         if discovery_task and not discovery_task.done():
             discovery_task.cancel()

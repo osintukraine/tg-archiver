@@ -7,6 +7,9 @@ import { useImmersive } from '@/contexts/ImmersiveContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { SITE_NAME } from '@/lib/constants';
 
+// Build-time flag for translation feature
+const TRANSLATION_ENABLED = process.env.NEXT_PUBLIC_TRANSLATION_ENABLED === 'true';
+
 export function HeaderNav() {
   const pathname = usePathname();
   const [translationMode, setTranslationMode] = useState<'original' | 'translation'>('original');
@@ -140,10 +143,8 @@ export function HeaderNav() {
   const navItems = [
     { href: '/', label: 'Browse', match: (p: string) => p === '/' },
     { href: '/channels', label: 'Channels', match: (p: string) => p === '/channels' || p?.startsWith('/channels/') },
-    { href: '/unified', label: 'News', match: (p: string) => p === '/unified' },
-    { href: '/events', label: 'Events', match: (p: string) => p === '/events' || p?.startsWith('/events/') },
-    { href: '/map', label: 'Map', match: (p: string) => p === '/map' },
-    { href: '/search', label: 'Search', match: (p: string) => p === '/search' || p?.startsWith('/entities/') },
+    { href: '/news', label: 'News', match: (p: string) => p === '/news' },
+    { href: '/search', label: 'Search', match: (p: string) => p === '/search' },
     { href: '/about', label: 'About', match: (p: string) => p === '/about' },
   ];
 
@@ -255,17 +256,35 @@ export function HeaderNav() {
           )}
         </button>
 
-        {/* Translation Toggle */}
-        <button
-          onClick={toggleTranslationMode}
-          className="p-2 sm:px-3 sm:py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
-          title={`Switch to ${translationMode === 'original' ? 'translation' : 'original'}-first mode`}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-          </svg>
-          <span className="hidden lg:inline">{translationMode === 'original' ? 'Original' : 'Translated'}</span>
-        </button>
+        {/* Translation Toggle - only show if translation is enabled at build time */}
+        {TRANSLATION_ENABLED && (
+          <button
+            onClick={toggleTranslationMode}
+            className="flex items-center gap-2 p-2 sm:px-3 sm:py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg text-sm font-medium transition-colors"
+            title={`Currently showing ${translationMode === 'original' ? 'original text' : 'translations'} - click to switch`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+            </svg>
+            {/* Toggle Switch */}
+            <div className="relative hidden sm:block">
+              <div
+                className={`w-10 h-5 rounded-full transition-colors ${
+                  translationMode === 'translation' ? 'bg-accent-primary' : 'bg-gray-600'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    translationMode === 'translation' ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </div>
+            </div>
+            <span className="hidden lg:inline text-xs">
+              {translationMode === 'translation' ? 'EN' : 'Original'}
+            </span>
+          </button>
+        )}
 
         {/* Mobile Menu Button - visible only on mobile */}
         <button
@@ -532,20 +551,38 @@ export function HeaderNav() {
                 )}
               </button>
 
-              {/* Translation Toggle */}
-              <button
-                onClick={toggleTranslationMode}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors"
-                style={{
-                  backgroundColor: theme === 'dark' ? '#1f2937' : '#f3f4f6',
-                  color: theme === 'dark' ? '#d1d5db' : '#4b5563'
-                }}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-                </svg>
-                {translationMode === 'original' ? 'Show Translations First' : 'Show Original First'}
-              </button>
+              {/* Translation Toggle - only show if translation is enabled at build time */}
+              {TRANSLATION_ENABLED && (
+                <button
+                  onClick={toggleTranslationMode}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors"
+                  style={{
+                    backgroundColor: theme === 'dark' ? '#1f2937' : '#f3f4f6',
+                    color: theme === 'dark' ? '#d1d5db' : '#4b5563'
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                    </svg>
+                    Translation
+                  </div>
+                  {/* Toggle Switch */}
+                  <div className="relative">
+                    <div
+                      className={`w-12 h-6 rounded-full transition-colors ${
+                        translationMode === 'translation' ? 'bg-cyan-500' : 'bg-gray-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                          translationMode === 'translation' ? 'translate-x-7' : 'translate-x-1'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </button>
+              )}
             </div>
           </div>
         </div>

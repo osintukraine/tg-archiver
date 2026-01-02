@@ -98,9 +98,6 @@ function GridThumbnail({ message, onClick }: GridThumbnailProps) {
       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-between">
           <span className="text-sm">{countryFlag}</span>
-          {message.importance_level === 'high' && (
-            <span className="text-red-400 text-xs">HIGH</span>
-          )}
         </div>
       </div>
 

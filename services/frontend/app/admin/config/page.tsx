@@ -26,17 +26,6 @@ interface ConfigItem {
   last_modified_at: string | null;
 }
 
-interface ModelConfig {
-  id: number;
-  task: string;
-  model_id: string;
-  enabled: boolean;
-  priority: number;
-  override_config: Record<string, unknown> | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
 interface EnvVarItem {
   key: string;
   value: string;
@@ -53,7 +42,6 @@ interface ConfigData {
 
 export default function ConfigPage() {
   const [config, setConfig] = useState<ConfigData | null>(null);
-  const [models, setModels] = useState<ModelConfig[]>([]);
   const [envVars, setEnvVars] = useState<EnvVarItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,20 +49,18 @@ export default function ConfigPage() {
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'platform' | 'models' | 'environment'>('platform');
+  const [activeTab, setActiveTab] = useState<'platform' | 'environment'>('platform');
 
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [configData, modelsData, envData] = await Promise.all([
+      const [configData, envData] = await Promise.all([
         adminApi.get('/api/admin/config/'),
-        adminApi.get('/api/admin/config/models/'),
         adminApi.get('/api/admin/config/env').catch(() => ({ env_vars: [] })),
       ]);
 
       setConfig(configData);
-      setModels(modelsData);
       setEnvVars(envData.env_vars || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -121,19 +107,6 @@ export default function ConfigPage() {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const toggleModelEnabled = async (model: ModelConfig) => {
-    try {
-      await adminApi.put(`/api/admin/config/models/${model.id}`, {
-        enabled: !model.enabled
-      });
-
-      fetchConfig();
-      setMessage({ type: 'success', text: `${model.enabled ? 'Disabled' : 'Enabled'} ${model.task}:${model.model_id}` });
-    } catch (err) {
-      setMessage({ type: 'error', text: 'Failed to update model config' });
     }
   };
 
@@ -256,16 +229,6 @@ export default function ConfigPage() {
           ⚙️ Platform Settings
         </button>
         <button
-          onClick={() => setActiveTab('models')}
-          className={`px-6 py-3 font-medium border-b-2 transition-colors ${
-            activeTab === 'models'
-              ? 'border-blue-500 text-blue-500'
-              : 'border-transparent text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          🤖 Model Configuration
-        </button>
-        <button
           onClick={() => setActiveTab('environment')}
           className={`px-6 py-3 font-medium border-b-2 transition-colors ${
             activeTab === 'environment'
@@ -336,7 +299,7 @@ export default function ConfigPage() {
             </div>
           )}
         </div>
-      ) : activeTab === 'platform' ? (
+      ) : (
         /* Platform Settings Tab */
         <div className="space-y-6">
           {config && Object.entries(config.categories).map(([category, items]) => (
@@ -385,78 +348,6 @@ export default function ConfigPage() {
           {config && config.total === 0 && (
             <div className="glass p-12 text-center text-text-tertiary">
               No configuration items found
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Model Configuration Tab */
-        <div className="glass p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-text-primary">LLM Model Assignments</h2>
-            <p className="text-sm text-text-tertiary">
-              Configure which models handle each task
-            </p>
-          </div>
-
-          {models.length > 0 ? (
-            <div className="space-y-3">
-              {/* Group by task */}
-              {Object.entries(
-                models.reduce((acc, model) => {
-                  if (!acc[model.task]) acc[model.task] = [];
-                  acc[model.task].push(model);
-                  return acc;
-                }, {} as Record<string, ModelConfig[]>)
-              ).map(([task, taskModels]) => (
-                <div key={task} className="p-4 bg-bg-secondary rounded-lg">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="font-medium text-text-primary capitalize">
-                      {task.replace(/_/g, ' ')}
-                    </span>
-                    <Badge variant="info" size="sm">
-                      {taskModels.filter(m => m.enabled).length}/{taskModels.length} active
-                    </Badge>
-                  </div>
-
-                  <div className="space-y-2">
-                    {taskModels.sort((a, b) => a.priority - b.priority).map((model) => (
-                      <div
-                        key={model.id}
-                        className="flex items-center justify-between p-2 bg-bg-tertiary rounded"
-                      >
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => toggleModelEnabled(model)}
-                            className={`w-10 h-6 rounded-full transition-colors ${
-                              model.enabled ? 'bg-green-500' : 'bg-gray-600'
-                            }`}
-                          >
-                            <div className={`w-4 h-4 bg-white rounded-full transition-transform mx-1 ${
-                              model.enabled ? 'translate-x-4' : 'translate-x-0'
-                            }`} />
-                          </button>
-                          <span className="font-mono text-sm">{model.model_id}</span>
-                          <Badge variant="default" size="sm">
-                            Priority {model.priority}
-                          </Badge>
-                        </div>
-                        {model.updated_at && (
-                          <span className="text-xs text-text-tertiary">
-                            Updated: {new Date(model.updated_at).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center text-text-tertiary py-8">
-              No model configurations found.
-              <p className="text-sm mt-2">
-                Model configurations define which LLM models are used for different tasks.
-              </p>
             </div>
           )}
         </div>

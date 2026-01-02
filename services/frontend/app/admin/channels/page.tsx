@@ -10,6 +10,14 @@ import { adminApi } from '@/lib/admin-api';
  * List and manage Telegram channels with filters and quality metrics.
  */
 
+interface Category {
+  id: number;
+  name: string;
+  color: string;
+  description: string | null;
+  channel_count: number;
+}
+
 interface Channel {
   id: number;
   telegram_id: number;
@@ -20,8 +28,11 @@ interface Channel {
   verified: boolean;
   scam: boolean;
   fake: boolean;
-  source_type: string | null;
-  affiliation: string | null;
+  category: {
+    id: number;
+    name: string;
+    color: string;
+  } | null;
   folder: string | null;
   rule: string | null;
   active: boolean;
@@ -36,45 +47,28 @@ interface ChannelStats {
   total_channels: number;
   active_channels: number;
   verified_channels: number;
-  by_affiliation: Record<string, number>;
+  by_category: Record<string, number>;
   by_folder: Record<string, number>;
   by_rule: Record<string, number>;
-  by_source_type: Record<string, number>;
 }
 
-interface Submission {
-  id: number;
-  channel_link: string;
-  channel_name: string;
-  reason: string;
-  value_description: string | null;
-  source_origin: 'ua' | 'ru' | 'unknown';
-  status: 'pending' | 'accepted' | 'rejected';
-  assigned_folder: string | null;
-  rejection_reason: string | null;
-  created_at: string;
-  reviewed_at: string | null;
-}
-
-const AFFILIATIONS = ['ukraine', 'russia', 'western', 'unknown'];
 const RULES = ['archive_all', 'selective_archive', 'monitor_only'];
-const FOLDER_OPTIONS = [
-  'Discover-UA',
-  'Discover-RU',
-  'Discover-?',
-  'Monitor-UA',
-  'Monitor-RU',
-  'Archive-UA',
-  'Archive-RU',
-];
+
+// Color mapping for category badges
+const CATEGORY_BADGE_COLORS: Record<string, 'info' | 'success' | 'warning' | 'error' | 'default'> = {
+  blue: 'info',
+  green: 'success',
+  orange: 'warning',
+  red: 'error',
+  purple: 'default',
+  gray: 'default',
+};
 
 export default function ChannelsPage() {
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'channels' | 'submissions'>('channels');
-
   // Channels state
   const [channels, setChannels] = useState<Channel[]>([]);
   const [stats, setStats] = useState<ChannelStats | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [folders, setFolders] = useState<{folder: string; count: number}[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,24 +76,24 @@ export default function ChannelsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'channels' | 'categories'>('channels');
+
   // Filters
   const [search, setSearch] = useState('');
-  const [affiliation, setAffiliation] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<number | ''>('');
   const [folder, setFolder] = useState<string>('');
   const [rule, setRule] = useState<string>('');
   const [activeOnly, setActiveOnly] = useState<boolean | undefined>(undefined);
 
   // Modal
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  const [editCategoryId, setEditCategoryId] = useState<number | 0>(0);
 
-  // Submissions state
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [submissionsLoading, setSubmissionsLoading] = useState(false);
-  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [submissionActionLoading, setSubmissionActionLoading] = useState(false);
+  // Category management
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryForm, setCategoryForm] = useState({ name: '', color: 'gray', description: '' });
 
   const fetchChannels = useCallback(async () => {
     setLoading(true);
@@ -110,7 +104,7 @@ export default function ChannelsPage() {
         page_size: '25',
       });
       if (search) params.append('search', search);
-      if (affiliation) params.append('affiliation', affiliation);
+      if (categoryId !== '') params.append('category_id', categoryId.toString());
       if (folder) params.append('folder', folder);
       if (rule) params.append('rule', rule);
       if (activeOnly !== undefined) params.append('active', activeOnly.toString());
@@ -124,7 +118,7 @@ export default function ChannelsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, affiliation, folder, rule, activeOnly]);
+  }, [page, search, categoryId, folder, rule, activeOnly]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -132,6 +126,15 @@ export default function ChannelsPage() {
       setStats(data);
     } catch (err) {
       console.error('Failed to fetch channel stats:', err);
+    }
+  }, []);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const data = await adminApi.get('/api/admin/categories');
+      setCategories(data);
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
     }
   }, []);
 
@@ -144,28 +147,22 @@ export default function ChannelsPage() {
     }
   }, []);
 
-  const fetchSubmissions = useCallback(async () => {
-    setSubmissionsLoading(true);
-    try {
-      const data = await adminApi.get('/api/channel-submissions?status_filter=pending');
-      setSubmissions(data.submissions || []);
-      setPendingCount(data.pending_count || 0);
-    } catch (err) {
-      console.error('Failed to fetch submissions:', err);
-    } finally {
-      setSubmissionsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     fetchChannels();
   }, [fetchChannels]);
 
   useEffect(() => {
     fetchStats();
+    fetchCategories();
     fetchFolders();
-    fetchSubmissions();
-  }, [fetchStats, fetchFolders, fetchSubmissions]);
+  }, [fetchStats, fetchCategories, fetchFolders]);
+
+  // Set edit category when modal opens
+  useEffect(() => {
+    if (selectedChannel) {
+      setEditCategoryId(selectedChannel.category?.id || 0);
+    }
+  }, [selectedChannel]);
 
   const handleUpdateChannel = async (channelId: number, updates: Record<string, unknown>) => {
     try {
@@ -177,73 +174,46 @@ export default function ChannelsPage() {
     }
   };
 
-  const handleAcceptSubmission = async () => {
-    if (!selectedSubmission || !selectedFolder) {
-      alert('Please select a folder');
-      return;
-    }
-
-    setSubmissionActionLoading(true);
+  const handleSaveCategory = async () => {
     try {
-      await adminApi.post(`/api/channel-submissions/${selectedSubmission.id}/accept`, {
-        folder: selectedFolder,
-      });
-      fetchSubmissions();
-      setSelectedSubmission(null);
-      setSelectedFolder('');
+      if (editingCategory) {
+        await adminApi.put(`/api/admin/categories/${editingCategory.id}`, categoryForm);
+      } else {
+        await adminApi.post('/api/admin/categories', categoryForm);
+      }
+      fetchCategories();
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+      setCategoryForm({ name: '', color: 'gray', description: '' });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to accept submission');
-    } finally {
-      setSubmissionActionLoading(false);
+      alert(err instanceof Error ? err.message : 'Failed to save category');
     }
   };
 
-  const handleRejectSubmission = async () => {
-    if (!selectedSubmission) return;
-
-    // Validate rejection reason (min 5 chars required by API)
-    if (rejectionReason && rejectionReason.length < 5) {
-      alert('Rejection reason must be at least 5 characters');
-      return;
-    }
-
-    setSubmissionActionLoading(true);
+  const handleDeleteCategory = async (categoryId: number) => {
+    if (!confirm('Delete this category? Channels will be uncategorized.')) return;
     try {
-      await adminApi.post(`/api/channel-submissions/${selectedSubmission.id}/reject`, {
-        reason: rejectionReason || 'No reason provided',
-      });
-      fetchSubmissions();
-      setSelectedSubmission(null);
-      setRejectionReason('');
+      await adminApi.delete(`/api/admin/categories/${categoryId}`);
+      fetchCategories();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to reject submission');
-    } finally {
-      setSubmissionActionLoading(false);
+      alert(err instanceof Error ? err.message : 'Failed to delete category');
     }
   };
 
-  const openReviewModal = (submission: Submission) => {
-    setSelectedSubmission(submission);
-    // Set default folder based on source_origin
-    const defaultFolder =
-      submission.source_origin === 'ua' ? 'Discover-UA' :
-      submission.source_origin === 'ru' ? 'Discover-RU' :
-      'Discover-?';
-    setSelectedFolder(defaultFolder);
-    setRejectionReason('');
-  };
-
-  const getOriginEmoji = (origin: string) => {
-    switch (origin) {
-      case 'ua': return '🇺🇦';
-      case 'ru': return '🇷🇺';
-      default: return '❓';
+  const openCategoryModal = (category?: Category) => {
+    if (category) {
+      setEditingCategory(category);
+      setCategoryForm({ name: category.name, color: category.color, description: category.description || '' });
+    } else {
+      setEditingCategory(null);
+      setCategoryForm({ name: '', color: 'gray', description: '' });
     }
+    setShowCategoryModal(true);
   };
 
-  const truncate = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
+  const getCategoryBadgeVariant = (color: string | undefined): 'info' | 'success' | 'warning' | 'error' | 'default' => {
+    if (!color) return 'default';
+    return CATEGORY_BADGE_COLORS[color] || 'default';
   };
 
   const columns = [
@@ -267,18 +237,14 @@ export default function ChannelsPage() {
       ),
     },
     {
-      key: 'affiliation',
-      label: 'Affiliation',
+      key: 'category',
+      label: 'Category',
       render: (_: unknown, channel: Channel) => (
         <Badge
-          variant={
-            channel.affiliation === 'ukrainian' ? 'info' :
-            channel.affiliation === 'russian' ? 'error' :
-            channel.affiliation === 'western' ? 'success' : 'default'
-          }
+          variant={getCategoryBadgeVariant(channel.category?.color)}
           size="sm"
         >
-          {channel.affiliation || 'unknown'}
+          {channel.category?.name || 'uncategorized'}
         </Badge>
       ),
     },
@@ -336,206 +302,219 @@ export default function ChannelsPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Channels</h1>
           <p className="text-text-secondary mt-1">
-            Manage Telegram channels and monitoring rules
+            Manage Telegram channels and categories
           </p>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-border-subtle">
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border-subtle">
         <button
           onClick={() => setActiveTab('channels')}
-          className={`px-4 py-2 font-medium transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             activeTab === 'channels'
-              ? 'text-blue-500 border-b-2 border-blue-500'
-              : 'text-text-secondary hover:text-text-primary'
+              ? 'border-blue-500 text-blue-500'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
           }`}
         >
-          Active Channels
+          Channels ({stats?.total_channels || 0})
         </button>
         <button
-          onClick={() => setActiveTab('submissions')}
-          className={`px-4 py-2 font-medium transition-colors flex items-center gap-2 ${
-            activeTab === 'submissions'
-              ? 'text-blue-500 border-b-2 border-blue-500'
-              : 'text-text-secondary hover:text-text-primary'
+          onClick={() => setActiveTab('categories')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'categories'
+              ? 'border-blue-500 text-blue-500'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
           }`}
         >
-          Pending Submissions
-          {pendingCount > 0 && (
-            <Badge variant="warning" size="sm">{pendingCount}</Badge>
-          )}
+          Categories ({categories.length})
         </button>
       </div>
 
-      {/* Channels Tab */}
+      {/* Stats Cards - only show for channels tab */}
+      {activeTab === 'channels' && stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Channels"
+            value={stats.total_channels}
+            icon={<span className="text-2xl">#</span>}
+          />
+          <StatCard
+            title="Active"
+            value={stats.active_channels}
+            icon={<span className="text-2xl text-green-500">●</span>}
+          />
+          <StatCard
+            title="Verified"
+            value={stats.verified_channels}
+            icon={<span className="text-2xl text-blue-500">✓</span>}
+          />
+          <StatCard
+            title="Filtered Results"
+            value={total}
+            icon={<span className="text-2xl">📨</span>}
+          />
+        </div>
+      )}
+
+      {/* Channels Tab Content */}
       {activeTab === 'channels' && (
         <>
-          {/* Stats Cards */}
-          {stats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard
-                title="Total Channels"
-                value={stats.total_channels}
-                icon={<span className="text-2xl">#</span>}
-              />
-              <StatCard
-                title="Active"
-                value={stats.active_channels}
-                icon={<span className="text-2xl text-green-500">●</span>}
-              />
-              <StatCard
-                title="Verified"
-                value={stats.verified_channels}
-                icon={<span className="text-2xl text-blue-500">✓</span>}
-              />
-              <StatCard
-                title="Filtered Results"
-                value={total}
-                icon={<span className="text-2xl">📨</span>}
-              />
-            </div>
-          )}
-
           {/* Filters */}
           <div className="glass p-4">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <div className="col-span-2">
-            <input
-              type="text"
-              placeholder="Search channels..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
-            />
-          </div>
-          <select
-            value={affiliation}
-            onChange={(e) => { setAffiliation(e.target.value); setPage(1); }}
-            className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
-          >
-            <option value="">All Affiliations</option>
-            {AFFILIATIONS.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-          <select
-            value={folder}
-            onChange={(e) => { setFolder(e.target.value); setPage(1); }}
-            className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
-          >
-            <option value="">All Folders</option>
-            {folders.map((f) => (
-              <option key={f.folder} value={f.folder}>{f.folder} ({f.count})</option>
-            ))}
-          </select>
-          <select
-            value={rule}
-            onChange={(e) => { setRule(e.target.value); setPage(1); }}
-            className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
-          >
-            <option value="">All Rules</option>
-            {RULES.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={activeOnly === true}
-                onChange={(e) => setActiveOnly(e.target.checked ? true : undefined)}
-                className="rounded"
-              />
-              Active only
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Error State */}
-      {error && (
-        <div className="glass p-8 text-center text-red-500">Error: {error}</div>
-      )}
-
-      {/* Table */}
-      {!error && (
-        <DataTable
-          columns={columns}
-          data={channels}
-          keyExtractor={(channel) => channel.id}
-          loading={loading}
-          emptyMessage="No channels found"
-        />
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="px-4 py-2 text-text-secondary">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
-          >
-            Next
-          </button>
-        </div>
-      )}
-
-        </>
-      )}
-
-      {/* Submissions Tab */}
-      {activeTab === 'submissions' && (
-        <>
-          {/* Submissions List */}
-          {submissionsLoading ? (
-            <div className="glass p-8 text-center text-text-secondary">Loading submissions...</div>
-          ) : submissions.length === 0 ? (
-            <div className="glass p-8 text-center text-text-secondary">No pending submissions</div>
-          ) : (
-            <div className="glass">
-              <div className="divide-y divide-border-subtle">
-                {submissions.map((submission) => (
-                  <div
-                    key={submission.id}
-                    className="p-4 hover:bg-bg-secondary cursor-pointer transition-colors"
-                    onClick={() => openReviewModal(submission)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xl">{getOriginEmoji(submission.source_origin)}</span>
-                          <h3 className="font-medium text-text-primary">
-                            {submission.channel_name}
-                          </h3>
-                        </div>
-                        <p className="text-sm text-text-secondary mb-2">
-                          {truncate(submission.reason, 120)}
-                        </p>
-                        <div className="flex items-center gap-4 text-xs text-text-tertiary">
-                          <span>{new Date(submission.created_at).toLocaleDateString()}</span>
-                          <span className="text-blue-500">{submission.channel_link}</span>
-                        </div>
-                      </div>
-                      <Badge variant="warning" size="sm">Pending</Badge>
-                    </div>
-                  </div>
-                ))}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+              <div className="col-span-2">
+                <input
+                  type="text"
+                  placeholder="Search channels..."
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                />
               </div>
+              <select
+                value={categoryId}
+                onChange={(e) => { setCategoryId(e.target.value ? parseInt(e.target.value) : ''); setPage(1); }}
+                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+              >
+                <option value="">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name} ({cat.channel_count})</option>
+                ))}
+              </select>
+              <select
+                value={folder}
+                onChange={(e) => { setFolder(e.target.value); setPage(1); }}
+                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+              >
+                <option value="">All Folders</option>
+                {folders.map((f) => (
+                  <option key={f.folder} value={f.folder}>{f.folder} ({f.count})</option>
+                ))}
+              </select>
+              <select
+                value={rule}
+                onChange={(e) => { setRule(e.target.value); setPage(1); }}
+                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+              >
+                <option value="">All Rules</option>
+                {RULES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={activeOnly === true}
+                    onChange={(e) => setActiveOnly(e.target.checked ? true : undefined)}
+                    className="rounded"
+                  />
+                  Active only
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Error State */}
+          {error && (
+            <div className="glass p-8 text-center text-red-500">Error: {error}</div>
+          )}
+
+          {/* Table */}
+          {!error && (
+            <DataTable
+              columns={columns}
+              data={channels}
+              keyExtractor={(channel) => channel.id}
+              loading={loading}
+              emptyMessage="No channels found"
+            />
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="px-4 py-2 text-text-secondary">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
           )}
         </>
+      )}
+
+      {/* Categories Tab Content */}
+      {activeTab === 'categories' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-text-secondary">
+              Categories help organize channels for filtering and reporting.
+            </p>
+            <button
+              onClick={() => openCategoryModal()}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+            >
+              + New Category
+            </button>
+          </div>
+
+          {/* Categories List */}
+          <div className="glass divide-y divide-border-subtle">
+            {categories.length === 0 ? (
+              <div className="p-8 text-center text-text-secondary">
+                No categories yet. Create one to get started.
+              </div>
+            ) : (
+              categories.map((cat) => (
+                <div key={cat.id} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: cat.color === 'gray' ? '#6b7280' : cat.color }}
+                    />
+                    <div>
+                      <div className="font-medium text-text-primary">{cat.name}</div>
+                      {cat.description && (
+                        <div className="text-sm text-text-tertiary">{cat.description}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-text-secondary">
+                      {cat.channel_count} channel{cat.channel_count !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      onClick={() => openCategoryModal(cat)}
+                      className="text-blue-500 hover:text-blue-400 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(cat.id)}
+                      className="text-red-500 hover:text-red-400 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       )}
 
       {/* Edit Channel Modal */}
@@ -547,15 +526,15 @@ export default function ChannelsPage() {
         >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-text-secondary mb-1">Affiliation</label>
+              <label className="block text-sm text-text-secondary mb-1">Category</label>
               <select
-                value={selectedChannel.affiliation || ''}
-                onChange={(e) => handleUpdateChannel(selectedChannel.id, { affiliation: e.target.value || null })}
+                value={editCategoryId}
+                onChange={(e) => setEditCategoryId(parseInt(e.target.value) || 0)}
                 className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
               >
-                <option value="">Unknown</option>
-                {AFFILIATIONS.map((a) => (
-                  <option key={a} value={a}>{a}</option>
+                <option value={0}>Uncategorized</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             </div>
@@ -593,124 +572,88 @@ export default function ChannelsPage() {
                 </div>
               </div>
             )}
+            <div className="flex justify-end gap-2 pt-4 border-t border-border-subtle">
+              <button
+                onClick={() => setSelectedChannel(null)}
+                className="px-4 py-2 text-text-secondary hover:text-text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleUpdateChannel(selectedChannel.id, { category_id: editCategoryId })}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+              >
+                Save Category
+              </button>
+            </div>
           </div>
         </Modal>
       )}
 
-      {/* Review Submission Modal */}
-      {selectedSubmission && (
+      {/* Category Modal */}
+      {showCategoryModal && (
         <Modal
           open={true}
-          title="Review Channel Submission"
+          title={editingCategory ? 'Edit Category' : 'New Category'}
           onClose={() => {
-            setSelectedSubmission(null);
-            setSelectedFolder('');
-            setRejectionReason('');
+            setShowCategoryModal(false);
+            setEditingCategory(null);
+            setCategoryForm({ name: '', color: 'gray', description: '' });
           }}
-          size="lg"
         >
           <div className="space-y-4">
-            {/* Channel Info */}
-            <div className="glass p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">{getOriginEmoji(selectedSubmission.source_origin)}</span>
-                <h3 className="font-medium text-text-primary text-lg">
-                  {selectedSubmission.channel_name}
-                </h3>
-              </div>
-              <div className="text-sm text-text-secondary">
-                <strong>Link:</strong>{' '}
-                <a
-                  href={selectedSubmission.channel_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:underline"
-                >
-                  {selectedSubmission.channel_link}
-                </a>
-              </div>
-              <div className="text-sm text-text-secondary">
-                <strong>Submitted:</strong> {new Date(selectedSubmission.created_at).toLocaleString()}
-              </div>
-            </div>
-
-            {/* Reason */}
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                Reason for Submission
-              </label>
-              <div className="glass p-3 text-sm text-text-primary whitespace-pre-wrap">
-                {selectedSubmission.reason}
-              </div>
+              <label className="block text-sm text-text-secondary mb-1">Name *</label>
+              <input
+                type="text"
+                value={categoryForm.name}
+                onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                placeholder="e.g., News, Tech, Sports"
+                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              />
             </div>
-
-            {/* Value Description */}
-            {selectedSubmission.value_description && (
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  Value Description
-                </label>
-                <div className="glass p-3 text-sm text-text-primary whitespace-pre-wrap">
-                  {selectedSubmission.value_description}
-                </div>
-              </div>
-            )}
-
-            {/* Folder Selection */}
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                Assign to Folder
-              </label>
+              <label className="block text-sm text-text-secondary mb-1">Color</label>
               <select
-                value={selectedFolder}
-                onChange={(e) => setSelectedFolder(e.target.value)}
+                value={categoryForm.color}
+                onChange={(e) => setCategoryForm({ ...categoryForm, color: e.target.value })}
                 className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
               >
-                {FOLDER_OPTIONS.map((folder) => (
-                  <option key={folder} value={folder}>
-                    {folder}
-                  </option>
-                ))}
+                <option value="gray">Gray</option>
+                <option value="blue">Blue</option>
+                <option value="green">Green</option>
+                <option value="orange">Orange</option>
+                <option value="red">Red</option>
+                <option value="purple">Purple</option>
               </select>
-              <p className="text-xs text-text-tertiary mt-1">
-                Default selected based on source origin
-              </p>
             </div>
-
-            {/* Rejection Reason (optional) */}
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                Rejection Reason (optional, min 5 characters if provided)
-              </label>
+              <label className="block text-sm text-text-secondary mb-1">Description</label>
               <textarea
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Provide a reason for rejection..."
-                className={`w-full bg-bg-secondary border rounded px-3 py-2 text-sm h-20 ${
-                  rejectionReason && rejectionReason.length < 5 ? 'border-yellow-500' : 'border-border-subtle'
-                }`}
-                disabled={submissionActionLoading}
+                value={categoryForm.description}
+                onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                placeholder="Optional description..."
+                rows={2}
+                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
               />
-              {rejectionReason && rejectionReason.length > 0 && rejectionReason.length < 5 && (
-                <p className="mt-1 text-xs text-yellow-400">{5 - rejectionReason.length} more characters needed</p>
-              )}
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-subtle">
+            <div className="flex justify-end gap-2 pt-4 border-t border-border-subtle">
               <button
-                onClick={handleRejectSubmission}
-                disabled={submissionActionLoading}
-                className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  setShowCategoryModal(false);
+                  setEditingCategory(null);
+                  setCategoryForm({ name: '', color: 'gray', description: '' });
+                }}
+                className="px-4 py-2 text-text-secondary hover:text-text-primary"
               >
-                {submissionActionLoading ? 'Processing...' : 'Reject'}
+                Cancel
               </button>
               <button
-                onClick={handleAcceptSubmission}
-                disabled={submissionActionLoading || !selectedFolder}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSaveCategory}
+                disabled={!categoryForm.name.trim()}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded disabled:opacity-50"
               >
-                {submissionActionLoading ? 'Processing...' : 'Accept & Join'}
+                {editingCategory ? 'Save Changes' : 'Create Category'}
               </button>
             </div>
           </div>

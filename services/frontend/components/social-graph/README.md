@@ -1,6 +1,6 @@
 # Social Graph Components
 
-React components for visualizing social network data, comment threads, and engagement metrics in the OSINT Intelligence Platform.
+React components for visualizing social network data, comment threads, and engagement metrics in the Telegram archiver.
 
 ## Components
 
@@ -21,6 +21,12 @@ import { SocialNetworkGraph } from '@/components/social-graph';
 - Export to PNG
 - Dark mode support
 
+**Use Cases**:
+- Visualize how messages spread through forwards
+- Identify influential nodes in the network
+- Track message propagation patterns
+- Analyze reply chains
+
 ### CommentThread
 
 Reddit-style threaded comment display with nested replies.
@@ -38,6 +44,12 @@ import { CommentThread } from '@/components/social-graph';
 - Pagination
 - Time ago formatting
 
+**Use Cases**:
+- Browse discussion threads under messages
+- Track conversation flow
+- Identify active participants
+- Monitor engagement in comment sections
+
 ### EngagementChart
 
 Time-series visualization of views, forwards, and reactions.
@@ -50,10 +62,16 @@ import { EngagementChart } from '@/components/social-graph';
 
 **Features**:
 - SVG-based line chart
-- Three metrics (views, forwards, reactions)
+- Multiple metrics (views, forwards, reactions)
 - Summary statistics
 - Peak engagement indicator
 - Dark mode support
+
+**Use Cases**:
+- Track message engagement over time
+- Identify viral moments
+- Analyze engagement patterns
+- Compare performance across messages
 
 ## API Hooks
 
@@ -93,7 +111,34 @@ See `/types/social-graph.ts` for complete TypeScript interfaces:
 
 ## Integration
 
-These components are integrated into `EnhancedPostCard` under the Network tab → Social sub-tab.
+These components are integrated into `EnhancedPostCard` under the Social Graph tab.
+
+## Example Integration
+
+```tsx
+import { SocialNetworkGraph, CommentThread, EngagementChart } from '@/components/social-graph';
+
+export function MessageDetailPage({ messageId }: { messageId: number }) {
+  return (
+    <div className="space-y-6">
+      <section>
+        <h2>Message Propagation</h2>
+        <SocialNetworkGraph messageId={messageId} />
+      </section>
+
+      <section>
+        <h2>Engagement Timeline</h2>
+        <EngagementChart messageId={messageId} />
+      </section>
+
+      <section>
+        <h2>Discussion</h2>
+        <CommentThread messageId={messageId} />
+      </section>
+    </div>
+  );
+}
+```
 
 ## Dependencies
 
@@ -115,3 +160,56 @@ GET /api/social-graph/messages/{id}/engagement-timeline
 ```
 
 See type definitions for expected response formats.
+
+## Configuration
+
+### Graph Layout Options
+
+The SocialNetworkGraph supports various layout algorithms:
+
+```tsx
+<SocialNetworkGraph
+  messageId={123}
+  layout="fcose"  // Options: 'fcose', 'cose', 'circle', 'grid'
+/>
+```
+
+### Chart Customization
+
+The EngagementChart accepts custom styling:
+
+```tsx
+<EngagementChart
+  messageId={123}
+  height={400}
+  showLegend={true}
+  colors={{
+    views: '#3b82f6',
+    forwards: '#10b981',
+    reactions: '#f59e0b'
+  }}
+/>
+```
+
+## Performance Considerations
+
+- Graph rendering is optimized for up to 1000 nodes
+- Lazy loading for large comment threads
+- Debounced zoom/pan events
+- Memoized calculations for engagement data
+
+## Accessibility
+
+- Keyboard navigation for graph controls
+- Screen reader support for statistics
+- High contrast mode support
+- Focus indicators for interactive elements
+
+## Future Enhancements
+
+Planned improvements:
+- Real-time updates for engagement metrics
+- Advanced filtering options
+- Export to multiple formats (SVG, JSON, CSV)
+- Cluster analysis for large networks
+- Sentiment visualization in comment threads

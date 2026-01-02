@@ -79,19 +79,6 @@ export function ImmersiveControls() {
               <span className="text-sm font-medium">RSS</span>
             </button>
 
-            {/* Geo layer toggle */}
-            <button
-              onClick={() => toggleLayer('geo')}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
-                layers.geo
-                  ? 'bg-green-500/80 text-white'
-                  : 'bg-black/60 text-white hover:bg-black/80'
-              }`}
-              title="Toggle Geolocation Background"
-            >
-              <span className="text-sm font-medium">GEO</span>
-            </button>
-
             {/* Divider */}
             <div className="w-px h-6 bg-white/20" />
 
@@ -213,13 +200,6 @@ export function ImmersiveControls() {
                     <span className="text-white">News Ticker</span>
                   </div>
                   <p className="text-white/60 text-xs">Shows latest RSS news headlines scrolling at the top. Click headlines to open articles.</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="bg-green-500/80 text-white text-xs font-medium px-2 py-0.5 rounded">GEO</span>
-                    <span className="text-white">Map Background</span>
-                  </div>
-                  <p className="text-white/60 text-xs">Shows a subtle dark map behind the video, centered on the message&apos;s geolocation (when available).</p>
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { ProfileNav } from '@/components/profile/ProfileNav';
+import { SITE_NAME } from '@/lib/constants';
 
 /**
  * Profile Layout
@@ -8,7 +9,7 @@ import { ProfileNav } from '@/components/profile/ProfileNav';
  */
 
 export const metadata = {
-  title: 'Profile - OSINT Platform',
+  title: `Profile - ${SITE_NAME}`,
   description: 'Manage your account settings and API keys',
 };
 

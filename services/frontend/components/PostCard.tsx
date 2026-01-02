@@ -13,7 +13,6 @@
 
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { ValidationPanel } from './ValidationPanel';
 import { getMediaUrl } from '@/lib/api';
 import type { PostCardProps, MessageTag, MediaItem } from '@/lib/types';
 
@@ -23,38 +22,10 @@ interface ResolvedMediaItem {
   mime_type: string;
   media_type: 'image' | 'video' | 'audio' | 'document';
 }
-import SentimentBadge from './SentimentBadge';
-import UrgencyMeter from './UrgencyMeter';
 import EngagementBar from './EngagementBar';
 import SocialGraphIndicator from './SocialGraphIndicator';
-import EntityChip from './EntityChip';
-import ReviewStatusBadge from './ReviewStatusBadge';
 import { formatNumber, calculateViralityRatio, getViralityColor } from '@/lib/utils';
 import { MediaLightbox } from './MediaLightbox';
-
-// Helper to get importance badge styling
-function getImportanceBadge(importance: string | null): { color: string; label: string; bgColor: string } {
-  if (importance === 'high') return {
-    color: 'text-white',
-    label: '🔴 High',
-    bgColor: 'bg-red-500'
-  };
-  if (importance === 'medium') return {
-    color: 'text-white',
-    label: '🟡 Medium',
-    bgColor: 'bg-yellow-600'
-  };
-  if (importance === 'low') return {
-    color: 'text-white',
-    label: '⚪ Low',
-    bgColor: 'bg-gray-500'
-  };
-  return {
-    color: 'text-gray-400',
-    label: '',
-    bgColor: ''
-  };
-}
 
 // Helper to get country info from channel folder
 function getCountryInfo(folder: string | null | undefined): { flag: string; label: string; color: string } | null {
@@ -255,36 +226,15 @@ export function PostCard({
     ? message.content_translated
     : message.content;
 
-  // Get top 2 entities for compact view (prioritize OpenSanctions)
-  const getTopEntities = () => {
-    const topEntities = [];
-
-    // Add OpenSanctions entities first (highest priority)
-    if (message.opensanctions_entities && message.opensanctions_entities.length > 0) {
-      topEntities.push(...message.opensanctions_entities.slice(0, 2));
-    }
-
-    // Fill with curated entities if we have space
-    if (topEntities.length < 2 && message.curated_entities && message.curated_entities.length > 0) {
-      const remaining = 2 - topEntities.length;
-      topEntities.push(...message.curated_entities.slice(0, remaining));
-    }
-
-    return topEntities.slice(0, 2);
-  };
-
   // Compact mode: Enhanced browse view with thumbnails
   if (currentDensity === 'compact') {
     const firstMediaUrl = mediaUrls[0];
-    const topEntities = getTopEntities();
 
     const countryBorderClass = getCountryBorderClass(channel?.folder);
 
     return (
       <div
-        className={`glass p-2 sm:p-3 rounded-lg cursor-pointer ${countryBorderClass} transition-colors duration-200 flex gap-2 sm:gap-3 ${
-          message.needs_human_review ? 'border-2 border-orange-500' : ''
-        }`}
+        className={`glass p-2 sm:p-3 rounded-lg cursor-pointer ${countryBorderClass} transition-colors duration-200 flex gap-2 sm:gap-3`}
         onClick={() => {
           if (onDensityChange) onDensityChange('detailed');
           onClick?.();
@@ -396,41 +346,13 @@ export function PostCard({
             {/* Right: Classification badges + Review status (aligned to right corner) */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {/* Topic badge */}
-              {message.osint_topic && (
+              {message.topic && (
                 <span
-                  className={`topic-${message.osint_topic.toLowerCase()} px-1.5 py-0.5 rounded text-xs cursor-help`}
-                  title={`OSINT Topic: ${message.osint_topic} - AI-classified content category for intelligence analysis`}
+                  className={`topic-${message.topic.toLowerCase()} px-1.5 py-0.5 rounded text-xs cursor-help`}
+                  title={`Topic: ${message.topic}`}
                 >
-                  {message.osint_topic}
+                  {message.topic}
                 </span>
-              )}
-              {/* Importance badge */}
-              {message.importance_level && (() => {
-                const badge = getImportanceBadge(message.importance_level);
-                return badge.label && (
-                  <span
-                    className={`${badge.bgColor} ${badge.color} px-1.5 py-0.5 text-xs rounded cursor-help`}
-                    title={`Importance Level: ${message.importance_level} - AI-assessed intelligence significance based on content analysis, entity mentions, and context`}
-                  >
-                    {badge.label}
-                  </span>
-                );
-              })()}
-              {/* Sentiment badge */}
-              {message.content_sentiment && (
-                <div title="Sentiment: AI-detected emotional tone of the message content">
-                  <SentimentBadge sentiment={message.content_sentiment as 'positive' | 'negative' | 'neutral' | 'urgent' | null} mode="compact" />
-                </div>
-              )}
-              {/* Urgency meter (only if high urgency) */}
-              {message.content_urgency_level !== null && message.content_urgency_level >= 50 && (
-                <div title={`Urgency Score: ${message.content_urgency_level}/100 - AI-assessed time-sensitivity requiring immediate attention`}>
-                  <UrgencyMeter urgency={message.content_urgency_level} mode="compact" showLabel={false} />
-                </div>
-              )}
-              {/* Review Status Badge - rightmost */}
-              {message.needs_human_review && (
-                <ReviewStatusBadge needsReview={true} reviewed={false} />
               )}
             </div>
           </div>
@@ -597,28 +519,15 @@ export function PostCard({
               </div>
             )}
 
-            {/* Importance Badge */}
-            {message.importance_level && (() => {
-              const badge = getImportanceBadge(message.importance_level);
-              return badge.label && (
-                <div className="flex flex-col items-end gap-1">
-                  <span
-                    className={`${badge.bgColor} ${badge.color} px-3 py-1 rounded text-sm cursor-help`}
-                    title={`Importance: ${message.importance_level} - AI-assessed intelligence value (High: Breaking events, Medium: Notable updates, Low: Routine content)`}
-                  >
-                    {badge.label}
-                  </span>
-                  {message.osint_topic && (
-                    <span
-                      className={`topic-${message.osint_topic.toLowerCase()} px-2 py-0.5 cursor-help`}
-                      title={`Topic: ${message.osint_topic} - Primary content classification`}
-                    >
-                      {message.osint_topic}
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Topic Badge */}
+            {message.topic && (
+              <span
+                className={`topic-${message.topic.toLowerCase()} px-2 py-0.5 cursor-help`}
+                title={`Topic: ${message.topic}`}
+              >
+                {message.topic}
+              </span>
+            )}
           </div>
         </div>
 
@@ -739,156 +648,7 @@ export function PostCard({
           getMediaType={getMediaTypeFromUrl}
         />
 
-        {/* NEW: AI Enrichment Section */}
-        {(message.content_sentiment || message.content_urgency_level !== null || message.key_phrases || message.summary) && (
-          <div className="space-y-3 border-t border-border-subtle pt-3">
-            <div
-              className="text-xs text-text-tertiary font-medium cursor-help"
-              title="AI-powered analysis performed by local LLM (Ollama) - No data sent to external services"
-            >
-              AI Enrichment
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              {/* Sentiment Badge */}
-              {message.content_sentiment && (
-                <div title="AI-detected emotional tone and narrative framing of the content">
-                  <SentimentBadge sentiment={message.content_sentiment as 'positive' | 'negative' | 'neutral' | 'urgent' | null} mode="detailed" />
-                </div>
-              )}
-
-              {/* Urgency Meter */}
-              {message.content_urgency_level !== null && (
-                <div
-                  className="flex-1 min-w-[200px]"
-                  title={`Urgency: ${message.content_urgency_level}/100 - Time-sensitive content requiring immediate attention (based on keywords, context, and military situation)`}
-                >
-                  <UrgencyMeter urgency={message.content_urgency_level} mode="detailed" showLabel={true} />
-                </div>
-              )}
-            </div>
-
-            {/* Key Phrases */}
-            {message.key_phrases && message.key_phrases.length > 0 && (
-              <div>
-                <div
-                  className="text-xs text-text-tertiary mb-1 cursor-help"
-                  title="Important terms and phrases extracted by AI for quick scanning"
-                >
-                  Key Phrases
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {message.key_phrases.slice(0, 5).map((phrase, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-1 rounded text-xs bg-purple-500/15 text-purple-300 border border-purple-500/20 cursor-help"
-                      title="AI-extracted key phrase - significant term or concept in this message"
-                    >
-                      {phrase}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* AI Summary (collapsible) */}
-            {message.summary && (
-              <div>
-                <details className="group">
-                  <summary
-                    className="cursor-pointer text-xs text-accent-primary hover:underline list-none flex items-center gap-1"
-                    title="AI-generated summary for quick comprehension"
-                  >
-                    <span className="group-open:rotate-90 transition-transform">▶</span>
-                    <span>AI Summary</span>
-                  </summary>
-                  <div className="mt-2 text-sm text-text-secondary bg-bg-secondary p-3 rounded-lg">
-                    {message.summary}
-                  </div>
-                </details>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* NEW: Entity Matches Section */}
-        {/* Entity Matches - Collapsible section with compact chips */}
-        {((message.opensanctions_entities && message.opensanctions_entities.length > 0) ||
-          (message.curated_entities && message.curated_entities.length > 0)) && (
-          <details className="border-t border-border-subtle pt-3 group">
-            <summary className="text-xs text-text-tertiary font-medium cursor-pointer hover:text-text-secondary flex items-center gap-2 list-none">
-              <span className="group-open:rotate-90 transition-transform text-[10px]">▶</span>
-              <span>Entity Matches</span>
-              {message.opensanctions_entities && message.opensanctions_entities.length > 0 && (
-                <span
-                  className="text-red-400 cursor-help"
-                  title="Sanctioned entities detected - individuals or organizations on international sanctions lists"
-                >
-                  🚨 {message.opensanctions_entities.length} sanctioned
-                </span>
-              )}
-              {message.curated_entities && message.curated_entities.length > 0 && (
-                <span
-                  className="text-blue-400 cursor-help"
-                  title="Known entities from curated knowledge graph - military units, officials, locations"
-                >
-                  📚 {message.curated_entities.length} curated
-                </span>
-              )}
-            </summary>
-
-            <div className="mt-3 space-y-3">
-              {/* OpenSanctions Entities - compact chips */}
-              {message.opensanctions_entities && message.opensanctions_entities.length > 0 && (
-                <div>
-                  <div className="text-xs text-red-400 mb-2 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <span
-                      className="cursor-help"
-                      title="Entities on international sanctions lists (EU, UN, US, UK) or designated as high-risk"
-                    >
-                      Sanctioned/High-Risk
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {message.opensanctions_entities.map((entity, idx) => (
-                      <EntityChip
-                        key={idx}
-                        entity={entity}
-                        mode="compact"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Curated Entities - compact chips */}
-              {message.curated_entities && message.curated_entities.length > 0 && (
-                <div>
-                  <div
-                    className="text-xs text-blue-400 mb-2 cursor-help"
-                    title="Entities from manually curated knowledge graph - verified military units, officials, organizations, and locations"
-                  >
-                    Curated Knowledge Graph
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {message.curated_entities.map((entity, idx) => (
-                      <EntityChip
-                        key={idx}
-                        entity={entity}
-                        mode="compact"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </details>
-        )}
-
-        {/* NEW: Social Graph Section */}
+        {/* Social Graph Section */}
         {(message.views !== null || message.forwards !== null ||
           message.forward_from_channel_id !== null || message.replied_to_message_id !== null ||
           message.has_comments) && (
@@ -1117,43 +877,6 @@ export function PostCard({
               </div>
             )}
 
-            {/* Human Review Status */}
-            {(message.needs_human_review || message.osint_reviewed) && (
-              <div className={`rounded p-2 ${
-                message.needs_human_review
-                  ? 'bg-orange-500/10 border border-orange-500/20'
-                  : 'bg-green-500/10 border border-green-500/20'
-              }`}>
-                {message.needs_human_review && (
-                  <div
-                    className="text-orange-400 cursor-help"
-                    title="Flagged for human review - This message requires analyst verification due to high importance or uncertainty in AI classification"
-                  >
-                    ⚠️ Flagged for human review
-                  </div>
-                )}
-                {message.osint_reviewed && (
-                  <div className="text-green-400">
-                    <span
-                      className="cursor-help"
-                      title="This message has been reviewed and verified by a human analyst"
-                    >
-                      ✓ Reviewed
-                    </span>
-                    {message.reviewed_by && ` by ${message.reviewed_by}`}
-                    {message.osint_manual_score !== null && message.osint_manual_score !== undefined && (
-                      <span
-                        className="ml-2 cursor-help"
-                        title="Manual OSINT score assigned by analyst (0-100, higher = more valuable intelligence)"
-                      >
-                        • Score: {message.osint_manual_score}/100
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Authenticity Hashes (collapsed) */}
             {(message.content_hash || message.metadata_hash) && (
               <details className="bg-bg-secondary/30 rounded p-2">
@@ -1201,10 +924,6 @@ export function PostCard({
           </div>
         </details>
 
-        {/* RSS Validation Panel */}
-        <div className="mt-4">
-          <ValidationPanel messageId={message.id} />
-        </div>
       </div>
     );
   }
@@ -1339,17 +1058,6 @@ export function PostCard({
                     <p className="text-sm text-text-secondary mt-1">{channel.description}</p>
                   )}
                 </div>
-                {message.importance_level && (() => {
-                  const badge = getImportanceBadge(message.importance_level);
-                  return badge.label && (
-                    <div
-                      className={`${badge.bgColor} ${badge.color} px-4 py-2 rounded text-base cursor-help`}
-                      title={`Importance: ${message.importance_level} - AI-assessed intelligence value`}
-                    >
-                      {badge.label}
-                    </div>
-                  );
-                })()}
               </div>
             )}
 
@@ -1492,34 +1200,13 @@ export function PostCard({
                 >
                   Topic
                 </div>
-                {message.osint_topic ? (
-                  <span className={`topic-${message.osint_topic.toLowerCase()} inline-block`}>
-                    {message.osint_topic}
+                {message.topic ? (
+                  <span className={`topic-${message.topic.toLowerCase()} inline-block`}>
+                    {message.topic}
                   </span>
                 ) : (
                   <span className="text-text-secondary text-sm">None</span>
                 )}
-              </div>
-
-              <div>
-                <div
-                  className="text-xs text-text-tertiary mb-1 cursor-help"
-                  title="AI-assessed intelligence value (High: Breaking events, Medium: Notable updates, Low: Routine content)"
-                >
-                  Importance
-                </div>
-                <div className="text-sm">
-                  {message.importance_level ? (() => {
-                    const badge = getImportanceBadge(message.importance_level);
-                    return badge.label && (
-                      <span className={`${badge.bgColor} ${badge.color} px-2 py-1 rounded text-xs inline-block`}>
-                        {badge.label}
-                      </span>
-                    );
-                  })() : (
-                    <span className="text-text-secondary">Not set</span>
-                  )}
-                </div>
               </div>
 
               <div>
@@ -1762,10 +1449,6 @@ export function PostCard({
               </div>
             )}
 
-            {/* RSS Validation Panel */}
-            <div className="mt-4">
-              <ValidationPanel messageId={message.id} />
-            </div>
           </div>
         </div>
       </div>

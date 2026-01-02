@@ -5,8 +5,6 @@ import { getMessage, getMediaUrl } from '@/lib/api';
 import { getBaseUrl, getSiteName, getBestMediaForOG, truncateForOG } from '@/lib/metadata';
 import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { PostNavigation } from '@/components/PostNavigation';
-import { SimilarMessages } from '@/components/SimilarMessages';
-import InlineMap from '@/components/map/InlineMap';
 
 interface PageProps {
   params: {
@@ -132,28 +130,10 @@ export default async function MessagePage({ params }: PageProps) {
         <PostNavigation currentId={id} />
       </div>
 
-      {/* Enhanced Message Card with 6 tabs */}
+      {/* Enhanced Message Card with tabs */}
       <EnhancedPostCard
         message={message}
       />
-
-      {/* Inline Map Preview - Show if message has location */}
-      {message.location && message.location.latitude && message.location.longitude && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Location</h2>
-          <InlineMap
-            latitude={message.location.latitude}
-            longitude={message.location.longitude}
-            locationName={message.location.location_name ?? undefined}
-            zoom={10}
-          />
-        </div>
-      )}
-
-      {/* Similar Messages */}
-      <div className="mt-8">
-        <SimilarMessages messageId={id} />
-      </div>
 
       {/* Navigation - Bottom */}
       <div className="mt-6">

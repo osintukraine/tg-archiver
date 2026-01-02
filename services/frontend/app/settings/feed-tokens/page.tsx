@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '@/lib/api';
+import { getAuthHeaders } from '@/lib/auth-utils';
 
 interface FeedToken {
   id: string;
@@ -33,7 +34,7 @@ export default function FeedTokensPage() {
   const fetchTokens = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/feed-tokens`, {
-        credentials: 'include',
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -73,8 +74,10 @@ export default function FeedTokensPage() {
     try {
       const res = await fetch(`${API_URL}/api/feed-tokens`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({ label: label || null }),
       });
 
@@ -102,7 +105,7 @@ export default function FeedTokensPage() {
     try {
       const res = await fetch(`${API_URL}/api/feed-tokens/${tokenId}`, {
         method: 'DELETE',
-        credentials: 'include',
+        headers: getAuthHeaders(),
       });
 
       if (res.ok) {

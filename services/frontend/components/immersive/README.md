@@ -1,6 +1,6 @@
 # Immersive Media Player Components
 
-Full-viewport media player for OSINT Intelligence Platform's immersive viewing mode.
+Full-viewport media player for immersive viewing mode in the Telegram archiver frontend.
 
 ## Components
 

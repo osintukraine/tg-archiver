@@ -1,21 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-
-const TOPICS = [
-  { value: 'combat', label: 'Combat', description: 'Active fighting, battles, strikes' },
-  { value: 'equipment', label: 'Equipment', description: 'Weapons, vehicles, gear' },
-  { value: 'casualties', label: 'Casualties', description: 'Losses, injuries, deaths' },
-  { value: 'movements', label: 'Movements', description: 'Troop movements, logistics' },
-  { value: 'infrastructure', label: 'Infrastructure', description: 'Buildings, bridges, utilities' },
-  { value: 'humanitarian', label: 'Humanitarian', description: 'Aid, civilians, refugees' },
-  { value: 'diplomatic', label: 'Diplomatic', description: 'Politics, negotiations, sanctions' },
-  { value: 'intelligence', label: 'Intelligence', description: 'Intel reports, analysis' },
-  { value: 'propaganda', label: 'Propaganda', description: 'Information warfare, narratives' },
-  { value: 'units', label: 'Units', description: 'Military units, organizations' },
-  { value: 'locations', label: 'Locations', description: 'Places, geography' },
-  { value: 'general', label: 'General', description: 'Other relevant content' },
-];
+import { useState, useEffect } from 'react';
+import { useTopics, Topic } from '@/lib/hooks/useTopics';
 
 interface ChangeTopicModalProps {
   isOpen: boolean;
@@ -32,8 +18,17 @@ export function ChangeTopicModal({
   currentTopic,
   loading = false,
 }: ChangeTopicModalProps) {
+  const { topics, loading: topicsLoading } = useTopics();
   const [selectedTopic, setSelectedTopic] = useState(currentTopic || '');
   const [reason, setReason] = useState('');
+
+  // Reset selected topic when modal opens with new currentTopic
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedTopic(currentTopic || '');
+      setReason('');
+    }
+  }, [isOpen, currentTopic]);
 
   if (!isOpen) return null;
 
@@ -56,29 +51,39 @@ export function ChangeTopicModal({
           <div className="p-4 border-b border-border">
             <h3 className="text-lg font-semibold text-text-primary">Change Topic</h3>
             <p className="text-sm text-text-secondary mt-1">
-              Override the AI-assigned topic for this message
+              Categorize this message with a topic
             </p>
           </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {TOPICS.map((topic) => (
-                <button
-                  key={topic.value}
-                  type="button"
-                  onClick={() => setSelectedTopic(topic.value)}
-                  className={`p-3 rounded-lg border text-left transition-colors ${
-                    selectedTopic === topic.value
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                      : 'bg-bg-secondary border-border hover:bg-bg-tertiary text-text-secondary'
-                  }`}
-                >
-                  <div className="font-medium text-sm">{topic.label}</div>
-                  <div className="text-xs opacity-70">{topic.description}</div>
-                </button>
-              ))}
-            </div>
+            {topicsLoading ? (
+              <div className="text-center text-text-secondary py-4">Loading topics...</div>
+            ) : topics.length === 0 ? (
+              <div className="text-center text-text-secondary py-4">
+                No topics configured. Create topics in Admin &gt; Topics.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {topics.map((topic) => (
+                  <button
+                    key={topic.name}
+                    type="button"
+                    onClick={() => setSelectedTopic(topic.name)}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      selectedTopic === topic.name
+                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                        : 'bg-bg-secondary border-border hover:bg-bg-tertiary text-text-secondary'
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{topic.label}</div>
+                    {topic.description && (
+                      <div className="text-xs opacity-70">{topic.description}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div>
               <label htmlFor="topic-reason" className="block text-sm font-medium text-text-primary mb-1">
@@ -107,7 +112,7 @@ export function ChangeTopicModal({
             </button>
             <button
               type="submit"
-              disabled={loading || !selectedTopic}
+              disabled={loading || !selectedTopic || topicsLoading}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
             >
               {loading ? 'Saving...' : 'Save Topic'}

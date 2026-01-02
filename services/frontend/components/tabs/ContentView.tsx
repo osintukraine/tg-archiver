@@ -7,7 +7,6 @@ import type { Message } from '@/lib/types';
 import { getMediaUrl } from '@/lib/api';
 import EngagementBar from '@/components/EngagementBar';
 import SocialGraphIndicator from '@/components/SocialGraphIndicator';
-import SentimentBadge from '@/components/SentimentBadge';
 import { MediaLightbox } from '@/components/MediaLightbox';
 
 interface ContentViewProps {
@@ -105,14 +104,6 @@ export function ContentView({ message }: ContentViewProps) {
 
           <MessageCircle className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">{message.channel?.name || 'Unknown Channel'}</span>
-
-          {/* Sentiment Badge */}
-          {message.content_sentiment && (
-            <SentimentBadge
-              sentiment={message.content_sentiment as 'positive' | 'negative' | 'neutral' | 'urgent'}
-              mode="compact"
-            />
-          )}
 
           {message.channel?.username && (
             <a
@@ -279,48 +270,6 @@ export function ContentView({ message }: ContentViewProps) {
                 #{tag}
               </Badge>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Curated Entity Matches (Knowledge Graph) */}
-      {message.curated_entities && message.curated_entities.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Matched Entities (Knowledge Graph)</p>
-          <div className="flex flex-wrap gap-2">
-            {message.curated_entities.map((entity, idx) => {
-              // Color-code by entity type
-              const entityColors: Record<string, string> = {
-                equipment: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-                individual: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-                organization: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                location: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-                event: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-                military_unit: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-                ship: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-                aircraft: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-              };
-
-              const colorClass = entityColors[entity.entity_type] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
-
-              // Format match type for display
-              const matchTypeLabel = {
-                exact_name: '100%',
-                alias: '95%',
-                hashtag: '90%',
-                semantic: `${Math.round(entity.similarity_score * 100)}%`,
-              }[entity.match_type];
-
-              return (
-                <Badge
-                  key={idx}
-                  className={`text-xs ${colorClass} border-0`}
-                  title={`${entity.entity_type} • ${entity.match_type} • ${entity.source_reference}${entity.description ? '\n' + entity.description : ''}`}
-                >
-                  {entity.name} <span className="opacity-60 ml-1">({matchTypeLabel})</span>
-                </Badge>
-              );
-            })}
           </div>
         </div>
       )}

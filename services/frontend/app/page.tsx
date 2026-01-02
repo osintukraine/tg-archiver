@@ -31,10 +31,15 @@ interface HomePageProps {
     channel_folder?: string;
     has_media?: string;
     media_type?: string;
-    topic?: string;
-    is_spam?: string;
-    osint_min?: string;
-    osint_max?: string;
+    language?: string;
+    has_comments?: string;
+    min_views?: string;
+    min_forwards?: string;
+    days?: string;
+    date_from?: string;
+    date_to?: string;
+    sort_by?: string;
+    sort_order?: string;
     page?: string;
     page_size?: string;
   };
@@ -46,12 +51,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     q: searchParams.q,
     channel_username: searchParams.channel_username,
     channel_folder: searchParams.channel_folder,
-    has_media: searchParams.has_media === 'true' ? true : undefined,
+    has_media: searchParams.has_media === 'true' ? true : searchParams.has_media === 'false' ? false : undefined,
     media_type: searchParams.media_type,
-    topic: searchParams.topic,
-    is_spam: searchParams.is_spam === 'true' ? true : searchParams.is_spam === 'false' ? false : undefined,
-    osint_min: searchParams.osint_min ? parseInt(searchParams.osint_min) : undefined,
-    osint_max: searchParams.osint_max ? parseInt(searchParams.osint_max) : undefined,
+    language: searchParams.language,
+    has_comments: searchParams.has_comments === 'true' ? true : searchParams.has_comments === 'false' ? false : undefined,
+    min_views: searchParams.min_views ? parseInt(searchParams.min_views) : undefined,
+    min_forwards: searchParams.min_forwards ? parseInt(searchParams.min_forwards) : undefined,
+    days: searchParams.days ? parseInt(searchParams.days) : undefined,
+    date_from: searchParams.date_from,
+    date_to: searchParams.date_to,
+    sort_by: searchParams.sort_by,
+    sort_order: searchParams.sort_order as 'asc' | 'desc' | undefined,
     page: searchParams.page ? parseInt(searchParams.page) : 1,
     page_size: searchParams.page_size ? parseInt(searchParams.page_size) : 20,
   };

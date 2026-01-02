@@ -14,4 +14,3 @@ export { Modal } from './Modal';
 export type { ModalProps } from './Modal';
 export { StatCard } from './StatCard';
 export type { StatCardProps } from './StatCard';
-export { EnrichmentTasksPanel } from './EnrichmentTasksPanel';

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Badge, StatCard } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
+import { useTopics } from '@/lib/hooks/useTopics';
 
 /**
  * Admin - Data Export
@@ -62,6 +63,9 @@ interface Channel {
 }
 
 export default function ExportPage() {
+  // Topics from API
+  const { topicOptions } = useTopics();
+
   // State
   const [profiles, setProfiles] = useState<Record<string, ExportProfile>>({});
   const [jobs, setJobs] = useState<ExportJob[]>([]);
@@ -79,9 +83,8 @@ export default function ExportPage() {
   const [selectedChannels, setSelectedChannels] = useState<number[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [importance, setImportance] = useState('');
-  const [isSpam, setIsSpam] = useState<string>('false');
   const [hasMedia, setHasMedia] = useState<string>('');
+  const [selectedTopic, setSelectedTopic] = useState<string>('');
 
   // Fetch initial data
   const fetchData = useCallback(async () => {
@@ -117,9 +120,8 @@ export default function ExportPage() {
     if (selectedChannels.length > 0) filters.channel_ids = selectedChannels;
     if (dateFrom) filters.date_from = dateFrom;
     if (dateTo) filters.date_to = dateTo;
-    if (importance) filters.importance_level = importance;
-    if (isSpam !== '') filters.is_spam = isSpam === 'true';
     if (hasMedia !== '') filters.has_media = hasMedia === 'true';
+    if (selectedTopic) filters.topics = [selectedTopic];
 
     try {
       const data = await adminApi.post('/api/admin/export/estimate', {
@@ -141,9 +143,8 @@ export default function ExportPage() {
     if (selectedChannels.length > 0) filters.channel_ids = selectedChannels;
     if (dateFrom) filters.date_from = dateFrom;
     if (dateTo) filters.date_to = dateTo;
-    if (importance) filters.importance_level = importance;
-    if (isSpam !== '') filters.is_spam = isSpam === 'true';
     if (hasMedia !== '') filters.has_media = hasMedia === 'true';
+    if (selectedTopic) filters.topics = [selectedTopic];
 
     try {
       await adminApi.post('/api/admin/export/start', {
@@ -265,7 +266,6 @@ export default function ExportPage() {
             >
               <option value="messages">Messages</option>
               <option value="channels" disabled>Channels (coming soon)</option>
-              <option value="entities" disabled>Entities (coming soon)</option>
             </select>
           </div>
 
@@ -323,37 +323,6 @@ export default function ExportPage() {
             />
           </div>
 
-          {/* Importance */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1">Importance</label>
-            <select
-              value={importance}
-              onChange={(e) => setImportance(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
-            >
-              <option value="">All</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          {/* Spam Filter */}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1">Include Spam</label>
-            <select
-              value={isSpam}
-              onChange={(e) => setIsSpam(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
-            >
-              <option value="false">Exclude spam</option>
-              <option value="true">Include spam</option>
-              <option value="">All messages</option>
-            </select>
-          </div>
-
           {/* Media Filter */}
           <div>
             <label className="block text-sm text-text-secondary mb-1">Media</label>
@@ -368,6 +337,21 @@ export default function ExportPage() {
             </select>
           </div>
 
+          {/* Topic Filter */}
+          <div>
+            <label className="block text-sm text-text-secondary mb-1">Topic</label>
+            <select
+              value={selectedTopic}
+              onChange={(e) => setSelectedTopic(e.target.value)}
+              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+            >
+              <option value="">All Topics</option>
+              {topicOptions.filter(t => t.value !== '').map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Label */}
           <div>
             <label className="block text-sm text-text-secondary mb-1">Label (optional)</label>
@@ -375,7 +359,7 @@ export default function ExportPage() {
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g., Q4 Combat Reports"
+              placeholder="e.g., December 2024 Archive"
               className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
             />
           </div>

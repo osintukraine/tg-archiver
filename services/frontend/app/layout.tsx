@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
-  keywords: ['OSINT', 'Telegram', 'Intelligence', 'Archive', 'Analysis'],
+  keywords: ['Telegram', 'Archive', 'Channels', 'Messages', 'Search'],
   openGraph: {
     type: 'website',
     locale: 'en_US',

@@ -3,36 +3,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAuthHeaders } from '@/lib/auth-utils';
 import Link from 'next/link';
 
 /**
  * API Keys Management Page
  *
  * Allows users to create, view, and revoke API keys for programmatic access.
- * Pattern follows feed-tokens page with key shown once on creation.
+ * Simplified version for tg-archiver.
  */
 
 interface ApiKey {
-  id: string;
-  prefix: string;
-  name: string;
-  description: string | null;
-  scopes: string[];
+  id: number;
+  name: string | null;
+  scopes: string[] | null;
   created_at: string;
   expires_at: string | null;
-  revoked_at: string | null;
   last_used_at: string | null;
-  use_count: number;
-  rate_limit_tier: string | null;
   is_active: boolean;
   is_expired: boolean;
 }
 
 interface NewApiKeyResponse {
   api_key: {
-    id: string;
-    prefix: string;
-    name: string;
+    id: number;
+    name: string | null;
     scopes: string[];
   };
   plaintext_key: string;
@@ -40,7 +35,7 @@ interface NewApiKeyResponse {
 }
 
 const AVAILABLE_SCOPES = [
-  { value: 'read', label: 'Read', description: 'Read messages, channels, events' },
+  { value: 'read', label: 'Read', description: 'Read messages, channels' },
   { value: 'write', label: 'Write', description: 'Create and update content' },
   { value: 'media', label: 'Media', description: 'Access media files' },
   { value: 'export', label: 'Export', description: 'Export data and feeds' },
@@ -51,7 +46,6 @@ export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [newKey, setNewKey] = useState<NewApiKeyResponse | null>(null);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [scopes, setScopes] = useState<string[]>(['read']);
   const [expiresInDays, setExpiresInDays] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +57,7 @@ export default function ApiKeysPage() {
   const fetchKeys = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/api-keys`, {
-        credentials: 'include',
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -74,7 +68,7 @@ export default function ApiKeysPage() {
         const errData = await res.json().catch(() => ({}));
         setError(errData.detail || 'Failed to load API keys.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load API keys.');
     } finally {
       setLoading(false);
@@ -100,21 +94,20 @@ export default function ApiKeysPage() {
     setNewKey(null);
 
     try {
-      const body: any = {
+      const body: Record<string, unknown> = {
         name: name.trim(),
         scopes,
       };
-      if (description.trim()) {
-        body.description = description.trim();
-      }
       if (expiresInDays && expiresInDays > 0) {
         body.expires_in_days = expiresInDays;
       }
 
       const res = await fetch(`${API_URL}/api/api-keys`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify(body),
       });
 
@@ -122,7 +115,6 @@ export default function ApiKeysPage() {
         const data = await res.json();
         setNewKey(data);
         setName('');
-        setDescription('');
         setScopes(['read']);
         setExpiresInDays(null);
         setShowCreateForm(false);
@@ -131,22 +123,22 @@ export default function ApiKeysPage() {
         const errData = await res.json().catch(() => ({}));
         setError(errData.detail || 'Failed to create API key.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to create API key.');
     } finally {
       setCreating(false);
     }
   };
 
-  const revokeKey = async (keyId: string, keyName: string) => {
-    if (!confirm(`Revoke API key "${keyName}"? All requests using this key will fail.`)) {
+  const revokeKey = async (keyId: number, keyName: string | null) => {
+    if (!confirm(`Revoke API key "${keyName || 'Unnamed'}"? All requests using this key will fail.`)) {
       return;
     }
 
     try {
       const res = await fetch(`${API_URL}/api/api-keys/${keyId}`, {
         method: 'DELETE',
-        credentials: 'include',
+        headers: getAuthHeaders(),
       });
 
       if (res.ok) {
@@ -155,7 +147,7 @@ export default function ApiKeysPage() {
         const errData = await res.json().catch(() => ({}));
         setError(errData.detail || 'Failed to revoke API key.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to revoke API key.');
     }
   };
@@ -256,7 +248,7 @@ export default function ApiKeysPage() {
       {newKey && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-900/50 rounded-lg p-4 mb-6">
           <h3 className="font-bold text-green-800 dark:text-green-300 mb-2">
-            ✅ API Key Created Successfully
+            API Key Created Successfully
           </h3>
           <p className="text-sm text-green-700 dark:text-green-400 mb-3">
             <strong>Save this key now!</strong> It will not be shown again.
@@ -269,7 +261,7 @@ export default function ApiKeysPage() {
               onClick={copyKey}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors whitespace-nowrap"
             >
-              {copiedKey ? '✓ Copied!' : 'Copy'}
+              {copiedKey ? 'Copied!' : 'Copy'}
             </button>
           </div>
           <button
@@ -320,21 +312,6 @@ export default function ApiKeysPage() {
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-3 py-2 bg-bg-base border border-border-subtle rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   maxLength={100}
-                />
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Description (optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="What is this key for?"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-base border border-border-subtle rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  maxLength={500}
                 />
               </div>
 
@@ -425,9 +402,11 @@ export default function ApiKeysPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <code className="font-mono text-sm bg-bg-secondary px-2 py-1 rounded">
-                        {key.prefix}...
+                        Key #{key.id}
                       </code>
-                      <span className="font-medium text-text-primary">{key.name}</span>
+                      {key.name && (
+                        <span className="font-medium text-text-primary">{key.name}</span>
+                      )}
 
                       {/* Status badges */}
                       {!key.is_active && (
@@ -442,31 +421,28 @@ export default function ApiKeysPage() {
                       )}
                     </div>
 
-                    {key.description && (
-                      <p className="text-sm text-text-tertiary mt-1">{key.description}</p>
-                    )}
-
                     {/* Scopes */}
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {key.scopes.map((scope) => (
-                        <span
-                          key={scope}
-                          className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded"
-                        >
-                          {scope}
-                        </span>
-                      ))}
-                    </div>
+                    {key.scopes && key.scopes.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {key.scopes.map((scope) => (
+                          <span
+                            key={scope}
+                            className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded"
+                          >
+                            {scope}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Metadata */}
                     <div className="text-sm text-text-tertiary mt-2 space-x-3">
                       <span>Created: {formatDate(key.created_at)}</span>
                       {key.last_used_at && (
-                        <span>• Last used: {formatDate(key.last_used_at)}</span>
+                        <span>· Last used: {formatDate(key.last_used_at)}</span>
                       )}
-                      <span>• {key.use_count.toLocaleString()} requests</span>
                       {key.expires_at && (
-                        <span>• Expires: {formatDate(key.expires_at)}</span>
+                        <span>· Expires: {formatDate(key.expires_at)}</span>
                       )}
                     </div>
                   </div>

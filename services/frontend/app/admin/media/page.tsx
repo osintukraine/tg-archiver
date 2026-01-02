@@ -22,12 +22,10 @@ interface MediaItem {
   mime_type: string | null;
   file_size: number | null;
   media_url: string | null;
-  importance_level: string | null;
   topic: string | null;
   sentiment: string | null;
   channel_name: string;
   channel_username: string | null;
-  source_type: string | null;
 }
 
 interface MediaStats {
@@ -37,7 +35,6 @@ interface MediaStats {
   videos_count: number;
   documents_count: number;
   by_channel: Record<string, { count: number; size_mb: number }>;
-  by_importance: Record<string, number>;
 }
 
 type MediaType = 'photo' | 'video' | 'document' | '';
@@ -51,7 +48,6 @@ export default function MediaPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [typeFilter, setTypeFilter] = useState<MediaType>('');
-  const [importanceFilter, setImportanceFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
 
   const fetchMedia = useCallback(async () => {
@@ -63,7 +59,6 @@ export default function MediaPage() {
         page_size: '48',  // 6x8 grid
       });
       if (typeFilter) params.append('media_type', typeFilter);
-      if (importanceFilter) params.append('importance', importanceFilter);
 
       const data = await adminApi.get(`/api/admin/media?${params}`);
       setItems(data.items);
@@ -74,7 +69,7 @@ export default function MediaPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, typeFilter, importanceFilter]);
+  }, [page, typeFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -162,20 +157,6 @@ export default function MediaPage() {
             <option value="document">Documents</option>
           </select>
         </div>
-        <div>
-          <label className="block text-sm text-text-secondary mb-1">Importance</label>
-          <select
-            value={importanceFilter}
-            onChange={(e) => { setImportanceFilter(e.target.value); setPage(1); }}
-            className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
-          >
-            <option value="">All</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
         <div className="ml-auto text-text-secondary text-sm self-end">
           {totalItems.toLocaleString()} items
         </div>
@@ -244,18 +225,6 @@ export default function MediaPage() {
                     {item.media_type}
                   </Badge>
                 </div>
-
-                {/* Importance indicator */}
-                {item.importance_level && ['critical', 'high'].includes(item.importance_level) && (
-                  <div className="absolute top-2 left-2">
-                    <Badge
-                      variant={item.importance_level === 'critical' ? 'error' : 'warning'}
-                      size="sm"
-                    >
-                      {item.importance_level}
-                    </Badge>
-                  </div>
-                )}
               </div>
             </div>
           ))}
@@ -343,12 +312,6 @@ export default function MediaPage() {
                 <span>{new Date(selectedItem.posted_at).toLocaleString()}</span>
                 <span>•</span>
                 <span>{formatFileSize(selectedItem.file_size)}</span>
-                {selectedItem.importance_level && (
-                  <>
-                    <span>•</span>
-                    <Badge variant="default" size="sm">{selectedItem.importance_level}</Badge>
-                  </>
-                )}
                 {selectedItem.topic && (
                   <>
                     <span>•</span>

@@ -8,11 +8,14 @@ const config: Config = {
   ],
   safelist: [
     // Topic classes (dynamically generated, need to be preserved)
-    'topic-combat',
-    'topic-civilian',
-    'topic-diplomatic',
-    'topic-equipment',
-    'topic-general',
+    'topic-news',
+    'topic-announcement',
+    'topic-discussion',
+    'topic-media',
+    'topic-important',
+    'topic-archive',
+    'topic-offtopic',
+    'topic-other',
     'topic-rule_based',
   ],
   darkMode: 'class', // Enable dark mode via class strategy

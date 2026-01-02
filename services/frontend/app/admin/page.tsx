@@ -23,7 +23,6 @@ export default function AdminDashboard() {
   // Widget components
   const MessagesToday = getWidget('messages-today');
   const ActiveChannels = getWidget('active-channels');
-  const EntityCount = getWidget('entity-count');
   const StorageUsed = getWidget('storage-used');
   const SpamRate = getWidget('spam-rate');
   const ProcessingLatency = getWidget('processing-latency');
@@ -47,10 +46,9 @@ export default function AdminDashboard() {
         <h2 className="text-sm font-medium text-text-tertiary uppercase tracking-wide mb-4">
           Key Metrics
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {MessagesToday && <MessagesToday />}
           {ActiveChannels && <ActiveChannels />}
-          {EntityCount && <EntityCount />}
           {StorageUsed && <StorageUsed />}
         </div>
       </section>

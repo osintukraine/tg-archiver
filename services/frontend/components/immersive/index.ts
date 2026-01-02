@@ -11,9 +11,4 @@ export { VideoPlayer } from './VideoPlayer';
 export { GlassPanel } from './GlassPanel';
 export { MediaDots } from './MediaDots';
 export { ImmersiveControls } from './ImmersiveControls';
-export { GeoBackground } from './GeoBackground';
 export { RssTicker } from './RssTicker';
-
-// Legacy exports (keep for backwards compatibility until cleanup)
-export { ImmersiveMediaPlayer } from './ImmersiveMediaPlayer';
-export { MediaRenderer } from './MediaRenderer';

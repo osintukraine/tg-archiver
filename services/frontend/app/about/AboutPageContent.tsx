@@ -1,14 +1,9 @@
-// services/frontend-nextjs/app/about/AboutPageContent.tsx
+// services/frontend/app/about/AboutPageContent.tsx
 
 'use client';
 
-import { useState, useEffect } from 'react';
 import Script from 'next/script';
-import { useAboutPageData } from '@/hooks/useAboutPageData';
-import TabNavigation, { TabId } from '@/components/about/TabNavigation';
-import OverviewTab from '@/components/about/tabs/OverviewTab';
 import ActivityTab from '@/components/about/tabs/ActivityTab';
-import ArchitectureTab from '@/components/about/tabs/ArchitectureTab';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SITE_NAME } from '@/lib/constants';
 
@@ -23,26 +18,6 @@ const KOFI_WIDGET_CONFIG = {
 };
 
 export default function AboutPageContent() {
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const { systemHealth, aboutStats, pipelineMetrics, servicesMetrics, qualityMetrics, isLoading, error } = useAboutPageData();
-
-  // URL-based tab routing
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab') as TabId;
-    if (tab && ['overview', 'activity', 'architecture'].includes(tab)) {
-      setActiveTab(tab);
-    }
-  }, []);
-
-  // Update URL when tab changes
-  const handleTabChange = (tab: TabId) => {
-    setActiveTab(tab);
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', tab);
-    window.history.pushState({}, '', url);
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
@@ -52,31 +27,14 @@ export default function AboutPageContent() {
             About {SITE_NAME}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 max-w-3xl">
-            A production-ready platform for archiving, enriching, and analyzing Telegram
-            channels with multi-model AI enrichment, semantic search, and configurable
-            intelligence rules.
+            Telegram channel archiving platform - real-time monitoring and activity tracking.
           </p>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <TabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
-
-      {/* Tab Content */}
+      {/* Activity Content */}
       <ErrorBoundary>
-        {activeTab === 'overview' && <OverviewTab />}
-        {activeTab === 'activity' && <ActivityTab />}
-        {activeTab === 'architecture' && (
-          <ArchitectureTab
-            systemHealth={systemHealth}
-            aboutStats={aboutStats}
-            pipelineMetrics={pipelineMetrics}
-            servicesMetrics={servicesMetrics}
-            qualityMetrics={qualityMetrics}
-            isLoading={isLoading}
-            error={error}
-          />
-        )}
+        <ActivityTab />
       </ErrorBoundary>
 
       {/* Ko-fi Floating Widget - only rendered when NEXT_PUBLIC_KOFI_USERNAME is set */}

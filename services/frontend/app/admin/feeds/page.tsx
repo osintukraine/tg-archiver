@@ -5,11 +5,9 @@ import { Badge, StatCard, DataTable, Modal } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 
 /**
- * Admin - Feeds Management
+ * Admin - RSS Feeds Management
  *
- * Unified feed management with two tabs:
- * - Ingestion: External RSS feeds the platform consumes
- * - Subscriptions: RSS/Atom/JSON feeds users subscribe to from the platform
+ * Manage external RSS feeds the platform ingests for the News page.
  */
 
 // ============================================================================
@@ -20,19 +18,14 @@ interface RSSFeed {
   id: number;
   name: string;
   url: string;
-  website_url: string | null;
-  category: string;
-  trust_level: number;
+  category: string | null;
   language: string | null;
-  country: string | null;
-  description: string | null;
-  active: boolean;
-  last_polled_at: string | null;
-  last_successful_poll_at: string | null;
-  poll_failures_count: number;
-  articles_fetched_total: number;
+  is_active: boolean;
+  last_fetched_at: string | null;
+  fetch_interval_minutes: number | null;
+  error_count: number;
+  last_error: string | null;
   created_at: string | null;
-  updated_at: string | null;
 }
 
 interface FeedStats {
@@ -41,9 +34,7 @@ interface FeedStats {
   inactive_feeds: number;
   failing_feeds: number;
   by_category: Record<string, number>;
-  by_trust_level: Record<string, number>;
   total_articles: number;
-  articles_last_24h: number;
 }
 
 interface FeedTestResult {
@@ -61,77 +52,34 @@ interface FeedTestResult {
   error: string | null;
 }
 
-interface UserSubscription {
-  id: number;
-  user_id: string;
-  user_email: string;
-  feed_type: 'rss' | 'atom' | 'json';
-  feed_url: string;
-  query_filters: Record<string, unknown>;
-  created_at: string;
-  last_accessed_at: string | null;
-  access_count: number;
-  is_active: boolean;
-}
-
-const CATEGORIES = ['ukraine', 'russia', 'neutral', 'international'];
-const TRUST_LEVELS = [1, 2, 3, 4, 5];
+const CATEGORIES = ['news', 'official', 'aggregator', 'community', 'other'];
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export default function FeedsPage() {
-  const [activeTab, setActiveTab] = useState<'ingestion' | 'subscriptions'>('ingestion');
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Feeds</h1>
+          <h1 className="text-2xl font-bold text-text-primary">RSS Feeds</h1>
           <p className="text-text-secondary mt-1">
-            Manage RSS ingestion and user subscriptions
+            Manage external RSS feeds ingested for the News page
           </p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border-subtle">
-        <button
-          onClick={() => setActiveTab('ingestion')}
-          className={`px-6 py-3 font-medium text-sm transition-colors ${
-            activeTab === 'ingestion'
-              ? 'text-blue-500 border-b-2 border-blue-500'
-              : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          📥 Ingestion
-          <span className="ml-2 text-xs text-text-tertiary">(RSS sources)</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('subscriptions')}
-          className={`px-6 py-3 font-medium text-sm transition-colors ${
-            activeTab === 'subscriptions'
-              ? 'text-blue-500 border-b-2 border-blue-500'
-              : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          📤 Subscriptions
-          <span className="ml-2 text-xs text-text-tertiary">(user feeds)</span>
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'ingestion' ? <IngestionTab /> : <SubscriptionsTab />}
+      <FeedManagement />
     </div>
   );
 }
 
 // ============================================================================
-// INGESTION TAB (existing RSS feed management)
+// FEED MANAGEMENT
 // ============================================================================
 
-function IngestionTab() {
+function FeedManagement() {
   const [feeds, setFeeds] = useState<RSSFeed[]>([]);
   const [stats, setStats] = useState<FeedStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,13 +103,9 @@ function IngestionTab() {
   const [formData, setFormData] = useState({
     name: '',
     url: '',
-    website_url: '',
-    category: 'neutral',
-    trust_level: 3,
+    category: 'news',
     language: 'en',
-    country: '',
-    description: '',
-    active: true,
+    is_active: true,
   });
 
   const fetchFeeds = useCallback(async () => {
@@ -174,7 +118,7 @@ function IngestionTab() {
       });
       if (search) params.append('search', search);
       if (category) params.append('category', category);
-      if (activeOnly !== undefined) params.append('active', activeOnly.toString());
+      if (activeOnly !== undefined) params.append('is_active', activeOnly.toString());
 
       const data = await adminApi.get(`/api/admin/feeds/rss?${params}`);
       setFeeds(data.items || []);
@@ -281,13 +225,9 @@ function IngestionTab() {
     setFormData({
       name: '',
       url: '',
-      website_url: '',
-      category: 'neutral',
-      trust_level: 3,
+      category: 'news',
       language: 'en',
-      country: '',
-      description: '',
-      active: true,
+      is_active: true,
     });
   };
 
@@ -298,17 +238,6 @@ function IngestionTab() {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
-
-  const getTrustBadge = (level: number) => {
-    const variants: Record<number, 'error' | 'warning' | 'default' | 'info' | 'success'> = {
-      1: 'error',
-      2: 'warning',
-      3: 'default',
-      4: 'info',
-      5: 'success',
-    };
-    return <Badge variant={variants[level] || 'default'} size="sm">Trust: {level}</Badge>;
-  };
 
   const columns = [
     {
@@ -327,28 +256,22 @@ function IngestionTab() {
       render: (_: unknown, feed: RSSFeed) => (
         <Badge
           variant={
-            feed.category === 'ukraine' ? 'info' :
-            feed.category === 'russia' ? 'error' :
-            feed.category === 'international' ? 'success' : 'default'
+            feed.category === 'news' ? 'info' :
+            feed.category === 'official' ? 'success' :
+            feed.category === 'aggregator' ? 'warning' :
+            feed.category === 'community' ? 'default' : 'default'
           }
           size="sm"
         >
-          {feed.category}
+          {feed.category || 'uncategorized'}
         </Badge>
       ),
     },
     {
-      key: 'trust_level',
-      label: 'Trust',
-      render: (_: unknown, feed: RSSFeed) => getTrustBadge(feed.trust_level),
-    },
-    {
-      key: 'articles_fetched_total',
-      label: 'Articles',
+      key: 'language',
+      label: 'Lang',
       render: (_: unknown, feed: RSSFeed) => (
-        <span className="text-sm text-text-primary font-medium">
-          {feed.articles_fetched_total.toLocaleString()}
-        </span>
+        <span className="text-sm text-text-secondary">{feed.language || '-'}</span>
       ),
     },
     {
@@ -356,13 +279,22 @@ function IngestionTab() {
       label: 'Status',
       render: (_: unknown, feed: RSSFeed) => (
         <div className="flex items-center gap-2">
-          <Badge variant={feed.active ? 'success' : 'default'} size="sm">
-            {feed.active ? 'Active' : 'Inactive'}
+          <Badge variant={feed.is_active ? 'success' : 'default'} size="sm">
+            {feed.is_active ? 'Active' : 'Inactive'}
           </Badge>
-          {feed.poll_failures_count > 3 && (
+          {feed.error_count > 3 && (
             <Badge variant="error" size="sm">Failing</Badge>
           )}
         </div>
+      ),
+    },
+    {
+      key: 'last_fetched',
+      label: 'Last Fetch',
+      render: (_: unknown, feed: RSSFeed) => (
+        <span className="text-xs text-text-tertiary">
+          {feed.last_fetched_at ? new Date(feed.last_fetched_at).toLocaleString() : 'Never'}
+        </span>
       ),
     },
     {
@@ -375,12 +307,6 @@ function IngestionTab() {
             className="text-blue-500 hover:text-blue-400 text-sm"
           >
             Edit
-          </button>
-          <button
-            onClick={() => handleTriggerPoll(feed.id)}
-            className="text-green-500 hover:text-green-400 text-sm"
-          >
-            Poll
           </button>
         </div>
       ),
@@ -404,7 +330,7 @@ function IngestionTab() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             title="Total Feeds"
             value={stats.total_feeds}
@@ -424,11 +350,6 @@ function IngestionTab() {
             title="Total Articles"
             value={stats.total_articles}
             icon={<span className="text-2xl">📄</span>}
-          />
-          <StatCard
-            title="Last 24h"
-            value={stats.articles_last_24h}
-            icon={<span className="text-2xl">📈</span>}
           />
         </div>
       )}
@@ -584,7 +505,7 @@ function IngestionTab() {
               <div>
                 <label className="block text-sm text-text-secondary mb-1">Category</label>
                 <select
-                  value={selectedFeed ? selectedFeed.category : formData.category}
+                  value={selectedFeed?.category || formData.category}
                   onChange={(e) => selectedFeed
                     ? setSelectedFeed({ ...selectedFeed, category: e.target.value })
                     : setFormData({ ...formData, category: e.target.value })
@@ -597,27 +518,10 @@ function IngestionTab() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-text-secondary mb-1">Trust Level</label>
-                <select
-                  value={selectedFeed ? selectedFeed.trust_level : formData.trust_level}
-                  onChange={(e) => selectedFeed
-                    ? setSelectedFeed({ ...selectedFeed, trust_level: Number(e.target.value) })
-                    : setFormData({ ...formData, trust_level: Number(e.target.value) })
-                  }
-                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
-                >
-                  {TRUST_LEVELS.map((l) => (
-                    <option key={l} value={l}>{l} - {l === 1 ? 'Low' : l === 5 ? 'High' : 'Medium'}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
                 <label className="block text-sm text-text-secondary mb-1">Language</label>
                 <input
                   type="text"
-                  value={(selectedFeed ? selectedFeed.language : formData.language) || ''}
+                  value={(selectedFeed?.language || formData.language) || ''}
                   onChange={(e) => selectedFeed
                     ? setSelectedFeed({ ...selectedFeed, language: e.target.value })
                     : setFormData({ ...formData, language: e.target.value })
@@ -626,51 +530,28 @@ function IngestionTab() {
                   placeholder="en"
                 />
               </div>
-              <div>
-                <label className="block text-sm text-text-secondary mb-1">Country</label>
-                <input
-                  type="text"
-                  value={(selectedFeed ? selectedFeed.country : formData.country) || ''}
-                  onChange={(e) => selectedFeed
-                    ? setSelectedFeed({ ...selectedFeed, country: e.target.value })
-                    : setFormData({ ...formData, country: e.target.value })
-                  }
-                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
-                  placeholder="US"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-text-secondary mb-1">Description</label>
-              <textarea
-                value={(selectedFeed ? selectedFeed.description : formData.description) || ''}
-                onChange={(e) => selectedFeed
-                  ? setSelectedFeed({ ...selectedFeed, description: e.target.value })
-                  : setFormData({ ...formData, description: e.target.value })
-                }
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
-                rows={2}
-              />
             </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="active"
-                checked={selectedFeed ? selectedFeed.active : formData.active}
+                id="is_active"
+                checked={selectedFeed ? selectedFeed.is_active : formData.is_active}
                 onChange={(e) => selectedFeed
-                  ? setSelectedFeed({ ...selectedFeed, active: e.target.checked })
-                  : setFormData({ ...formData, active: e.target.checked })
+                  ? setSelectedFeed({ ...selectedFeed, is_active: e.target.checked })
+                  : setFormData({ ...formData, is_active: e.target.checked })
                 }
                 className="rounded"
               />
-              <label htmlFor="active" className="text-sm">Active</label>
+              <label htmlFor="is_active" className="text-sm">Active</label>
             </div>
 
             {selectedFeed && (
               <div className="glass p-3 space-y-2 text-sm">
-                <div>Articles fetched: {selectedFeed.articles_fetched_total}</div>
-                <div>Poll failures: {selectedFeed.poll_failures_count}</div>
-                <div>Last polled: {selectedFeed.last_polled_at ? new Date(selectedFeed.last_polled_at).toLocaleString() : 'Never'}</div>
+                <div>Error count: {selectedFeed.error_count}</div>
+                {selectedFeed.last_error && (
+                  <div className="text-red-400 text-xs">Last error: {selectedFeed.last_error}</div>
+                )}
+                <div>Last fetched: {selectedFeed.last_fetched_at ? new Date(selectedFeed.last_fetched_at).toLocaleString() : 'Never'}</div>
               </div>
             )}
 
@@ -769,63 +650,3 @@ function IngestionTab() {
   );
 }
 
-// ============================================================================
-// SUBSCRIPTIONS TAB (placeholder for user feed subscriptions)
-// ============================================================================
-
-function SubscriptionsTab() {
-  return (
-    <div className="mt-6">
-      <div className="glass p-12 text-center">
-        <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
-          <svg className="w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-        </div>
-        <h2 className="text-xl font-semibold text-text-primary mb-2">User Subscriptions</h2>
-        <p className="text-text-secondary max-w-md mx-auto mb-6">
-          When authentication is enabled, users will be able to subscribe to RSS/Atom/JSON feeds
-          from the platform. This page will let you manage and monitor those subscriptions.
-        </p>
-
-        <div className="bg-bg-secondary p-6 rounded-lg max-w-lg mx-auto text-left">
-          <h3 className="font-medium text-text-primary mb-3">Planned Features</h3>
-          <ul className="space-y-2 text-sm text-text-secondary">
-            <li className="flex items-center gap-2">
-              <span className="text-yellow-500">⏳</span>
-              View all user feed subscriptions
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-yellow-500">⏳</span>
-              Revoke/invalidate specific feeds
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-yellow-500">⏳</span>
-              Monitor access patterns and abuse
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-yellow-500">⏳</span>
-              Rate limiting per user/feed
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-yellow-500">⏳</span>
-              Usage analytics (requests, bandwidth)
-            </li>
-          </ul>
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-2 justify-center">
-          <span className="px-3 py-1 rounded-full text-xs bg-purple-500/10 text-purple-400 border border-purple-500/30">
-            Requires Auth
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs bg-bg-tertiary text-text-secondary">
-            RSS / Atom / JSON
-          </span>
-          <span className="px-3 py-1 rounded-full text-xs bg-bg-tertiary text-text-secondary">
-            Access Control
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}

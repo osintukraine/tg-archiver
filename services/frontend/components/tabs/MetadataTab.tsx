@@ -3,8 +3,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hash, Radio, Calendar, Image as ImageIcon, Languages, Eye, Database, UserCheck, Archive, Network } from 'lucide-react';
-import ReviewStatusBadge from '@/components/ReviewStatusBadge';
+import { Hash, Radio, Calendar, Image as ImageIcon, Languages, Eye, Database, Archive, Network } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 import type { Message } from '@/lib/types';
 
@@ -23,13 +22,11 @@ interface MetadataTabProps {
  * - Translation status (language, provider, timestamp, cost)
  * - Social metrics (views, forwards, reactions)
  * - Processing metadata (backfill status, grouped_id)
- * - Human review status (needs_review, reviewed, reviewer)
  * - Archival context (triggered_by, triggered_at, priority)
  * - Social graph context (author, forwards, replies, linked chats)
  */
 export function MetadataTab({ message }: MetadataTabProps) {
   const hasMedia = message.media_urls && message.media_urls.length > 0;
-  const hasReviewStatus = message.needs_human_review || message.osint_reviewed;
   const hasArchivalContext = message.archive_triggered_by || message.archive_triggered_at || message.archive_priority !== null;
   const hasSocialGraphContext = message.author_user_id || message.forward_from_channel_id ||
                                 message.forward_from_message_id || message.forward_date ||
@@ -108,7 +105,7 @@ export function MetadataTab({ message }: MetadataTabProps) {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground dark:text-gray-400">Channel Status</span>
                 <div className="flex gap-1">
-                  {message.channel.verified && <Badge variant="default" className="text-xs">✓ Verified</Badge>}
+                  {message.channel.verified && <Badge variant="default" className="text-xs">Verified</Badge>}
                   {message.channel.scam && <Badge variant="destructive" className="text-xs">Scam</Badge>}
                   {message.channel.fake && <Badge variant="destructive" className="text-xs">Fake</Badge>}
                   {message.channel.restricted && <Badge variant="outline" className="text-xs">Restricted</Badge>}
@@ -189,7 +186,7 @@ export function MetadataTab({ message }: MetadataTabProps) {
                       rel="noopener noreferrer"
                       className="text-blue-600 dark:text-blue-400 hover:underline truncate block font-mono"
                     >
-                      📎 {url.split('/').pop()?.substring(0, 40) || `Media ${idx + 1}`}...
+                      {url.split('/').pop()?.substring(0, 40) || `Media ${idx + 1}`}...
                     </a>
                   </div>
                 ))}
@@ -288,36 +285,6 @@ export function MetadataTab({ message }: MetadataTabProps) {
           </CardContent>
         </Card>
       ) : null}
-
-      {/* Human Review Status */}
-      {hasReviewStatus && (
-        <Card className="dark:border-gray-700">
-          <CardHeader className="pb-3 dark:border-gray-700">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <UserCheck className="h-4 w-4" />
-              Human Review Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <ReviewStatusBadge
-              needsReview={message.needs_human_review}
-              reviewed={message.osint_reviewed}
-              reviewedBy={message.reviewed_by || undefined}
-              manualScore={message.osint_manual_score || undefined}
-              reviewedAt={message.reviewed_at || undefined}
-              mode="detailed"
-            />
-            {message.reviewed_at && (
-              <div className="flex items-center justify-between text-sm pt-2 border-t dark:border-gray-700">
-                <span className="text-muted-foreground dark:text-gray-400">Reviewed At</span>
-                <span className="font-mono text-xs">
-                  {new Date(message.reviewed_at).toLocaleString()}
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Processing Status */}
       <Card className="dark:border-gray-700">
@@ -429,12 +396,12 @@ export function MetadataTab({ message }: MetadataTabProps) {
         </Card>
       )}
 
-      {/* Message Authenticity Hashing (Phase 3) */}
+      {/* Message Authenticity Hashing */}
       {(message.content_hash || message.metadata_hash) && (
         <Card className="dark:border-gray-700 border-l-4 border-l-green-500">
           <CardHeader className="pb-3 dark:border-gray-700">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <span className="text-green-600 dark:text-green-400">🔐</span>
+              <span className="text-green-600 dark:text-green-400">*</span>
               Message Authenticity
             </CardTitle>
             <p className="text-xs text-muted-foreground dark:text-gray-400 mt-1">

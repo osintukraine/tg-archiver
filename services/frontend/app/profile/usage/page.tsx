@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_URL } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { getAuthHeaders } from '@/lib/auth-utils';
 import Link from 'next/link';
 
 /**
@@ -27,10 +28,8 @@ interface UsageSummary {
     map: number;
   };
   keys: Array<{
-    id: string;
-    name: string;
-    prefix: string;
-    use_count: number;
+    id: number;
+    name: string | null;
     last_used_at: string | null;
   }>;
 }
@@ -68,7 +67,7 @@ export default function UsagePage() {
   const fetchUsage = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/api-keys/usage/summary`, {
-        credentials: 'include',
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -259,12 +258,12 @@ export default function UsagePage() {
                   <div key={key.id} className="px-6 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <code className="text-sm font-mono bg-bg-secondary px-2 py-0.5 rounded">
-                        {key.prefix}...
+                        Key #{key.id}
                       </code>
-                      <span className="text-text-primary">{key.name}</span>
+                      {key.name && <span className="text-text-primary">{key.name}</span>}
                     </div>
                     <div className="text-sm text-text-tertiary">
-                      {key.use_count.toLocaleString()} requests
+                      {key.last_used_at ? `Used ${new Date(key.last_used_at).toLocaleDateString()}` : 'Never used'}
                     </div>
                   </div>
                 ))}

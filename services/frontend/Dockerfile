@@ -9,8 +9,8 @@ FROM oven/bun:1 AS base
 FROM base AS deps
 WORKDIR /app
 
-# Copy package files
-COPY package.json bun.lock ./
+# Copy package files (paths relative to repo root - see docker-compose.yml context)
+COPY services/frontend/package.json services/frontend/bun.lock ./
 
 # Install dependencies (temporarily not using frozen lockfile while updating deps)
 RUN bun install
@@ -24,8 +24,8 @@ WORKDIR /app
 # Copy dependencies
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy application code
-COPY . .
+# Copy application code (from services/frontend/ to /app/)
+COPY services/frontend/ .
 
 # Environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -39,12 +39,14 @@ ARG NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ARG NEXT_PUBLIC_PLATFORM_NAME="tg-archiver"
 ARG NEXT_PUBLIC_AUTH_PROVIDER=none
 ARG NEXT_PUBLIC_KOFI_USERNAME=""
+ARG NEXT_PUBLIC_TRANSLATION_ENABLED=true
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_MINIO_URL=${NEXT_PUBLIC_MINIO_URL}
 ENV NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
 ENV NEXT_PUBLIC_PLATFORM_NAME=${NEXT_PUBLIC_PLATFORM_NAME}
 ENV NEXT_PUBLIC_AUTH_PROVIDER=${NEXT_PUBLIC_AUTH_PROVIDER}
 ENV NEXT_PUBLIC_KOFI_USERNAME=${NEXT_PUBLIC_KOFI_USERNAME}
+ENV NEXT_PUBLIC_TRANSLATION_ENABLED=${NEXT_PUBLIC_TRANSLATION_ENABLED}
 
 # Build Next.js application
 RUN bun run build

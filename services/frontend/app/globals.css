@@ -78,92 +78,71 @@
     border-radius: 0.75rem;
   }
 
-  /* OSINT score badges */
-  .osint-critical {
+  /* Importance level badges */
+  .importance-critical {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-accent-danger/20 text-accent-danger border border-accent-danger/30;
   }
 
-  .osint-high {
+  .importance-high {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-accent-warning/20 text-accent-warning border border-accent-warning/30;
   }
 
-  .osint-medium {
+  .importance-medium {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-accent-primary/20 text-accent-primary border border-accent-primary/30;
   }
 
-  .osint-low {
+  .importance-low {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold text-text-tertiary border;
     background-color: color-mix(in srgb, var(--text-tertiary) 20%, transparent);
     border-color: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
   }
 
-  .osint-minimal {
+  .importance-minimal {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold text-text-tertiary border;
     background-color: color-mix(in srgb, var(--border-subtle) 20%, transparent);
     border-color: color-mix(in srgb, var(--border-subtle) 30%, transparent);
   }
 
-  /* Topic badges - 12 categories (2025-11-28: Expanded taxonomy) */
+  /* Topic badges - Generic categories for any Telegram archive */
 
-  /* Combat - Red (active military operations) */
-  .topic-combat,
+  /* News - Red (breaking news, updates) */
+  .topic-news,
   .topic-rule_based {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30;
   }
 
-  /* Equipment - Green (military hardware) */
-  .topic-equipment {
+  /* Announcement - Green (official announcements) */
+  .topic-announcement {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30;
   }
 
-  /* Casualties - Orange/Amber (losses, destruction) */
-  .topic-casualties {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30;
-  }
-
-  /* Movements - Cyan (troop movements) */
-  .topic-movements {
+  /* Discussion - Cyan (conversations, threads) */
+  .topic-discussion {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30;
   }
 
-  /* Infrastructure - Yellow (energy, bridges) */
-  .topic-infrastructure {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
-  }
-
-  /* Humanitarian - Blue (civilian impact, aid) */
-  .topic-humanitarian,
-  .topic-civilian {
+  /* Media - Blue (photos, videos, documents) */
+  .topic-media {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30;
   }
 
-  /* Diplomatic - Purple (international relations) */
-  .topic-diplomatic {
+  /* Important - Purple (high priority content) */
+  .topic-important {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30;
   }
 
-  /* Intelligence - Indigo (OSINT, reconnaissance) */
-  .topic-intelligence {
+  /* Archive - Indigo (historical content) */
+  .topic-archive {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30;
   }
 
-  /* Propaganda - Pink (info warfare) */
-  .topic-propaganda {
+  /* Off-topic - Pink (unrelated content) */
+  .topic-offtopic {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-pink-500/20 text-pink-400 border border-pink-500/30;
   }
 
-  /* Units - Teal (military units) */
-  .topic-units {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-teal-500/20 text-teal-400 border border-teal-500/30;
-  }
-
-  /* Locations - Emerald (geographic/frontline) */
-  .topic-locations {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
-  }
-
-  /* General - Gray (fallback) */
-  .topic-general {
+  /* Other - Gray (fallback) */
+  .topic-other {
     @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30;
   }
 
@@ -209,39 +188,39 @@
     mask-composite: exclude;
   }
 
-  /* Ukrainian flag: Blue (#0057B8) → Yellow (#FFD700) */
-  .country-border-ua::before {
-    background: linear-gradient(to bottom, #0057B8 0%, #0057B8 50%, #FFD700 50%, #FFD700 100%);
+  /* Category 1: Blue accent */
+  .category-border-primary::before {
+    background: linear-gradient(to bottom, #3B82F6 0%, #3B82F6 50%, #60A5FA 50%, #60A5FA 100%);
   }
 
-  /* Russian flag: White (#FFFFFF) → Blue (#0039A6) → Red (#D52B1E) */
-  .country-border-ru::before {
-    background: linear-gradient(to bottom, #FFFFFF 0%, #FFFFFF 33.33%, #0039A6 33.33%, #0039A6 66.66%, #D52B1E 66.66%, #D52B1E 100%);
+  /* Category 2: Purple accent */
+  .category-border-secondary::before {
+    background: linear-gradient(to bottom, #8B5CF6 0%, #8B5CF6 33.33%, #A78BFA 33.33%, #A78BFA 66.66%, #C4B5FD 66.66%, #C4B5FD 100%);
   }
 
-  /* Unaffiliated: Solid white */
-  .country-border-unaffiliated::before {
-    background: #FFFFFF;
+  /* Uncategorized: Solid gray */
+  .category-border-default::before {
+    background: #6B7280;
   }
 
   /* Show gradient border on hover */
-  .country-border-ua:hover::before,
-  .country-border-ru:hover::before,
-  .country-border-unaffiliated:hover::before {
+  .category-border-primary:hover::before,
+  .category-border-secondary:hover::before,
+  .category-border-default:hover::before {
     opacity: 1;
   }
 
   /* Subtle glow effect on hover for better visibility */
-  .country-border-ua:hover {
-    box-shadow: 0 0 15px rgba(0, 87, 184, 0.3), 0 0 15px rgba(255, 215, 0, 0.3);
+  .category-border-primary:hover {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3), 0 0 15px rgba(96, 165, 250, 0.3);
   }
 
-  .country-border-ru:hover {
-    box-shadow: 0 0 12px rgba(213, 43, 30, 0.25), 0 0 12px rgba(0, 57, 166, 0.25);
+  .category-border-secondary:hover {
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.25), 0 0 12px rgba(167, 139, 250, 0.25);
   }
 
-  .country-border-unaffiliated:hover {
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+  .category-border-default:hover {
+    box-shadow: 0 0 15px rgba(107, 114, 128, 0.2);
   }
 
   /* Review status glow effect */

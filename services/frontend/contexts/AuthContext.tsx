@@ -1,27 +1,17 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Configuration, FrontendApi, Session, Identity } from '@ory/client';
 import { useRouter } from 'next/navigation';
 
-// Initialize Ory Kratos client
-// When behind Caddy proxy, use /kratos path (same origin)
-// For direct access, use the full Kratos URL
-const kratosPublicUrl = process.env.NEXT_PUBLIC_ORY_URL ||
-  (typeof window !== 'undefined' ? `${window.location.origin}/kratos` : 'http://localhost:4433');
-
-const ory = new FrontendApi(
-  new Configuration({
-    basePath: kratosPublicUrl,
-    baseOptions: {
-      withCredentials: true,
-    },
-  })
-);
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 export interface User {
-  id: string;
+  id: number;
+  username: string;
   email: string;
+  is_active: boolean;
+  is_admin: boolean;
+  // Computed for backwards compatibility
   name?: string;
   roles: string[];
   verified: boolean;
@@ -32,8 +22,9 @@ export interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   error: string | null;
-  login: (returnTo?: string) => void;
-  logout: () => Promise<void>;
+  token: string | null;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => void;
   refreshSession: () => Promise<void>;
   hasRole: (role: string) => boolean;
   isAdmin: () => boolean;
@@ -41,105 +32,163 @@ export interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function mapSessionToUser(session: Session): User {
-  const identity: Identity = session.identity!;
-  const traits = identity.traits as { email?: string; name?: { first?: string; last?: string } };
-  const metadata = identity.metadata_public as { role?: string; roles?: string[] } | null;
+// Token storage helpers
+const TOKEN_KEY = 'tg_archiver_token';
 
-  // Handle both formats: "role" (string) from Kratos admin or "roles" (array)
-  let roles: string[] = ['viewer'];
-  if (metadata?.roles && Array.isArray(metadata.roles)) {
-    roles = metadata.roles;
-  } else if (metadata?.role && typeof metadata.role === 'string') {
-    roles = [metadata.role];
+function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function setStoredToken(token: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(TOKEN_KEY, token);
   }
+}
 
-  return {
-    id: identity.id,
-    email: traits?.email || 'unknown@example.com',
-    name: traits?.name?.first
-      ? `${traits.name.first} ${traits.name.last || ''}`.trim()
-      : undefined,
-    roles,
-    verified: (identity.verifiable_addresses?.length || 0) > 0,
-  };
+function removeStoredToken(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(TOKEN_KEY);
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const refreshSession = useCallback(async () => {
+  // Fetch current user from /auth/users/me
+  const fetchCurrentUser = useCallback(async (authToken: string): Promise<User | null> => {
     try {
-      setError(null);
-      const { data: session } = await ory.toSession();
+      const response = await fetch(`${API_URL}/api/auth/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
 
-      if (session?.active) {
-        const mappedUser = mapSessionToUser(session);
-        setUser(mappedUser);
-        return;
+      if (response.ok) {
+        const userData = await response.json();
+        // Add computed fields for backwards compatibility
+        return {
+          ...userData,
+          name: userData.username,
+          roles: userData.is_admin ? ['admin'] : ['viewer'],
+          verified: userData.is_active,
+        };
+      } else if (response.status === 401) {
+        // Token invalid or expired
+        removeStoredToken();
+        return null;
       }
-    } catch (err: unknown) {
-      // 401/403 is expected for unauthenticated users
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status !== 401 && status !== 403) {
-        console.error('[Auth] Session refresh failed:', err);
-        setError('Failed to refresh session');
-      }
+    } catch (err) {
+      console.error('[Auth] Failed to fetch user:', err);
     }
-    setUser(null);
+    return null;
   }, []);
 
-  useEffect(() => {
-    const initSession = async () => {
-      setIsLoading(true);
-      await refreshSession();
+  // Initialize auth state from stored token
+  const refreshSession = useCallback(async () => {
+    const storedToken = getStoredToken();
+
+    if (!storedToken) {
+      setUser(null);
+      setToken(null);
       setIsLoading(false);
-    };
-    initSession();
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    const userData = await fetchCurrentUser(storedToken);
+
+    if (userData) {
+      setUser(userData);
+      setToken(storedToken);
+    } else {
+      setUser(null);
+      setToken(null);
+      removeStoredToken();
+    }
+
+    setIsLoading(false);
+  }, [fetchCurrentUser]);
+
+  // Initialize on mount
+  useEffect(() => {
+    refreshSession();
   }, [refreshSession]);
 
-  const login = useCallback((returnTo?: string) => {
-    const loginUrl = new URL('/auth/login', window.location.origin);
-    if (returnTo) {
-      loginUrl.searchParams.set('returnTo', returnTo);
-    }
-    router.push(loginUrl.toString());
-  }, [router]);
+  // Login with username/password
+  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
 
-  const logout = useCallback(async () => {
     try {
-      setError(null);
-      const { data: flow } = await ory.createBrowserLogoutFlow();
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
 
-      // Perform logout
-      await ory.updateLogoutFlow({ token: flow.logout_token });
+      if (response.ok) {
+        const data = await response.json();
+        const newToken = data.access_token;
 
-      setUser(null);
-      router.push('/');
+        // Store token
+        setStoredToken(newToken);
+        setToken(newToken);
+
+        // Fetch user details
+        const userData = await fetchCurrentUser(newToken);
+        if (userData) {
+          setUser(userData);
+          setIsLoading(false);
+          return true;
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.detail || 'Login failed');
+      }
     } catch (err) {
-      console.error('[Auth] Logout failed:', err);
-      setError('Logout failed');
-      // Force clear user state anyway
-      setUser(null);
+      console.error('[Auth] Login error:', err);
+      setError('Network error. Please try again.');
     }
+
+    setIsLoading(false);
+    return false;
+  }, [fetchCurrentUser]);
+
+  // Logout
+  const logout = useCallback(() => {
+    removeStoredToken();
+    setUser(null);
+    setToken(null);
+    setError(null);
+    router.push('/');
   }, [router]);
 
+  // Role helpers
   const hasRole = useCallback((role: string) => {
-    return user?.roles?.includes(role) ?? false;
+    if (!user) return false;
+    if (role === 'admin') return user.is_admin;
+    return true; // All authenticated users have viewer role
   }, [user]);
 
   const isAdmin = useCallback(() => {
-    return hasRole('admin');
-  }, [hasRole]);
+    return user?.is_admin ?? false;
+  }, [user]);
 
   const value: AuthContextType = {
-    isAuthenticated: !!user,
+    isAuthenticated: !!user && !!token,
     user,
     isLoading,
     error,
+    token,
     login,
     logout,
     refreshSession,

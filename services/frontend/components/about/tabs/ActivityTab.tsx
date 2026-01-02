@@ -32,40 +32,28 @@ import {
 
 // Topic colors for consistent styling
 const TOPIC_COLORS: Record<string, string> = {
-  combat: 'bg-red-500',
-  equipment: 'bg-orange-500',
-  casualties: 'bg-rose-600',
-  movements: 'bg-amber-500',
-  infrastructure: 'bg-yellow-500',
-  humanitarian: 'bg-emerald-500',
-  diplomatic: 'bg-blue-500',
-  intelligence: 'bg-purple-500',
-  disinformation: 'bg-pink-500',
-  propaganda: 'bg-pink-500',
-  units: 'bg-indigo-500',
-  locations: 'bg-cyan-500',
-  general: 'bg-gray-500',
+  news: 'bg-red-500',
+  announcement: 'bg-green-500',
+  discussion: 'bg-cyan-500',
+  media: 'bg-blue-500',
+  important: 'bg-purple-500',
+  archive: 'bg-indigo-500',
+  offtopic: 'bg-pink-500',
+  other: 'bg-gray-500',
   unknown: 'bg-gray-400',
-  other: 'bg-slate-500',
 };
 
 // Human-readable topic labels
 const TOPIC_LABELS: Record<string, string> = {
-  combat: 'Combat',
-  equipment: 'Equipment',
-  casualties: 'Casualties',
-  movements: 'Troop Movements',
-  infrastructure: 'Infrastructure',
-  humanitarian: 'Humanitarian',
-  diplomatic: 'Diplomatic',
-  intelligence: 'Intelligence',
-  disinformation: 'Disinformation',
-  propaganda: 'Propaganda',
-  units: 'Military Units',
-  locations: 'Locations',
-  general: 'General',
-  unknown: 'Unclassified',
+  news: 'News',
+  announcement: 'Announcement',
+  discussion: 'Discussion',
+  media: 'Media',
+  important: 'Important',
+  archive: 'Archive',
+  offtopic: 'Off-Topic',
   other: 'Other',
+  unknown: 'Unclassified',
 };
 
 function TimeframeToggle<T extends string>({

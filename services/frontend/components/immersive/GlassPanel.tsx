@@ -5,15 +5,6 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import type { Message } from '@/lib/types';
 
-// Helper to get country border class for hover effect
-function getCountryBorderClass(folder: string | null | undefined): string {
-  if (!folder) return 'country-border-unaffiliated';
-  const folderUpper = folder.toUpperCase();
-  if (folderUpper.includes('-UA')) return 'country-border-ua';
-  if (folderUpper.includes('-RU')) return 'country-border-ru';
-  return 'country-border-unaffiliated';
-}
-
 interface GlassPanelProps {
   message: Message;
 }
@@ -23,8 +14,6 @@ export function GlassPanel({ message }: GlassPanelProps) {
   const [isMinimized, setIsMinimized] = useState(false);
 
   const channelName = message.channel?.name || `Channel ${message.channel_id}`;
-  const countryFlag = getCountryFlag(message.channel?.folder);
-  const countryBorderClass = getCountryBorderClass(message.channel?.folder);
   const timestamp = message.telegram_date
     ? format(new Date(message.telegram_date), 'MMM d, HH:mm')
     : '';
@@ -43,13 +32,13 @@ export function GlassPanel({ message }: GlassPanelProps) {
       <div className="absolute bottom-4 left-4 z-40">
         <button
           onClick={() => setIsMinimized(false)}
-          className={`flex items-center gap-2 px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm text-white hover:bg-black/90 transition-colors ${countryBorderClass}`}
+          className="flex items-center gap-2 px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm text-white hover:bg-black/90 transition-colors"
           title="Show info panel"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span className="text-sm font-medium">{countryFlag} Info</span>
+          <span className="text-sm font-medium">Info</span>
         </button>
       </div>
     );
@@ -57,8 +46,8 @@ export function GlassPanel({ message }: GlassPanelProps) {
 
   return (
     <div className="absolute bottom-0 left-0 right-0 z-40 p-4">
-      {/* Outer wrapper for country border (no overflow-hidden so pseudo-element isn't clipped) */}
-      <div className={`rounded-xl transition-all duration-300 ${countryBorderClass}`}>
+      {/* Outer wrapper */}
+      <div className="rounded-xl transition-all duration-300">
         {/* Inner container with overflow handling and glass effect */}
         <div
           className={`rounded-xl overflow-hidden transition-all duration-300 ${
@@ -74,23 +63,12 @@ export function GlassPanel({ message }: GlassPanelProps) {
           {/* Header: Channel + Time + Quick badges + Minimize */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-lg flex-shrink-0">{countryFlag}</span>
               <span className="text-white font-medium truncate">{channelName}</span>
               {message.channel?.username && (
                 <span className="text-gray-500 text-sm">@{message.channel.username}</span>
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Importance badge */}
-              {message.importance_level && (
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  message.importance_level === 'high' ? 'bg-red-500/30 text-red-400' :
-                  message.importance_level === 'medium' ? 'bg-yellow-500/30 text-yellow-400' :
-                  'bg-gray-500/30 text-gray-400'
-                }`}>
-                  {message.importance_level.toUpperCase()}
-                </span>
-              )}
               <span className="text-gray-400 text-sm">{timestamp}</span>
               {/* Minimize button */}
               <button
@@ -109,17 +87,17 @@ export function GlassPanel({ message }: GlassPanelProps) {
           <div className="flex items-center gap-4 text-sm text-gray-400">
             {mediaCount > 0 && (
               <span className="flex items-center gap-1">
-                📷 {mediaCount} media
+                {mediaCount} media
               </span>
             )}
             {hasViews && (
               <span className="flex items-center gap-1">
-                👁 {formatNumber(message.views!)}
+                {formatNumber(message.views!)} views
               </span>
             )}
             {hasForwards && (
               <span className="flex items-center gap-1">
-                🔄 {formatNumber(message.forwards!)}
+                {formatNumber(message.forwards!)} fwd
               </span>
             )}
           </div>
@@ -145,32 +123,20 @@ export function GlassPanel({ message }: GlassPanelProps) {
             </svg>
           </button>
 
-          {/* Expanded: Detailed analyst view */}
+          {/* Expanded: Detailed view */}
           {isExpanded && (
             <div className="pt-3 border-t border-white/10 space-y-4">
 
-              {/* AI Analysis section */}
-              {(message.osint_topic || message.content_sentiment || message.content_urgency_level) && (
+              {/* Topic section */}
+              {message.topic && (
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    AI Analysis
+                    Topic
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {message.osint_topic && (
-                      <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-300">
-                        📊 {message.osint_topic}
-                      </span>
-                    )}
-                    {message.content_sentiment && (
-                      <span className="px-2 py-1 rounded text-xs bg-white/10 text-white/80">
-                        {getSentimentEmoji(message.content_sentiment)} {message.content_sentiment}
-                      </span>
-                    )}
-                    {message.content_urgency_level !== null && message.content_urgency_level > 30 && (
-                      <span className="px-2 py-1 rounded text-xs bg-orange-500/20 text-orange-400">
-                        ⚡ Urgency {message.content_urgency_level}%
-                      </span>
-                    )}
+                    <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-300">
+                      {message.topic}
+                    </span>
                   </div>
                 </div>
               )}
@@ -195,40 +161,6 @@ export function GlassPanel({ message }: GlassPanelProps) {
                 </div>
               )}
 
-              {/* OpenSanctions Entities */}
-              {message.opensanctions_entities && message.opensanctions_entities.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2 flex items-center gap-1">
-                    <span>⚠️</span> OpenSanctions Watchlist
-                  </h4>
-                  <div className="space-y-2">
-                    {message.opensanctions_entities.slice(0, 3).map((entity, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between px-2 py-1.5 rounded bg-red-500/10 border border-red-500/20"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-red-300">{entity.name}</span>
-                          <span className="text-xs text-red-400/60">{entity.schema_type}</span>
-                        </div>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${
-                          entity.risk_classification === 'sanctioned' ? 'bg-red-600/30 text-red-300' :
-                          entity.risk_classification === 'pep' ? 'bg-yellow-600/30 text-yellow-300' :
-                          'bg-gray-600/30 text-gray-300'
-                        }`}>
-                          {entity.risk_classification}
-                        </span>
-                      </div>
-                    ))}
-                    {message.opensanctions_entities.length > 3 && (
-                      <p className="text-xs text-gray-500">
-                        +{message.opensanctions_entities.length - 3} more entities
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Forward source */}
               {message.forward_from_channel_id && (
                 <div>
@@ -236,24 +168,7 @@ export function GlassPanel({ message }: GlassPanelProps) {
                     Forwarded From
                   </h4>
                   <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <span>↩️</span>
                     <span>Channel ID: {message.forward_from_channel_id}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Key phrases */}
-              {message.key_phrases && message.key_phrases.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Key Phrases
-                  </h4>
-                  <div className="flex flex-wrap gap-1">
-                    {message.key_phrases.slice(0, 5).map((phrase, idx) => (
-                      <span key={idx} className="px-2 py-0.5 rounded text-xs bg-white/5 text-white/60">
-                        {phrase}
-                      </span>
-                    ))}
                   </div>
                 </div>
               )}
@@ -279,23 +194,6 @@ export function GlassPanel({ message }: GlassPanelProps) {
       </div>
     </div>
   );
-}
-
-function getCountryFlag(folder: string | null | undefined): string {
-  if (!folder) return '📺';
-  const upper = folder.toUpperCase();
-  if (upper.includes('-UA') || upper.includes('UKRAINE')) return '🇺🇦';
-  if (upper.includes('-RU') || upper.includes('RUSSIA')) return '🇷🇺';
-  return '📺';
-}
-
-function getSentimentEmoji(sentiment: string): string {
-  switch (sentiment) {
-    case 'positive': return '😊';
-    case 'negative': return '😡';
-    case 'urgent': return '⚠️';
-    default: return '😐';
-  }
 }
 
 function formatNumber(n: number): string {

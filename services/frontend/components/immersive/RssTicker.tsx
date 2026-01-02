@@ -5,13 +5,12 @@ import { useEffect, useState, useRef } from 'react';
 interface RssItem {
   id: number;
   title: string;
-  source_name: string;
+  feed_name: string;
   published_at: string;
   url: string;
 }
 
 interface RssTickerProps {
-  messageId: number; // Kept for potential future correlation features
   enabled: boolean;
 }
 
@@ -20,13 +19,13 @@ export function RssTicker({ enabled }: RssTickerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const hasFetched = useRef(false);
 
-  // Fetch latest RSS news from unified stream
+  // Fetch latest RSS news
   useEffect(() => {
     if (!enabled) {
       return;
     }
 
-    // Only fetch once when enabled (not on every message change)
+    // Only fetch once when enabled
     if (hasFetched.current && rssItems.length > 0) {
       return;
     }
@@ -35,23 +34,21 @@ export function RssTicker({ enabled }: RssTickerProps) {
       setIsLoading(true);
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        // Fetch RSS items from unified stream API
         const response = await fetch(
-          `${API_URL}/api/stream/unified?sources=rss&limit=15&hours=24`
+          `${API_URL}/api/stream/rss?limit=15&hours=24`
         );
         if (response.ok) {
           const data = await response.json();
-          // Transform to our RssItem interface
           const items: RssItem[] = data.map((item: {
             id: number;
             title: string;
-            source_name: string;
+            feed_name: string;
             published_at: string;
             url: string;
           }) => ({
             id: item.id,
             title: item.title,
-            source_name: item.source_name,
+            feed_name: item.feed_name,
             published_at: item.published_at,
             url: item.url,
           }));
@@ -120,7 +117,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
                     className="flex-shrink-0 flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="text-white/50">{item.source_name}:</span>
+                    <span className="text-white/50">{item.feed_name}:</span>
                     <span className="max-w-sm truncate">{item.title}</span>
                   </a>
                 ))}
@@ -134,7 +131,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
                     className="flex-shrink-0 flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="text-white/50">{item.source_name}:</span>
+                    <span className="text-white/50">{item.feed_name}:</span>
                     <span className="max-w-sm truncate">{item.title}</span>
                   </a>
                 ))}

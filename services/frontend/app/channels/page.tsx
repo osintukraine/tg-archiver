@@ -1,8 +1,8 @@
 /**
  * Channels Listing Page
  *
- * Displays all monitored channels organized by country (Russia/Ukraine)
- * Two-column layout with clickable cards leading to individual channel pages
+ * Displays all monitored channels organized by category.
+ * Responsive grid layout with clickable cards leading to individual channel pages.
  */
 
 import { Metadata } from 'next';
@@ -14,7 +14,7 @@ import { SITE_NAME } from '@/lib/constants';
 // Force dynamic rendering - channel list changes frequently
 export const dynamic = 'force-dynamic';
 
-const description = 'Browse all monitored Telegram channels organized by country. View archived messages from Russia and Ukraine sources.';
+const description = 'Browse all monitored Telegram channels. View archived messages organized by category.';
 
 export const metadata: Metadata = {
   title: `Channels - ${SITE_NAME}`,
@@ -32,19 +32,35 @@ export const metadata: Metadata = {
   },
 };
 
+// Category color mapping
+const CATEGORY_COLORS: Record<string, string> = {
+  blue: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+  green: 'bg-green-500/10 text-green-400 border-green-500/30',
+  purple: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+  orange: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
+  red: 'bg-red-500/10 text-red-400 border-red-500/30',
+  gray: 'bg-gray-500/10 text-gray-400 border-gray-500/30',
+};
+
 export default async function ChannelsPage() {
   const channels = await getChannels();
 
-  // Split channels by country based on folder name
-  const russiaChannels = channels.filter(ch =>
-    ch.folder?.toLowerCase().includes('russia') ||
-    ch.folder?.toLowerCase().includes('ru')
-  );
+  // Group channels by category
+  const channelsByCategory = channels.reduce((acc, channel) => {
+    const categoryName = channel.category?.name || 'uncategorized';
+    if (!acc[categoryName]) {
+      acc[categoryName] = {
+        channels: [],
+        color: channel.category?.color || 'gray',
+      };
+    }
+    acc[categoryName].channels.push(channel);
+    return acc;
+  }, {} as Record<string, { channels: Channel[]; color: string }>);
 
-  const ukraineChannels = channels.filter(ch =>
-    ch.folder?.toLowerCase().includes('ukraine') ||
-    ch.folder?.toLowerCase().includes('ua')
-  );
+  // Sort categories by channel count
+  const sortedCategories = Object.entries(channelsByCategory)
+    .sort((a, b) => b[1].channels.length - a[1].channels.length);
 
   return (
     <div className="min-h-screen bg-bg-primary">
@@ -55,44 +71,41 @@ export default async function ChannelsPage() {
             Monitored Channels
           </h1>
           <p className="text-text-secondary">
-            {channels.length} channels • {russiaChannels.length} Russia • {ukraineChannels.length} Ukraine
+            {channels.length} channels across {sortedCategories.length} categories
           </p>
         </div>
       </div>
 
-      {/* Two-column layout */}
+      {/* Channel grid by category */}
       <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column: Russia */}
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-4xl">🇷🇺</span>
-              <h2 className="text-2xl font-bold text-text-primary">
-                Russia ({russiaChannels.length})
-              </h2>
-            </div>
-            <div className="space-y-4">
-              {russiaChannels.map((channel) => (
-                <ChannelCard key={channel.id} channel={channel} />
-              ))}
-            </div>
+        {sortedCategories.length === 0 ? (
+          <div className="text-center py-12 text-text-secondary">
+            No channels configured yet.
           </div>
+        ) : (
+          <div className="space-y-10">
+            {sortedCategories.map(([categoryName, { channels: categoryChannels, color }]) => (
+              <div key={categoryName}>
+                {/* Category header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium border ${CATEGORY_COLORS[color] || CATEGORY_COLORS.gray}`}>
+                    {categoryName}
+                  </span>
+                  <span className="text-text-secondary">
+                    {categoryChannels.length} channel{categoryChannels.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
 
-          {/* Right Column: Ukraine */}
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-4xl">🇺🇦</span>
-              <h2 className="text-2xl font-bold text-text-primary">
-                Ukraine ({ukraineChannels.length})
-              </h2>
-            </div>
-            <div className="space-y-4">
-              {ukraineChannels.map((channel) => (
-                <ChannelCard key={channel.id} channel={channel} />
-              ))}
-            </div>
+                {/* Channel cards grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {categoryChannels.map((channel) => (
+                    <ChannelCard key={channel.id} channel={channel} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -102,7 +115,7 @@ export default async function ChannelsPage() {
  * Individual Channel Card Component
  */
 function ChannelCard({ channel }: { channel: Channel }) {
-  // Generate gradient colors for avatar (same logic as channel detail page)
+  // Generate gradient colors for avatar
   const getGradientColors = (name: string) => {
     const hue = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 360;
     return `from-[hsl(${hue},70%,60%)] to-[hsl(${(hue + 60) % 360},70%,50%)]`;
@@ -117,15 +130,15 @@ function ChannelCard({ channel }: { channel: Channel }) {
     >
       <div className="flex items-start gap-3 sm:gap-4">
         {/* Avatar */}
-        <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br ${gradientColors} flex items-center justify-center text-white font-bold text-lg sm:text-xl flex-shrink-0`}>
+        <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${gradientColors} flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
           {(channel.name || channel.username || 'C')[0].toUpperCase()}
         </div>
 
         {/* Channel Info */}
         <div className="flex-1 min-w-0">
           {/* Name and verification */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-            <h3 className="text-base sm:text-lg font-semibold text-text-primary line-clamp-1">
+          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            <h3 className="text-base font-semibold text-text-primary line-clamp-1">
               {channel.name || channel.username || `Channel ${channel.id}`}
             </h3>
             {channel.verified && (
@@ -146,45 +159,16 @@ function ChannelCard({ channel }: { channel: Channel }) {
             </p>
           )}
 
-          {/* Metadata grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 text-xs">
-            {/* Folder */}
+          {/* Status */}
+          <div className="flex items-center gap-3 text-xs">
+            <span className={`font-medium ${channel.active ? 'text-green-400' : 'text-red-400'}`}>
+              {channel.active ? 'Active' : 'Inactive'}
+            </span>
             {channel.folder && (
-              <div>
-                <span className="text-text-secondary">Folder:</span>{' '}
-                <span className="text-text-primary font-medium">{channel.folder}</span>
-              </div>
-            )}
-
-            {/* Rule */}
-            {channel.rule && (
-              <div>
-                <span className="text-text-secondary">Rule:</span>{' '}
-                <span className={`font-medium ${
-                  channel.rule === 'archive_all'
-                    ? 'text-green-400'
-                    : 'text-yellow-400'
-                }`}>
-                  {channel.rule === 'archive_all' ? 'Archive All' : 'Selective'}
-                </span>
-              </div>
-            )}
-
-            {/* Active status */}
-            <div>
-              <span className="text-text-secondary">Status:</span>{' '}
-              <span className={`font-medium ${channel.active ? 'text-green-400' : 'text-red-400'}`}>
-                {channel.active ? 'Active' : 'Inactive'}
+              <span className="text-text-secondary">
+                {channel.folder}
               </span>
-            </div>
-
-            {/* Telegram ID */}
-            <div>
-              <span className="text-text-secondary">ID:</span>{' '}
-              <span className="text-text-primary font-mono text-[10px]">
-                {channel.telegram_id}
-              </span>
-            </div>
+            )}
           </div>
 
           {/* Description preview if available */}

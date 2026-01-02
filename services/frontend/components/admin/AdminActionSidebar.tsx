@@ -6,9 +6,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { adminApi } from '@/lib/admin-api';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { ChangeTopicModal } from './modals/ChangeTopicModal';
-import { ChangeImportanceModal } from './modals/ChangeImportanceModal';
-import { GeolocationModal } from './modals/GeolocationModal';
-import { LinkEventModal } from './modals/LinkEventModal';
 import { AdminNoteModal } from './modals/AdminNoteModal';
 
 /**
@@ -16,6 +13,13 @@ import { AdminNoteModal } from './modals/AdminNoteModal';
  *
  * Floating sidebar panel for admin moderation actions on message pages.
  * Only visible to admin users on /messages/[id] pages.
+ *
+ * tg-archiver provides these moderation capabilities:
+ * - Hide/Unhide messages from public view
+ * - Mark as spam/unspam
+ * - Delete messages (soft delete)
+ * - Add admin notes
+ * - Categorize messages with topics
  */
 
 interface MessageActionInfo {
@@ -23,11 +27,8 @@ interface MessageActionInfo {
   is_hidden: boolean;
   is_deleted: boolean;
   is_spam: boolean;
-  topic_override: string | null;
-  importance_override: string | null;
+  topic: string | null;
   admin_notes: string | null;
-  has_location: boolean;
-  primary_event_id: number | null;
   history: Array<{
     action: string;
     performed_by: string | null;
@@ -45,7 +46,7 @@ interface ActionResult {
   audit_id: number;
 }
 
-type ModalType = 'confirm' | 'topic' | 'importance' | 'geolocation' | 'event' | 'note' | null;
+type ModalType = 'confirm' | 'topic' | 'note' | null;
 
 interface ConfirmModalConfig {
   title: string;
@@ -187,26 +188,6 @@ export function AdminActionSidebar() {
     }
   };
 
-  const handleQuarantine = () => {
-    showConfirmModal({
-      title: 'Quarantine Message',
-      message: 'This message will be moved to the quarantine queue for off-topic review and removed from the main archive.',
-      action: 'quarantine',
-      requireReason: true,
-      variant: 'danger',
-    }, 'quarantine');
-  };
-
-  const handleReprocess = () => {
-    showConfirmModal({
-      title: 'Reprocess Message',
-      message: 'This message will be queued for AI reprocessing with the current classification model.',
-      action: 'reprocess',
-      requireReason: false,
-      variant: 'info',
-    }, 'reprocess');
-  };
-
   const handleConfirmAction = (reason?: string) => {
     if (!pendingAction) return;
     executeAction(pendingAction, reason ? { reason } : undefined);
@@ -306,15 +287,13 @@ export function AdminActionSidebar() {
                     {info.is_spam && (
                       <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded">Spam</span>
                     )}
-                    {info.topic_override && (
-                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">
-                        Topic: {info.topic_override}
+                    {info.topic && (
+                      <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
+                        Topic: {info.topic}
                       </span>
                     )}
-                    {info.importance_override && (
-                      <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
-                        Importance: {info.importance_override}
-                      </span>
+                    {info.admin_notes && (
+                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">Has Notes</span>
                     )}
                   </div>
                 )}
@@ -347,19 +326,11 @@ export function AdminActionSidebar() {
                       disabled={loading}
                     />
                     <ActionButton
-                      icon="⚠️"
-                      label="Quarantine"
-                      onClick={handleQuarantine}
-                      variant="warning"
-                      disabled={loading || info?.is_deleted}
-                    />
-                    <ActionButton
                       icon="📝"
                       label="Note"
                       onClick={() => setActiveModal('note')}
                       active={!!info?.admin_notes}
                       disabled={loading}
-                      className="col-span-2"
                     />
                   </div>
                 </section>
@@ -369,59 +340,12 @@ export function AdminActionSidebar() {
                   <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wide mb-3">
                     Classification
                   </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <ActionButton
-                      icon="🏷"
-                      label="Topic"
-                      onClick={() => setActiveModal('topic')}
-                      active={!!info?.topic_override}
-                      disabled={loading}
-                    />
-                    <ActionButton
-                      icon="⭐"
-                      label="Importance"
-                      onClick={() => setActiveModal('importance')}
-                      active={!!info?.importance_override}
-                      disabled={loading}
-                    />
-                    <ActionButton
-                      icon="🔄"
-                      label="Reprocess"
-                      onClick={handleReprocess}
-                      disabled={loading}
-                      className="col-span-2"
-                    />
-                  </div>
-                </section>
-
-                {/* Geolocation Section */}
-                <section>
-                  <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wide mb-3">
-                    Geolocation
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <ActionButton
-                      icon="📍"
-                      label={info?.has_location ? 'Edit Location' : 'Add Location'}
-                      onClick={() => setActiveModal('geolocation')}
-                      active={info?.has_location}
-                      disabled={loading}
-                      className="col-span-2"
-                    />
-                  </div>
-                </section>
-
-                {/* Events Section */}
-                <section>
-                  <h3 className="text-xs font-medium text-text-tertiary uppercase tracking-wide mb-3">
-                    Events
-                  </h3>
                   <div className="grid grid-cols-1 gap-2">
                     <ActionButton
-                      icon="🔗"
-                      label={info?.primary_event_id ? `Linked: Event #${info.primary_event_id}` : 'Link to Event'}
-                      onClick={() => setActiveModal('event')}
-                      active={!!info?.primary_event_id}
+                      icon="🏷"
+                      label={info?.topic ? `Topic: ${info.topic}` : 'Set Topic'}
+                      onClick={() => setActiveModal('topic')}
+                      active={!!info?.topic}
                       disabled={loading}
                     />
                   </div>
@@ -476,49 +400,7 @@ export function AdminActionSidebar() {
           isOpen={true}
           onClose={() => setActiveModal(null)}
           onSubmit={(topic, reason) => executeAction('topic', { topic, reason })}
-          currentTopic={info?.topic_override}
-          loading={loading}
-        />
-      )}
-
-      {activeModal === 'importance' && (
-        <ChangeImportanceModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          onSubmit={(importance, reason) => executeAction('importance', { importance, reason })}
-          currentImportance={info?.importance_override}
-          loading={loading}
-        />
-      )}
-
-      {activeModal === 'geolocation' && messageId && (
-        <GeolocationModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          onSubmit={(lat, lng, name, reason) =>
-            executeAction('geolocation', { latitude: lat, longitude: lng, location_name: name, reason })
-          }
-          onRemove={() => adminApi.delete(`/api/admin/messages/${messageId}/geolocation`).then(() => {
-            setSuccessMessage('Location removed');
-            fetchInfo();
-            setActiveModal(null);
-          })}
-          hasExisting={info?.has_location || false}
-          loading={loading}
-        />
-      )}
-
-      {activeModal === 'event' && messageId && (
-        <LinkEventModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          onSubmit={(eventId, reason) => executeAction('link-event', { event_id: eventId, reason })}
-          onUnlink={() => adminApi.delete(`/api/admin/messages/${messageId}/link-event`).then(() => {
-            setSuccessMessage('Event unlinked');
-            fetchInfo();
-            setActiveModal(null);
-          })}
-          currentEventId={info?.primary_event_id}
+          currentTopic={info?.topic}
           loading={loading}
         />
       )}

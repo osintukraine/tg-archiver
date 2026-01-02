@@ -149,16 +149,6 @@ export function useSmartQueue({
 function getSmartScore(message: Message): number {
   let score = 0;
 
-  // Importance weight (high importance = +100, medium = +50, low = +10)
-  if (message.importance_level === 'high') score += 100;
-  else if (message.importance_level === 'medium') score += 50;
-  else score += 10;
-
-  // Urgency weight
-  if (message.content_urgency_level) {
-    score += message.content_urgency_level * 20;
-  }
-
   // Recency weight (decay over 48 hours, max +100 for brand new)
   if (message.telegram_date) {
     const ageHours = (Date.now() - new Date(message.telegram_date).getTime()) / (1000 * 60 * 60);
@@ -169,6 +159,11 @@ function getSmartScore(message: Message): number {
   // Video bonus (+25 for videos)
   const hasVideo = message.media_items?.some(item => item.media_type === 'video');
   if (hasVideo) score += 25;
+
+  // Engagement bonus (views)
+  if (message.views && message.views > 1000) {
+    score += Math.min(25, message.views / 10000);
+  }
 
   return score;
 }

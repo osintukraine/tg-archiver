@@ -8,18 +8,15 @@ import { getMediaUrl } from '@/lib/api';
 /**
  * Admin - Kanban Board
  *
- * Visual kanban board for reviewing messages by OSINT topic classification.
- * Lanes: Critical (combat/casualties/movements) > High (equipment/units/propaganda) > Medium (diplomatic/humanitarian) > Low (general/uncertain)
+ * Visual kanban board for reviewing messages by engagement level.
+ * Lanes: Trending > Popular > Recent > Quiet
  */
 
-interface KanbanItem {
+interface BoardItem {
   message_id: number;
   date: string;
   title: string;
-  urgency_lane: string;
-  osint_topic: string | null;
-  importance_level: string | null;
-  sentiment: string | null;
+  lane: string;
   views: number | null;
   forwards: number | null;
   channel: string;
@@ -27,46 +24,41 @@ interface KanbanItem {
   has_media: boolean;
 }
 
-interface KanbanLane {
+interface BoardLane {
   name: string;
   count: number;
-  items: KanbanItem[];
+  items: BoardItem[];
 }
 
-interface KanbanStats {
+interface BoardStats {
   by_lane: Record<string, number>;
-  by_sentiment: Record<string, number>;
-  by_importance: Record<string, number>;
-  avg_urgency: number;
+  total_messages: number;
+  with_media: number;
 }
 
-// Lane config based on OSINT topic classification
-// Critical: combat, casualties, movements (active military operations)
-// High: equipment, units, propaganda (military intelligence)
-// Medium: diplomatic, humanitarian (strategic context)
-// Low: general, uncertain, unclassified (background)
-const LANE_CONFIG: Record<string, { color: string; bg: string; emoji: string; topics: string[] }> = {
-  Critical: { color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30', emoji: '🔴', topics: ['combat', 'casualties', 'movements'] },
-  High: { color: 'text-orange-500', bg: 'bg-orange-500/10 border-orange-500/30', emoji: '🟠', topics: ['equipment', 'units', 'propaganda'] },
-  Medium: { color: 'text-yellow-500', bg: 'bg-yellow-500/10 border-yellow-500/30', emoji: '🟡', topics: ['diplomatic', 'humanitarian'] },
-  Low: { color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/30', emoji: '🔵', topics: ['general', 'uncertain'] },
+// Engagement-based lane config
+const LANE_CONFIG: Record<string, { color: string; bg: string; emoji: string; description: string }> = {
+  Trending: { color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/30', emoji: '🔥', description: 'High views/forwards' },
+  Popular: { color: 'text-orange-500', bg: 'bg-orange-500/10 border-orange-500/30', emoji: '📈', description: 'Above average engagement' },
+  Recent: { color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/30', emoji: '🆕', description: 'Posted in last 2 days' },
+  Quiet: { color: 'text-gray-500', bg: 'bg-gray-500/10 border-gray-500/30', emoji: '📭', description: 'Lower engagement' },
 };
 
 export default function KanbanPage() {
-  const [lanes, setLanes] = useState<Record<string, KanbanLane>>({});
-  const [stats, setStats] = useState<KanbanStats | null>(null);
+  const [lanes, setLanes] = useState<Record<string, BoardLane>>({});
+  const [stats, setStats] = useState<BoardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(7);
-  const [selectedItem, setSelectedItem] = useState<KanbanItem | null>(null);
-  const [visibleLaneFilter, setVisibleLaneFilter] = useState<Set<string>>(new Set(['Critical', 'High', 'Medium', 'Low']));
+  const [selectedItem, setSelectedItem] = useState<BoardItem | null>(null);
+  const [visibleLaneFilter, setVisibleLaneFilter] = useState<Set<string>>(new Set(['Trending', 'Popular', 'Recent', 'Quiet']));
 
-  const fetchKanban = useCallback(async () => {
+  const fetchBoard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await adminApi.get(`/api/admin/kanban?days=${days}&limit_per_lane=20`);
-      setLanes(data.lanes);
+      setLanes(data.lanes || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -79,24 +71,21 @@ export default function KanbanPage() {
       const data = await adminApi.get(`/api/admin/kanban/stats?days=${days}`);
       setStats(data);
     } catch (err) {
-      console.error('Failed to fetch kanban stats:', err);
+      console.error('Failed to fetch board stats:', err);
     }
   }, [days]);
 
   useEffect(() => {
-    fetchKanban();
+    fetchBoard();
     fetchStats();
-  }, [fetchKanban, fetchStats]);
+  }, [fetchBoard, fetchStats]);
 
-  // Lanes based on OSINT topic classification (no more "Normal")
-  const laneOrder = ['Critical', 'High', 'Medium', 'Low'];
+  const laneOrder = ['Trending', 'Popular', 'Recent', 'Quiet'];
 
-  // Toggle lane visibility
   const toggleLane = (laneName: string) => {
     setVisibleLaneFilter(prev => {
       const next = new Set(prev);
       if (next.has(laneName)) {
-        // Don't allow deselecting all lanes
         if (next.size > 1) next.delete(laneName);
       } else {
         next.add(laneName);
@@ -105,7 +94,6 @@ export default function KanbanPage() {
     });
   };
 
-  // Filter lanes based on user selection
   const visibleLanes = laneOrder.filter(laneName => visibleLaneFilter.has(laneName));
 
   return (
@@ -113,24 +101,33 @@ export default function KanbanPage() {
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-text-primary">Kanban</h1>
+            <h1 className="text-2xl font-bold text-text-primary">Message Board</h1>
             <p className="text-text-secondary mt-1">
-              Messages grouped by OSINT topic
+              Messages organized by engagement level
             </p>
           </div>
-          <div>
-            <label className="text-sm text-text-secondary mr-2">Time Range:</label>
-            <select
-              value={days}
-              onChange={(e) => setDays(parseInt(e.target.value))}
-              className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+          <div className="flex items-center gap-4">
+            <a
+              href="/admin/messages"
+              className="text-blue-500 hover:text-blue-400 text-sm"
             >
-              <option value={1}>Last 24 hours</option>
-              <option value={3}>Last 3 days</option>
-              <option value={7}>Last 7 days</option>
-              <option value={14}>Last 14 days</option>
-              <option value={30}>Last 30 days</option>
-            </select>
+              View as Table →
+            </a>
+            <div>
+              <label className="text-sm text-text-secondary mr-2">Time Range:</label>
+              <select
+                value={days}
+                onChange={(e) => setDays(parseInt(e.target.value))}
+                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+              >
+                <option value={0}>All Time</option>
+                <option value={1}>Last 24 hours</option>
+                <option value={3}>Last 3 days</option>
+                <option value={7}>Last 7 days</option>
+                <option value={14}>Last 14 days</option>
+                <option value={30}>Last 30 days</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -150,6 +147,7 @@ export default function KanbanPage() {
                     ? `${config.bg} ${config.color} border`
                     : 'bg-bg-tertiary text-text-tertiary border border-transparent hover:border-border-subtle'
                 }`}
+                title={config.description}
               >
                 {config.emoji} {laneName} ({count})
               </button>
@@ -166,14 +164,10 @@ export default function KanbanPage() {
         </div>
       </div>
 
-      {/* Stats Cards - only show for visible lanes */}
-      {stats && visibleLanes.length < 4 && (
-        <div className={`grid gap-4 ${
-          visibleLanes.length === 1 ? 'grid-cols-1' :
-          visibleLanes.length === 2 ? 'grid-cols-2' :
-          'grid-cols-3'
-        }`}>
-          {visibleLanes.map((lane) => (
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {laneOrder.map((lane) => (
             <StatCard
               key={lane}
               title={lane}
@@ -194,7 +188,7 @@ export default function KanbanPage() {
       {/* Loading State */}
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {['Critical', 'High', 'Medium', 'Low'].map((lane) => (
+          {laneOrder.map((lane) => (
             <div key={lane} className="glass p-4 animate-pulse">
               <div className="h-6 bg-bg-tertiary rounded w-24 mb-4" />
               {Array.from({ length: 3 }).map((_, i) => (
@@ -205,7 +199,7 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* Kanban Board - responsive grid that adapts to visible lane count */}
+      {/* Kanban Board */}
       {!loading && !error && (
         <div className={`grid gap-4 min-h-[600px] ${
           visibleLanes.length === 1 ? 'grid-cols-1' :
@@ -231,21 +225,21 @@ export default function KanbanPage() {
                       {lane?.count || 0}
                     </Badge>
                   </div>
+                  <p className="text-xs text-text-tertiary mt-1">{config?.description}</p>
                 </div>
 
                 {/* Lane Items */}
                 <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {lane?.items.map((item) => (
+                  {lane?.items?.map((item) => (
                     <div
                       key={item.message_id}
                       className="glass p-3 cursor-pointer hover:bg-bg-secondary/50 transition-colors"
                       onClick={() => setSelectedItem(item)}
                     >
-                      {/* Thumbnail - handle video vs image */}
+                      {/* Thumbnail */}
                       {item.has_media && item.thumbnail_url && (
                         <div className="aspect-video bg-bg-tertiary rounded mb-2 overflow-hidden relative">
                           {/\.(mp4|mov|webm|avi|mkv)$/i.test(item.thumbnail_url) ? (
-                            // Video - show with hover-to-play
                             <video
                               src={getMediaUrl(item.thumbnail_url) || ''}
                               className="w-full h-full object-cover"
@@ -255,7 +249,6 @@ export default function KanbanPage() {
                               onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                             />
                           ) : (
-                            // Image - show normally
                             <img
                               src={getMediaUrl(item.thumbnail_url) || ''}
                               alt=""
@@ -277,27 +270,16 @@ export default function KanbanPage() {
                         <span>{new Date(item.date).toLocaleDateString()}</span>
                       </div>
 
-                      {/* Badges */}
+                      {/* Stats */}
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {item.osint_topic && (
-                          <Badge variant="info" size="sm">
-                            {item.osint_topic}
-                          </Badge>
-                        )}
-                        {item.sentiment && (
-                          <Badge
-                            variant={
-                              item.sentiment === 'positive' ? 'success' :
-                              item.sentiment === 'negative' ? 'error' : 'default'
-                            }
-                            size="sm"
-                          >
-                            {item.sentiment}
-                          </Badge>
-                        )}
-                        {(item.views || 0) > 1000 && (
+                        {(item.views || 0) > 0 && (
                           <Badge variant="default" size="sm">
-                            👁 {((item.views || 0) / 1000).toFixed(1)}k
+                            👁 {item.views! >= 1000 ? `${(item.views! / 1000).toFixed(1)}k` : item.views}
+                          </Badge>
+                        )}
+                        {(item.forwards || 0) > 0 && (
+                          <Badge variant="info" size="sm">
+                            ↗️ {item.forwards}
                           </Badge>
                         )}
                       </div>
@@ -331,12 +313,12 @@ export default function KanbanPage() {
               <div className="flex items-center gap-2">
                 <Badge
                   variant={
-                    selectedItem.urgency_lane === 'Critical' ? 'error' :
-                    selectedItem.urgency_lane === 'High' ? 'warning' :
-                    selectedItem.urgency_lane === 'Medium' ? 'warning' : 'default'
+                    selectedItem.lane === 'Trending' ? 'error' :
+                    selectedItem.lane === 'Popular' ? 'warning' :
+                    selectedItem.lane === 'Recent' ? 'info' : 'default'
                   }
                 >
-                  {selectedItem.urgency_lane}
+                  {LANE_CONFIG[selectedItem.lane]?.emoji} {selectedItem.lane}
                 </Badge>
                 <span className="text-text-secondary">{selectedItem.channel}</span>
               </div>
@@ -353,7 +335,6 @@ export default function KanbanPage() {
               {selectedItem.has_media && selectedItem.thumbnail_url && (
                 <div className="mb-4">
                   {/\.(mp4|mov|webm|avi|mkv)$/i.test(selectedItem.thumbnail_url) ? (
-                    // Video - show video player
                     <video
                       src={getMediaUrl(selectedItem.thumbnail_url) || ''}
                       controls
@@ -362,7 +343,6 @@ export default function KanbanPage() {
                       preload="metadata"
                     />
                   ) : (
-                    // Image - show normally
                     <img
                       src={getMediaUrl(selectedItem.thumbnail_url) || ''}
                       alt=""
@@ -375,23 +355,10 @@ export default function KanbanPage() {
                 {selectedItem.title || '(No content)'}
               </p>
               <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                {selectedItem.osint_topic && (
-                  <span className="text-text-secondary">
-                    🎯 Topic: <strong className="text-blue-400">{selectedItem.osint_topic}</strong>
-                  </span>
-                )}
-                {selectedItem.sentiment && (
-                  <span className={`${
-                    selectedItem.sentiment === 'negative' ? 'text-red-400' :
-                    selectedItem.sentiment === 'positive' ? 'text-green-400' : 'text-text-secondary'
-                  }`}>
-                    Sentiment: <strong>{selectedItem.sentiment}</strong>
-                  </span>
-                )}
                 {(selectedItem.views || selectedItem.forwards) && (
                   <span className="text-text-tertiary">
                     👁 {(selectedItem.views || 0).toLocaleString()} views
-                    {selectedItem.forwards ? ` · ${selectedItem.forwards} forwards` : ''}
+                    {selectedItem.forwards ? ` · ↗️ ${selectedItem.forwards} forwards` : ''}
                   </span>
                 )}
               </div>

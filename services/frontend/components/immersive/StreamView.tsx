@@ -5,7 +5,6 @@ import { useImmersive } from '@/contexts/ImmersiveContext';
 import { VideoPlayer } from './VideoPlayer';
 import { GlassPanel } from './GlassPanel';
 import { ImmersiveControls } from './ImmersiveControls';
-import { GeoBackground } from './GeoBackground';
 import { RssTicker } from './RssTicker';
 
 const AUTO_ADVANCE_DELAY = 8000; // 8s for images
@@ -126,13 +125,6 @@ export function StreamView() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Geo Background Layer (behind everything) */}
-      <GeoBackground
-        latitude={currentMessage.location?.latitude ?? null}
-        longitude={currentMessage.location?.longitude ?? null}
-        enabled={layers.geo}
-      />
-
       {/* Video/Image Player */}
       <VideoPlayer
         message={currentMessage}
@@ -144,7 +136,6 @@ export function StreamView() {
 
       {/* RSS Ticker Layer */}
       <RssTicker
-        messageId={currentMessage.id}
         enabled={layers.rss}
       />
 

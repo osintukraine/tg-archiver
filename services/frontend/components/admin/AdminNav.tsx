@@ -1,4 +1,4 @@
-// services/frontend-nextjs/components/admin/AdminNav.tsx
+// services/frontend/components/admin/AdminNav.tsx
 'use client';
 
 import { SidebarNav, NavSection } from '@/components/shared/SidebarNav';
@@ -29,14 +29,14 @@ export function AdminNav() {
     <SidebarNav
       sections={sections}
       title="Admin"
-      subtitle="OSINT Platform"
+      subtitle="Archive Management"
       accentColor="blue"
       logoIcon={
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
         </svg>
       }
-      backLink={{ href: '/', label: 'Back to Platform' }}
+      backLink={{ href: '/', label: 'Back to Archive' }}
     />
   );
 }

@@ -16,58 +16,12 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 # =============================================================================
 
 
-class MessageTag(BaseModel):
-    """AI-generated tag for message classification."""
-
-    id: int
-    message_id: int
-    tag: str
-    tag_type: str  # keywords, topics, entities, emotions, urgency
-    confidence: float
-    generated_by: str
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CuratedEntityMatch(BaseModel):
-    """Curated entity matched to a message from knowledge graph."""
-
-    entity_id: int
-    entity_type: str  # equipment, individual, organization, location, event, military_unit, ship, aircraft
-    name: str
-    description: Optional[str] = None
-    similarity_score: float  # 0.0-1.0 confidence
-    match_type: str  # exact_name, alias, hashtag, semantic
-    source_reference: str  # armyguide, root_nk_database, odin_sanctions, etc.
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class MediaItemSimple(BaseModel):
     """Media item with URL and mime type for proper HTML5 element rendering."""
 
     url: str = Field(..., description="Full URL to the media file")
     mime_type: str = Field(..., description="MIME type (e.g., video/mp4, image/jpeg, audio/mpeg)")
     media_type: str = Field(..., description="Category: image, video, audio, or document")
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class OpenSanctionsEntityMatch(BaseModel):
-    """OpenSanctions entity matched to a message (sanctioned, PEP, criminal, corporate)."""
-
-    entity_id: int
-    opensanctions_id: str  # External ID from OpenSanctions API
-    entity_type: str  # Person, Organization, Company, etc. (FtM schema types)
-    schema_type: str  # FtM schema type
-    name: str
-    description: Optional[str] = None
-    risk_classification: str  # sanctioned, pep, criminal, corporate
-    datasets: list[str] = Field(default_factory=list)  # Which datasets entity appears in
-    match_score: float  # 0.0-1.0 confidence from matching
-    match_method: str  # real_time, async_enrichment, manual
-    aliases: Optional[list[str]] = None  # Known aliases
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -96,21 +50,11 @@ class ChannelSummary(BaseModel):
     telegram_id: Optional[int] = None
     username: Optional[str] = None
     name: Optional[str] = None
-    folder: Optional[str] = None  # CRITICAL: Used for country indicators in frontend
+    folder: Optional[str] = None  # Used for folder-based organization in frontend
     verified: bool = False
     scam: bool = False
     fake: bool = False
     restricted: bool = False
-
-    # Channel source categorization (human-managed via NocoDB)
-    source_type: Optional[str] = Field(
-        None,
-        description="Channel type: state_media, military_unit, military_official, government_official, journalist, osint_aggregator, news_aggregator, personality, regional, militant, unknown"
-    )
-    affiliation: Optional[str] = Field(
-        None,
-        description="Channel affiliation: russia, ukraine, neutral, unknown"
-    )
 
 
 class MessageBase(BaseModel):
@@ -135,13 +79,11 @@ class MessageBase(BaseModel):
     spam_type: Optional[str] = Field(None, description="Type of spam: financial, promotional, off_topic")
     spam_review_status: Optional[str] = Field(None, description="Review status: pending, reviewed, false_positive, true_positive, reprocessed")
 
-    # LLM Classification
-    osint_topic: Optional[str] = Field(None, description="LLM-classified topic (combat, general, etc.)")
-    importance_level: Optional[str] = Field(None, description="LLM importance: high, medium, low")
+    # Topic classification (references message_topics)
+    topic: Optional[str] = Field(None, description="Topic from message_topics table")
 
-    # Legacy regex fields (kept for backward compatibility)
-    keyword_match_count: Optional[int] = Field(None, description="DEPRECATED: Legacy regex keyword count")
-    entities: Optional[dict] = Field(None, description="DEPRECATED: Regex-based entity extraction")
+    # Entity extraction (regex-based: hashtags, mentions, URLs)
+    entities: Optional[dict] = Field(None, description="Regex-based entities: hashtags, mentions, URLs")
 
     # Engagement metrics from Telegram
     views: Optional[int] = Field(None, description="Telegram view count")
@@ -159,25 +101,6 @@ class MessageBase(BaseModel):
     comments_count: int = Field(0, description="Number of comments in discussion")
     linked_chat_id: Optional[int] = Field(None, description="Linked discussion group ID")
 
-    # AI enrichment metadata
-    content_sentiment: Optional[str] = Field(None, description="LLM sentiment: positive, negative, neutral, urgent")
-    content_urgency_level: Optional[int] = Field(None, description="0-100 urgency score")
-    content_complexity: Optional[str] = Field(None, description="simple, moderate, complex")
-    key_phrases: Optional[list[str]] = Field(None, description="Extracted key phrases")
-    summary: Optional[str] = Field(None, description="AI-generated summary")
-    summary_generated_at: Optional[datetime] = Field(None, description="When summary was generated")
-
-    # Embedding metadata
-    embedding_model: Optional[str] = Field(None, description="Model used for content_embedding")
-    embedding_generated_at: Optional[datetime] = Field(None, description="When embedding was generated")
-
-    # Human review
-    needs_human_review: bool = Field(False, description="Flagged for human review")
-    osint_reviewed: bool = Field(False, description="Has been reviewed by human")
-    manual_importance_level: Optional[str] = Field(None, description="Human-assigned importance: high, medium, low")
-    reviewed_by: Optional[str] = Field(None, description="Reviewer username")
-    reviewed_at: Optional[datetime] = Field(None, description="When reviewed")
-
     # Selective archival
     archive_triggered_by: Optional[int] = Field(None, description="User ID who triggered archival")
     archive_triggered_at: Optional[datetime] = Field(None, description="When archival was triggered")
@@ -190,21 +113,6 @@ class MessageBase(BaseModel):
     # Media availability tracking
     media_was_available: Optional[bool] = Field(None, description="Whether media was available on Telegram")
     media_expired_at: Optional[datetime] = Field(None, description="When media URL expired")
-
-    # AI-generated tags
-    tags: list[MessageTag] = Field(default_factory=list, description="AI-generated classification tags")
-
-    # Curated entity matches from knowledge graph
-    curated_entities: list[CuratedEntityMatch] = Field(
-        default_factory=list,
-        description="Matched entities from curated knowledge graph (1,425 items from ArmyGuide, Root.NK, ODIN)"
-    )
-
-    # OpenSanctions entity matches (sanctions, PEPs, criminals)
-    opensanctions_entities: list[OpenSanctionsEntityMatch] = Field(
-        default_factory=list,
-        description="Matched entities from OpenSanctions database (sanctioned individuals, PEPs, criminals, corporations)"
-    )
 
     # Geocoded locations (supports multiple locations per message)
     location: Optional[MessageLocation] = Field(
@@ -286,6 +194,16 @@ class AdjacentMessages(BaseModel):
 # =============================================================================
 
 
+class ChannelCategorySchema(BaseModel):
+    """Channel category for grouping channels."""
+
+    id: int
+    name: str
+    color: str = "gray"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ChannelBase(BaseModel):
     """Base channel schema."""
 
@@ -305,16 +223,6 @@ class ChannelBase(BaseModel):
     fake: bool = False
     restricted: bool = False
 
-    # Channel source categorization (human-managed via NocoDB)
-    source_type: Optional[str] = Field(
-        None,
-        description="Channel type: state_media, military_unit, military_official, government_official, journalist, osint_aggregator, news_aggregator, personality, regional, militant, unknown"
-    )
-    affiliation: Optional[str] = Field(
-        None,
-        description="Channel affiliation: russia, ukraine, neutral, unknown"
-    )
-
 
 class ChannelDetail(ChannelBase):
     """Detailed channel with all fields."""
@@ -323,6 +231,7 @@ class ChannelDetail(ChannelBase):
     created_at: datetime
     updated_at: datetime
     last_message_at: Optional[datetime] = None
+    category: Optional[ChannelCategorySchema] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -332,6 +241,7 @@ class ChannelList(ChannelBase):
 
     id: int
     last_message_at: Optional[datetime] = None
+    category: Optional[ChannelCategorySchema] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -350,9 +260,8 @@ class SearchParams(BaseModel):
     # Filters
     channel_id: Optional[int] = Field(None, description="Filter by channel ID")
     channel_username: Optional[str] = Field(None, description="Filter by channel username")
-    importance_level: Optional[str] = Field(None, description="Filter by importance level: high, medium, low")
     topic: Optional[str] = Field(
-        None, description="Filter by topic (combat/civilian/diplomatic/equipment/general)"
+        None, description="Filter by topic (news/discussion/media/announcement/other)"
     )
     has_media: Optional[bool] = Field(None, description="Filter messages with media")
     media_type: Optional[str] = Field(
@@ -397,7 +306,6 @@ class ChannelStats(BaseModel):
     total_messages: int
     spam_messages: int
     archived_messages: int
-    high_importance_count: int = 0  # Count of messages with importance_level='high'
     messages_by_topic: dict[str, int]
     first_message_at: Optional[datetime] = None
     last_message_at: Optional[datetime] = None
@@ -411,7 +319,6 @@ class PlatformStats(BaseModel):
     total_messages: int
     messages_today: int
     messages_this_week: int
-    high_importance_count: int = 0  # Count of messages with importance_level='high'
     messages_by_topic: dict[str, int]
     storage_used_mb: Optional[float] = None
 
@@ -475,7 +382,6 @@ class DateBucket(BaseModel):
 
     timestamp: datetime
     message_count: int
-    high_importance_count: int = 0  # Count of messages with importance_level='high' in this bucket
     media_count: int = 0
 
 
@@ -490,7 +396,6 @@ class TimelineStats(BaseModel):
 class DistributionStats(BaseModel):
     """Statistical distributions for visualizations."""
 
-    importance_levels: Optional[dict[str, int]] = None  # {'high': count, 'medium': count, 'low': count}
     topics: Optional[dict[str, int]] = None
     channels: Optional[dict[int, int]] = None
     media_types: Optional[dict[str, int]] = None
@@ -504,9 +409,6 @@ class ChannelDailyStats(BaseModel):
     message_count: int
     spam_count: int
     non_spam_count: int
-    high_importance_count: int
-    medium_importance_count: int
-    low_importance_count: int
     media_count: int
 
 
@@ -521,7 +423,6 @@ class ChannelAnalytics(BaseModel):
     total_messages: int
     total_spam: int
     spam_rate: float  # percentage
-    high_importance_count: int
     media_count: int
 
     # Time series (daily buckets)
@@ -538,30 +439,6 @@ class ChannelAnalyticsResponse(BaseModel):
 
     channels: list[ChannelAnalytics]
     total_channels: int
-    date_from: str
-    date_to: str
-    cached: bool = False
-
-
-class EntityMention(BaseModel):
-    """Entity mention statistics."""
-
-    entity_id: int
-    entity_name: str
-    entity_type: str
-    mention_count: int
-    unique_channels: int
-    first_mention: Optional[str] = None
-    last_mention: Optional[str] = None
-
-
-class EntityAnalyticsResponse(BaseModel):
-    """Response for entity analytics endpoint."""
-
-    top_entities: list[EntityMention]
-    total_entities: int
-    total_mentions: int
-    by_type: dict[str, int]  # Count per entity type
     date_from: str
     date_to: str
     cached: bool = False
@@ -602,7 +479,6 @@ class MessageCompact(BaseModel):
     id: int
     channel_id: int
     content: Optional[str] = Field(None, max_length=200)  # Truncated to 200 chars
-    importance_level: Optional[str] = None  # high, medium, low
     media_type: Optional[str] = None
     created_at: datetime
 
@@ -612,7 +488,7 @@ class MessageCompact(BaseModel):
 class MessageExpanded(MessageCompact):
     """Expanded message with enrichment (for hover/preview)."""
 
-    osint_topic: Optional[str] = None
+    topic: Optional[str] = None
     entities: Optional[dict] = None
     is_spam: bool = False
     telegram_date: Optional[datetime] = None
@@ -639,8 +515,7 @@ class MessageFull(BaseModel):
     # Enrichment
     is_spam: bool = False
     spam_confidence: Optional[float] = None
-    importance_level: Optional[str] = None  # high, medium, low
-    osint_topic: Optional[str] = None
+    topic: Optional[str] = None
     entities: Optional[dict] = None
 
     # Media
@@ -676,8 +551,7 @@ class MediaItem(BaseModel):
     message_id: int
     channel_id: int
     content: Optional[str] = None  # Truncated to 200 chars
-    importance_level: Optional[str] = None  # high, medium, low
-    osint_topic: Optional[str] = None
+    topic: Optional[str] = None
     created_at: datetime
 
     # Media metadata
@@ -732,122 +606,29 @@ class AlbumMediaResponse(BaseModel):
 
 
 # =============================================================================
-# INTELLIGENCE STREAM SCHEMAS
+# RSS STREAM SCHEMAS
 # =============================================================================
 
 
-class UnifiedStreamItem(BaseModel):
-    """Unified stream item combining Telegram and RSS content."""
+class RSSStreamItem(BaseModel):
+    """RSS feed article for stream display."""
 
-    type: str  # 'telegram' or 'rss'
     id: int
-    source_name: str  # Channel name or RSS feed name
-    source_category: Optional[str] = None  # Folder or RSS category
-    source_trust_level: Optional[int] = None  # Trust level (1-5) for RSS sources
-    title: str  # Short title/headline
-    content: str  # Full message/article content
-    content_translated: Optional[str] = None  # Translated content (for Telegram messages)
-    importance_level: Optional[str] = None  # LLM importance: high, medium, low
-    tags: list[str] = Field(default_factory=list)  # Tags/categories
-    published_at: datetime  # Message/article timestamp
-    url: str  # Link to source (message URL or article URL)
-    correlation_count: Optional[int] = None  # Number of correlated items
-
-
-class CorrelatedArticle(BaseModel):
-    """Single article in correlation response."""
-
-    article_id: int
-    title: str
-    source_name: str  # RSS feed name
-    source_category: Optional[str] = None  # RSS category
-    source_trust_level: Optional[int] = None  # Trust level (1-5)
-    similarity_score: float  # Cosine similarity (0-1)
-    entity_overlap_score: Optional[int] = None  # Percentage overlap
-    matched_entities: Optional[dict] = None  # Common entities between sources
+    feed_name: str  # RSS feed name
+    feed_category: Optional[str] = None  # RSS category
+    trust_level: Optional[int] = None  # Trust level (1-5)
+    title: str  # Article headline
+    summary: Optional[str] = None  # Article summary/description
+    content: str  # Full article content
+    author: Optional[str] = None  # Article author
+    published_at: datetime  # Article timestamp
     url: str  # Link to article
-    published_at: datetime
-
-
-class CorrelationResponse(BaseModel):
-    """Response with correlated RSS articles grouped by type."""
-
-    message_id: int
-    same_event: list[CorrelatedArticle] = Field(
-        default_factory=list,
-        description="Articles covering the same event (high similarity)"
-    )
-    related: list[CorrelatedArticle] = Field(
-        default_factory=list,
-        description="Related articles (medium-high similarity)"
-    )
-    alternative_viewpoints: list[CorrelatedArticle] = Field(
-        default_factory=list,
-        description="Articles with opposing perspectives"
-    )
-    total_correlations: int = Field(
-        0,
-        description="Total number of correlated articles"
-    )
 
 
 # =============================================================================
-# RSS VALIDATION LAYER SCHEMAS
+# SOCIAL GRAPH API SCHEMAS
 # =============================================================================
 
-
-class ArticleValidationItem(BaseModel):
-    """Single article validation result."""
-
-    article_id: int
-    title: str
-    source_name: str
-    source_trust_level: int = Field(
-        default=3,
-        ge=1,
-        le=5,
-        description="Source trust level (1-5): 5=highest (Reuters/AP), 4=high (BBC/Kyiv Independent), 3=medium, 2=low (TASS/RT), 1=minimal"
-    )
-    source_category: Optional[str] = Field(
-        default=None,
-        description="Source category: ukraine, russia, neutral, international, social_media"
-    )
-    validation_type: str  # confirms|contradicts|context|alternative|none
-    relevance_explanation: str
-    confidence: int  # 0-100
-    is_relevant: bool
-    similarity_score: float  # From pgvector
-    published_at: datetime
-    url: str
-
-
-class ValidationResponse(BaseModel):
-    """LLM-generated validation summary for a Telegram message."""
-
-    message_id: int
-    summary: str  # 2-3 sentence overall summary
-    total_articles_found: int
-    articles_by_type: dict = Field(
-        default_factory=dict,
-        description="Count of articles by validation type"
-    )
-    overall_confidence: float  # Average confidence across all articles
-    article_validations: list[ArticleValidationItem] = Field(
-        default_factory=list,
-        description="Individual article classifications"
-    )
-    cached: bool = Field(
-        False,
-        description="Whether this result was served from cache"
-    )
-    cache_expires_at: Optional[datetime] = Field(
-        None,
-        description="When cached result expires (if cached=true)"
-    )
-    processing_time_ms: Optional[int] = Field(
-        None,
-        description="Time taken to generate validation (if not cached)"
-    )
 """
 Social Graph API Schemas
 
@@ -951,7 +732,6 @@ class MessageSocialGraphResponse(BaseModel):
     # Metadata
     telegram_date: Optional[datetime] = None
     is_spam: bool = False
-    importance_level: Optional[str] = None  # high, medium, low
     created_at: datetime
 
 
@@ -1120,7 +900,6 @@ class InfluencerResponse(BaseModel):
     # Engagement averages
     avg_views_per_message: int
     avg_forwards_per_message: int
-    high_importance_message_count: int  # Count of authored messages with importance_level='high'
 
     # Influence score (weighted composite)
     influence_score: int

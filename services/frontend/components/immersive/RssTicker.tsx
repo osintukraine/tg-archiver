@@ -33,7 +33,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
     const fetchRssNews = async () => {
       setIsLoading(true);
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
         const response = await fetch(
           `${API_URL}/api/stream/rss?limit=15&hours=24`
         );

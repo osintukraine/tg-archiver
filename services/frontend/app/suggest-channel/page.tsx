@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { SITE_NAME } from '@/lib/constants';
 
-// Use NEXT_PUBLIC_API_URL for client-side API calls (as per CLAUDE.md #6)
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use relative URLs when behind proxy, or NEXT_PUBLIC_API_URL for direct access
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Cloudflare Turnstile site key
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';

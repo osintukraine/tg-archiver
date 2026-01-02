@@ -7,6 +7,7 @@ from .channel import Channel
 from .channel_submission import ChannelSubmission
 from .extraction_pattern import ExtractionPattern
 from .export_job import ExportJob, MESSAGE_EXPORT_PROFILES, EXPORT_EXCLUDED_COLUMNS
+from .import_job import ImportJob, ImportJobChannel, ImportJobLog
 from .external_news import ExternalNews
 from .monitored_folder import MonitoredFolder
 from .feed_token import FeedToken
@@ -55,5 +56,8 @@ __all__ = [
     "MESSAGE_EXPORT_PROFILES",
     "EXPORT_EXCLUDED_COLUMNS",
     # Import System
+    "ImportJob",
+    "ImportJobChannel",
+    "ImportJobLog",
     "MonitoredFolder",
 ]

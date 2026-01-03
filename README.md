@@ -560,4 +560,4 @@ docker run --rm -v tg-archiver_minio_data:/data -v $(pwd):/backup \
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file for details.
+AGPL-3.0 License - See [LICENSE](LICENSE) file for details.

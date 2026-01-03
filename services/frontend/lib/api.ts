@@ -79,7 +79,7 @@ function getApiUrl(): string {
 export const API_URL = getApiUrl();
 
 /**
- * Authenticated fetch wrapper that includes JWT token.
+ * Authenticated fetch wrapper that includes JWT token and CSRF token.
  * Use this for any API calls that require authentication.
  *
  * @param url - The URL to fetch (can be relative or absolute)
@@ -89,6 +89,7 @@ export const API_URL = getApiUrl();
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   // Get JWT token from localStorage
   const token = typeof window !== 'undefined' ? localStorage.getItem('tg_archiver_token') : null;
+  const method = options.method?.toUpperCase() || 'GET';
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -99,9 +100,21 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Add CSRF token for state-changing requests
+  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (stateChangingMethods.includes(method)) {
+    const csrfToken = typeof document !== 'undefined'
+      ? document.cookie.match(/(^| )csrf_token=([^;]+)/)?.[2]
+      : null;
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+  }
+
   return fetch(url, {
     ...options,
     headers,
+    credentials: 'include', // Ensure cookies are sent for CSRF
   });
 }
 
@@ -195,10 +208,21 @@ function getAuthToken(): string | null {
 }
 
 /**
+ * Get CSRF token from cookie (client-side only)
+ * Required for state-changing requests (POST, PUT, PATCH, DELETE)
+ */
+function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(^| )csrf_token=([^;]+)/);
+  return match ? match[2] : null;
+}
+
+/**
  * Fetch helper with error handling and authentication
  */
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${getApiUrl()}${path}`;
+  const method = options?.method?.toUpperCase() || 'GET';
 
   // Get auth token for client-side requests
   const token = getAuthToken();
@@ -212,10 +236,20 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Add CSRF token for state-changing requests (client-side only)
+  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (stateChangingMethods.includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers['X-CSRF-Token'] = csrfToken;
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include', // Ensure cookies are sent for CSRF
       // Disable Next.js server-side caching - data is dynamic and changes frequently
       cache: 'no-store',
     });

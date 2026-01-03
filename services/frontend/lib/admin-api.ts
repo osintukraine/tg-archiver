@@ -3,15 +3,18 @@
  *
  * This module provides a centralized client for all admin API calls with:
  * - Automatic JWT token inclusion
+ * - CSRF token handling (double-submit cookie pattern)
  * - Consistent error handling
  * - Type-safe request/response handling
  * - Request/response logging
  *
  * IMPORTANT: All admin pages MUST use this client instead of raw fetch()
- * to ensure JWT tokens are properly sent with requests.
+ * to ensure JWT tokens and CSRF tokens are properly sent with requests.
  */
 
 const TOKEN_KEY = 'tg_archiver_token';
+const CSRF_COOKIE_NAME = 'csrf_token';
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
 
 /**
  * Get stored JWT token
@@ -19,6 +22,16 @@ const TOKEN_KEY = 'tg_archiver_token';
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(TOKEN_KEY);
+}
+
+/**
+ * Get CSRF token from cookie
+ * Required for state-changing requests (POST, PUT, PATCH, DELETE)
+ */
+function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(^| )${CSRF_COOKIE_NAME}=([^;]+)`));
+  return match ? match[2] : null;
 }
 
 /**
@@ -54,6 +67,7 @@ export async function adminFetch<T = any>(
 ): Promise<T> {
   const url = `${API_URL}${path}`;
   const token = getToken();
+  const method = options.method?.toUpperCase() || 'GET';
 
   // Build headers with JWT token if available
   const headers: Record<string, string> = {
@@ -65,10 +79,20 @@ export async function adminFetch<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Add CSRF token for state-changing requests
+  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (stateChangingMethods.includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers[CSRF_HEADER_NAME] = csrfToken;
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include', // Ensure cookies are sent for CSRF
     });
 
     if (!response.ok) {

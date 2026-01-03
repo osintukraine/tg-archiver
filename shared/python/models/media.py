@@ -104,17 +104,21 @@ class MessageMedia(Base):
 
     __tablename__ = "message_media"
 
-    # Composite primary key
+    # Primary key (junction table with auto-increment for simpler handling)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     message_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True
+        BigInteger, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
     )
-    media_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("media_files.id", ondelete="CASCADE"), primary_key=True
+    media_file_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("media_files.id", ondelete="CASCADE"), nullable=False
     )
+
+    # Album ordering (for multi-media posts)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Relationships
     message: Mapped["Message"] = relationship("Message", back_populates="media")
     media_file: Mapped["MediaFile"] = relationship("MediaFile", back_populates="messages")
 
     def __repr__(self) -> str:
-        return f"<MessageMedia(message_id={self.message_id}, media_id={self.media_id})>"
+        return f"<MessageMedia(message_id={self.message_id}, media_file_id={self.media_file_id}, position={self.position})>"

@@ -22,7 +22,6 @@ from telethon import TelegramClient
 
 from config.settings import settings
 from media_archiver import MediaArchiver
-from notifications import NotificationClient
 
 # Structured logging for Loki aggregation
 from observability import setup_logging, get_logger, LogContext
@@ -35,12 +34,12 @@ from .redis_consumer import RedisConsumer
 # Import Prometheus metrics server
 from observability.metrics import processor_metrics_server, record_queue_depth
 
+# Import audit logger for platform events
+from audit.audit_logger import AuditLogger
+audit = AuditLogger("processor")
+
 # Import translation service from shared modules
-import importlib.util
-spec = importlib.util.spec_from_file_location("translation_service_module", "/app/shared/python/translation.py")
-translation_service_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(translation_service_module)
-TranslationService = translation_service_module.TranslationService
+from translation import CommentTranslator as TranslationService
 
 # Initialize structured logging
 setup_logging(service_name="processor")
@@ -51,6 +50,53 @@ shutdown_event = asyncio.Event()
 
 # Queue depth update interval (seconds)
 QUEUE_DEPTH_UPDATE_INTERVAL = 10
+
+
+async def pattern_reload_listener(entity_extractor: EntityExtractor) -> None:
+    """
+    Background task to listen for pattern reload signals from Redis pub/sub.
+
+    When patterns are updated via the admin API, a message is published to
+    the 'extraction:reload' channel which triggers this handler to reload
+    patterns from the database.
+    """
+    import redis.asyncio as aioredis
+    from models.base import AsyncSessionLocal
+
+    logger.info("Starting pattern reload listener on 'extraction:reload' channel")
+
+    redis_url = settings.REDIS_URL
+    pubsub = None
+
+    try:
+        r = aioredis.from_url(redis_url)
+        pubsub = r.pubsub()
+        await pubsub.subscribe("extraction:reload")
+
+        while not shutdown_event.is_set():
+            try:
+                message = await asyncio.wait_for(
+                    pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0),
+                    timeout=5.0
+                )
+                if message:
+                    logger.info("Received pattern reload signal")
+                    async with AsyncSessionLocal() as db:
+                        count = await entity_extractor.reload_patterns(db)
+                        logger.info(f"Reloaded {count} extraction patterns")
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                logger.warning(f"Error in pattern reload listener: {e}")
+                await asyncio.sleep(5)
+
+    except Exception as e:
+        logger.error(f"Pattern reload listener failed to start: {e}")
+    finally:
+        if pubsub:
+            await pubsub.unsubscribe("extraction:reload")
+            await pubsub.close()
+        logger.info("Pattern reload listener stopped")
 
 
 async def update_queue_depth(redis_consumer: RedisConsumer) -> None:
@@ -103,6 +149,7 @@ async def main() -> NoReturn:
     telegram_client = None
     processor = None
     queue_depth_task = None
+    pattern_reload_task = None
 
     try:
         # 1. Initialize Redis consumer
@@ -110,19 +157,21 @@ async def main() -> NoReturn:
         redis_consumer = RedisConsumer()
         await redis_consumer.connect()
 
-        # 2. Initialize NotificationClient
-        logger.info("Initializing notification client...")
-        notifier = NotificationClient(service_name="processor", redis_url=settings.REDIS_URL)
-
-        # 3. Initialize message router
+        # 2. Initialize message router
         logger.info("Initializing message router...")
         message_router = MessageRouter()
 
-        # 4. Initialize entity extractor (regex-based, fast)
+        # 3. Initialize entity extractor (regex-based, fast)
         logger.info("Initializing entity extractor...")
         entity_extractor = EntityExtractor()
 
-        # 5. Initialize Telegram client for media download
+        # Load extraction patterns from database
+        from models.base import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            pattern_count = await entity_extractor.load_patterns_from_db(db)
+            logger.info(f"Loaded {pattern_count} extraction patterns from database")
+
+        # 4. Initialize Telegram client for media download
         import socket
         import shutil
 
@@ -158,7 +207,7 @@ async def main() -> NoReturn:
 
         logger.info("Telegram client connected successfully (processor session)")
 
-        # 6. Initialize MinIO client for media archival
+        # 5. Initialize MinIO client for media archival
         logger.info("Initializing MinIO client...")
         minio_client = Minio(
             endpoint=settings.MINIO_ENDPOINT,
@@ -167,14 +216,14 @@ async def main() -> NoReturn:
             secure=settings.MINIO_SECURE,
         )
 
-        # 7. Initialize media archiver with Redis for sync queue
+        # 6. Initialize media archiver with Redis for sync queue
         media_archiver = MediaArchiver(
             minio_client=minio_client,
             redis_client=redis_consumer.client,
             storage_box_id="default",
         )
 
-        # 8. Initialize translation service
+        # 7. Initialize translation service
         translation_service = None
         if settings.TRANSLATION_ENABLED:
             logger.info("Initializing translation service (DeepL + Google fallback)...")
@@ -183,7 +232,7 @@ async def main() -> NoReturn:
         else:
             logger.info("Translation disabled in processor")
 
-        # 9. Initialize MessageProcessor (simplified - no LLM)
+        # 8. Initialize MessageProcessor (simplified - no LLM)
         logger.info("Initializing message processor...")
         processor = MessageProcessor(
             message_router=message_router,
@@ -191,14 +240,27 @@ async def main() -> NoReturn:
             media_archiver=media_archiver,
             telegram_client=telegram_client,
             translation_service=translation_service,
-            notifier=notifier,
         )
 
         logger.info("All components initialized successfully")
         logger.info("Note: No AI classification - all messages will be archived")
 
-        # 10. Start background queue depth metrics updater
+        # Log service startup to audit
+        async with AsyncSessionLocal() as db:
+            await audit.log_service_started(
+                session=db,
+                version="1.0.0",
+                config={
+                    "translation_enabled": settings.TRANSLATION_ENABLED,
+                    "media_archival_enabled": True,
+                },
+            )
+
+        # 9. Start background queue depth metrics updater
         queue_depth_task = asyncio.create_task(update_queue_depth(redis_consumer))
+
+        # 10. Start pattern reload listener (for admin API updates)
+        pattern_reload_task = asyncio.create_task(pattern_reload_listener(entity_extractor))
 
         # 11. Start processing messages
         logger.info("Starting message processing...")
@@ -245,11 +307,18 @@ async def main() -> NoReturn:
         # Graceful shutdown
         logger.info("Shutting down gracefully...")
 
-        # Cancel the queue depth updater task
+        # Cancel background tasks
         if queue_depth_task and not queue_depth_task.done():
             queue_depth_task.cancel()
             try:
                 await queue_depth_task
+            except asyncio.CancelledError:
+                pass
+
+        if pattern_reload_task and not pattern_reload_task.done():
+            pattern_reload_task.cancel()
+            try:
+                await pattern_reload_task
             except asyncio.CancelledError:
                 pass
 
@@ -261,10 +330,22 @@ async def main() -> NoReturn:
             logger.info("Disconnecting Telegram client...")
             await telegram_client.disconnect()
 
-        # Print statistics
+        # Print statistics and log to audit
         if processor:
             stats = processor.get_stats()
             logger.info(f"Processing statistics: {stats}")
+
+            # Log batch stats to audit trail
+            if stats.get("messages_archived", 0) > 0:
+                try:
+                    async with AsyncSessionLocal() as db:
+                        await audit.log_messages_archived(
+                            session=db,
+                            count=stats.get("messages_archived", 0),
+                            batch_id=f"session-{shutdown_event._loop.time() if hasattr(shutdown_event, '_loop') else 'unknown'}",
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to log shutdown stats to audit: {e}")
 
         logger.info("Shutdown complete")
 

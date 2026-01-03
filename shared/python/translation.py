@@ -1,15 +1,15 @@
 """
 Translation Service - DeepL Pro + Google Translate Fallback
 
-Provides high-quality translation for Russian/Ukrainian → English.
-Uses DeepL Pro free API (superior quality for RU/UK → EN).
+Provides high-quality translation for multilingual content.
+Uses DeepL Pro free API (superior quality for many language pairs).
 Falls back to Google Translate if DeepL quota exceeded or unavailable.
 
-Cost: €0/month (DeepL Pro free tier: 500,000 chars/month)
+Cost: $0/month (DeepL Pro free tier: 500,000 chars/month)
 
 Architecture:
-1. Try DeepL Pro first (best quality for RU/UK → EN)
-2. If DeepL fails/quota exceeded → Google Translate
+1. Try DeepL Pro first (best quality for many language pairs)
+2. If DeepL fails/quota exceeded -> Google Translate
 3. Track usage and costs in database (TranslationUsage model)
 4. Language detection (fasttext or langdetect)
 5. Per-message cost tracking for budget control
@@ -112,7 +112,7 @@ class TranslationService:
     """
     Translation service with DeepL Pro and Google Translate fallback.
 
-    DeepL Pro is superior for Russian/Ukrainian → English translation.
+    DeepL Pro provides high-quality translation for many language pairs.
     Free tier: 500,000 characters/month.
     """
 
@@ -175,7 +175,7 @@ class TranslationService:
 
         character_count = len(preprocessed_text)
 
-        # Try DeepL Pro first (best quality for RU/UK → EN)
+        # Try DeepL Pro first (best quality for many language pairs)
         if self.deepl_client:
             try:
                 result = await self._translate_with_deepl(

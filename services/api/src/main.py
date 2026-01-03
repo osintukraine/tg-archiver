@@ -5,6 +5,7 @@ Simplified API for Telegram archiving without AI dependencies.
 Provides: Message search, media gallery, social graph, RSS feeds.
 """
 
+import os
 import time
 import uuid
 
@@ -26,6 +27,8 @@ logger = get_logger(__name__)
 
 from .auth.factory import init_auth_config, get_auth_config
 from .middleware.auth_unified import AuthMiddleware
+from .middleware.rate_limit import RateLimitMiddleware
+from .middleware.csrf import CSRFMiddleware, CSRF_ENABLED
 from .dependencies import CurrentUser, AuthenticatedUser, AdminUser
 from .routers import (
     about_router,
@@ -58,6 +61,7 @@ from .routers import (
     admin_extraction_router,
     admin_folders_router,
     admin_topics_router,
+    admin_import_router,
     metrics_router,
 )
 from .routers.docs import router as docs_router
@@ -119,6 +123,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         response.headers["Cache-Control"] = "no-store"
+        # CSP for API - restrictive since we serve JSON, not HTML
+        # Allow 'self' for Swagger/ReDoc UI resources
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "frame-ancestors 'none'"
+        )
         return response
 
 
@@ -135,7 +149,10 @@ app = FastAPI(
 )
 
 # Middleware
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+# Trusted hosts for proxy headers (X-Forwarded-For, X-Forwarded-Proto)
+# In production, restrict to actual proxy IPs/hostnames
+TRUSTED_PROXY_HOSTS = os.getenv("TRUSTED_PROXY_HOSTS", "caddy,127.0.0.1,localhost").split(",")
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=TRUSTED_PROXY_HOSTS)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Initialize authentication on startup
@@ -153,6 +170,14 @@ async def startup_auth():
         async with AsyncSessionLocal() as db:
             await ensure_admin_user(db)
             await db.commit()
+
+# Rate limiting for auth endpoints (before auth middleware)
+app.add_middleware(RateLimitMiddleware)
+
+# CSRF protection (optional, controlled by CSRF_ENABLED env var)
+if CSRF_ENABLED:
+    app.add_middleware(CSRFMiddleware)
+    logger.info("CSRF protection enabled")
 
 # Auth middleware
 app.add_middleware(AuthMiddleware)
@@ -241,6 +266,7 @@ app.include_router(admin_categories_router)
 app.include_router(admin_extraction_router)
 app.include_router(admin_folders_router)
 app.include_router(admin_topics_router)
+app.include_router(admin_import_router)
 
 
 @app.on_event("startup")

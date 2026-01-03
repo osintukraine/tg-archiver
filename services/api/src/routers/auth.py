@@ -5,28 +5,34 @@ Provides login endpoints for JWT authentication and user management.
 """
 
 import logging
+import os
 from datetime import timedelta
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.base import get_db
 from ..auth.factory import get_auth_config, AuthProvider
 from ..auth.models import AuthConfig, AuthUser
 from ..dependencies import AdminUser, AuthenticatedUser  # Dependency versions
 from ..auth.jwt import (
     authenticate_user,
     create_access_token,
+    ensure_admin_user,
     JWT_EXPIRATION_MINUTES,
     create_user,
     update_user_password,
-    get_user,
     list_users,
+    delete_user,
+    invalidate_token,
+    extract_token_from_request,
 )
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
 # ============================================
@@ -35,8 +41,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 class LoginRequest(BaseModel):
     """Login request with username and password."""
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -48,46 +54,48 @@ class TokenResponse(BaseModel):
 
 class UserCreateRequest(BaseModel):
     """Create user request."""
-    username: str
-    password: str
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    roles: Optional[list[str]] = None
+    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+    is_admin: bool = False
 
 
 class PasswordChangeRequest(BaseModel):
     """Change password request."""
-    current_password: str
-    new_password: str
+    current_password: str = Field(..., min_length=1, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserResponse(BaseModel):
     """User information response (without password)."""
-    id: str
+    id: int
     username: str
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    roles: list[str] = []
+    email: str
+    is_active: bool
+    is_admin: bool
+
+    class Config:
+        from_attributes = True
 
 
 # ============================================
-# LOGIN ENDPOINTS (JWT Provider Only)
+# LOGIN ENDPOINTS
 # ============================================
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
     credentials: LoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
     config: AuthConfig = Depends(get_auth_config)
 ):
     """
     Authenticate user and return JWT access token.
 
-    This endpoint validates username/password credentials against the local JWT user
-    database (users.json) and returns a signed JWT token for subsequent API requests.
-    The token includes the username as the subject claim and is valid for JWT_EXPIRATION_MINUTES.
+    This endpoint validates username/password credentials against the PostgreSQL
+    users table and returns a signed JWT token for subsequent API requests.
 
-    Only available when AUTH_PROVIDER=jwt. Other providers (Cloudron, Ory) use their own
-    authentication flows and do not use this endpoint.
+    Only available when AUTH_PROVIDER=jwt.
 
     Example:
         ```bash
@@ -101,30 +109,20 @@ async def login(
         curl http://localhost:8000/api/messages \\
           -H "Authorization: Bearer YOUR_TOKEN_HERE"
         ```
-
-    Args:
-        credentials: LoginRequest containing username and password
-        config: Authentication configuration (injected dependency)
-
-    Returns:
-        TokenResponse with access_token, token_type, and expires_in (seconds)
-
-    Raises:
-        HTTPException 400: If AUTH_PROVIDER is not 'jwt'
-        HTTPException 401: If username or password is incorrect
     """
     # Only available for JWT provider
     if config.provider != AuthProvider.JWT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Login endpoint only available with AUTH_PROVIDER=jwt. "
-                   f"Current provider: {config.provider}. "
-                   f"For Cloudron, use Cloudron's OAuth flow. "
-                   f"For Ory, use Ory Kratos self-service UI."
+                   f"Current provider: {config.provider}."
         )
 
+    # Ensure admin user exists (creates from env vars if not)
+    await ensure_admin_user(db)
+
     # Authenticate user
-    user = authenticate_user(credentials.username, credentials.password)
+    user = await authenticate_user(db, credentials.username, credentials.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -132,20 +130,70 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create access token
+    # Create access token with user info
     access_token_expires = timedelta(minutes=JWT_EXPIRATION_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["username"]},
+        data={
+            "sub": user.username,
+            "user_id": user.id,
+            "email": user.email,
+            "is_admin": user.is_admin,
+        },
         expires_delta=access_token_expires
     )
 
     logger.info(f"User {credentials.username} logged in successfully")
+
+    # Set cookie for /docs and /redoc browser access
+    # Secure flag: True in production (HTTPS), False in development
+    is_production = os.getenv("ENVIRONMENT", "development") == "production"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=JWT_EXPIRATION_MINUTES * 60,
+        httponly=True,
+        samesite="strict",  # Strict prevents CSRF attacks
+        secure=is_production,  # Only send over HTTPS in production
+    )
 
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
         expires_in=JWT_EXPIRATION_MINUTES * 60  # Convert minutes to seconds
     )
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    current_user: AuthenticatedUser,
+    config: AuthConfig = Depends(get_auth_config)
+) -> Dict[str, str]:
+    """
+    Logout and invalidate the current JWT token.
+
+    The token is added to a Redis blacklist until it expires naturally.
+    Only available when AUTH_PROVIDER=jwt.
+    """
+    if config.provider != AuthProvider.JWT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Logout only available with AUTH_PROVIDER=jwt"
+        )
+
+    # Get the token from the request
+    token = extract_token_from_request(request)
+    if token:
+        success = await invalidate_token(token)
+        if not success:
+            logger.warning(f"Failed to invalidate token for user {current_user.username}")
+
+    # Clear the cookie
+    response.delete_cookie(key="access_token")
+
+    logger.info(f"User {current_user.username} logged out")
+    return {"message": "Logged out successfully"}
 
 
 # ============================================
@@ -156,33 +204,14 @@ async def login(
 async def create_user_endpoint(
     user_data: UserCreateRequest,
     current_user: AdminUser,  # Requires admin role
+    db: AsyncSession = Depends(get_db),
     config: AuthConfig = Depends(get_auth_config)
 ):
     """
-    Create a new user in the JWT user database.
-
-    Adds a new user to the local users.json file with hashed password (bcrypt).
-    The username must be unique. Default role is 'viewer' if not specified.
-
-    Only available when AUTH_PROVIDER=jwt. Other providers manage users through
-    their own systems (Cloudron admin panel, Ory Kratos identity management).
+    Create a new user.
 
     Requires admin role to access this endpoint.
-
-    Args:
-        user_data: UserCreateRequest with username, password, email (optional),
-                   display_name (optional), and roles (optional)
-        current_user: Authenticated admin user (injected dependency)
-        config: Authentication configuration (injected dependency)
-
-    Returns:
-        UserResponse with created user information (password excluded)
-
-    Raises:
-        HTTPException 400: If AUTH_PROVIDER is not 'jwt'
-        HTTPException 401: If not authenticated
-        HTTPException 403: If not admin role
-        HTTPException 409: If username already exists in users.json
+    Only available when AUTH_PROVIDER=jwt.
     """
     if config.provider != AuthProvider.JWT:
         raise HTTPException(
@@ -190,18 +219,16 @@ async def create_user_endpoint(
             detail="User management only available with AUTH_PROVIDER=jwt"
         )
 
-    # Admin check is handled by AdminUser dependency
-
     try:
-        user = create_user(
+        user = await create_user(
+            db=db,
             username=user_data.username,
-            password=user_data.password,
             email=user_data.email,
-            display_name=user_data.display_name,
-            roles=user_data.roles or ["viewer"]
+            password=user_data.password,
+            is_admin=user_data.is_admin,
         )
-        logger.info(f"User {user_data.username} created successfully")
-        return UserResponse(**user)
+        logger.info(f"User {user_data.username} created by {current_user.username}")
+        return UserResponse.model_validate(user)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -211,63 +238,35 @@ async def create_user_endpoint(
 
 @router.get("/users/me", response_model=UserResponse)
 async def get_current_user_info(
-    current_user: AuthenticatedUser,  # Requires authentication
+    current_user: AuthenticatedUser,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get current authenticated user's profile information.
-
-    Returns the authenticated user's profile including ID, username, email,
-    display_name, and roles. Works with all authentication providers (JWT,
-    Cloudron, Ory). The user information is extracted from the JWT token,
-    Cloudron session, or Ory session depending on the active provider.
-
-    Args:
-        current_user: Authenticated user (injected by AuthenticatedUser dependency)
-
-    Returns:
-        UserResponse with current user's profile information (password excluded)
-
-    Raises:
-        HTTPException 401: If not authenticated or token is invalid/expired
     """
-    # AuthenticatedUser dependency handles 401 if not authenticated
+    from ..auth.jwt import get_user_by_username
 
-    return UserResponse(
-        id=current_user.id,
-        username=current_user.username,
-        email=current_user.email,
-        display_name=current_user.display_name,
-        roles=current_user.roles
-    )
+    user = await get_user_by_username(db, current_user.username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return UserResponse.model_validate(user)
 
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users_endpoint(
     current_user: AdminUser,  # Requires admin role
+    db: AsyncSession = Depends(get_db),
     config: AuthConfig = Depends(get_auth_config)
 ):
     """
-    List all users in the JWT user database.
-
-    Retrieves all users from the local users.json file and returns their
-    profile information (passwords excluded). Intended for admin user management.
-
-    Only available when AUTH_PROVIDER=jwt. Other providers manage users through
-    their own systems and do not expose user lists via this API.
+    List all users.
 
     Requires admin role to access this endpoint.
-
-    Args:
-        current_user: Authenticated admin user (injected by AdminUser dependency)
-        config: Authentication configuration (injected dependency)
-
-    Returns:
-        List of UserResponse objects with all users' information (passwords excluded)
-
-    Raises:
-        HTTPException 400: If AUTH_PROVIDER is not 'jwt'
-        HTTPException 401: If not authenticated
-        HTTPException 403: If not admin role
+    Only available when AUTH_PROVIDER=jwt.
     """
     if config.provider != AuthProvider.JWT:
         raise HTTPException(
@@ -275,40 +274,59 @@ async def list_users_endpoint(
             detail="User management only available with AUTH_PROVIDER=jwt"
         )
 
-    # Admin check is handled by AdminUser dependency
+    users = await list_users(db)
+    return [UserResponse.model_validate(user) for user in users]
 
-    users = list_users()
-    return [UserResponse(**user) for user in users]
+
+@router.delete("/users/{user_id}")
+async def delete_user_endpoint(
+    user_id: int,
+    current_user: AdminUser,  # Requires admin role
+    db: AsyncSession = Depends(get_db),
+    config: AuthConfig = Depends(get_auth_config)
+) -> Dict[str, str]:
+    """
+    Delete a user.
+
+    Requires admin role. Cannot delete yourself.
+    Only available when AUTH_PROVIDER=jwt.
+    """
+    if config.provider != AuthProvider.JWT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User management only available with AUTH_PROVIDER=jwt"
+        )
+
+    # Prevent self-deletion
+    if str(user_id) == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account"
+        )
+
+    success = await delete_user(db, user_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    logger.info(f"User {user_id} deleted by {current_user.username}")
+    return {"message": "User deleted successfully"}
 
 
 @router.post("/users/me/password")
 async def change_password(
     password_data: PasswordChangeRequest,
-    current_user: AuthenticatedUser,  # Requires authentication
+    current_user: AuthenticatedUser,
+    db: AsyncSession = Depends(get_db),
     config: AuthConfig = Depends(get_auth_config)
 ) -> Dict[str, str]:
     """
     Change the current user's password.
 
-    Validates the current password, then updates the user's password in the local
-    users.json file with a new bcrypt hash. Requires the user to provide their
-    current password for security verification before allowing the change.
-
-    Only available when AUTH_PROVIDER=jwt. Other providers manage passwords through
-    their own systems (Cloudron user settings, Ory Kratos self-service flows).
-
-    Args:
-        password_data: PasswordChangeRequest with current_password and new_password
-        current_user: Authenticated user (injected dependency)
-        config: Authentication configuration (injected dependency)
-
-    Returns:
-        Dictionary with success message: {"message": "Password updated successfully"}
-
-    Raises:
-        HTTPException 400: If AUTH_PROVIDER is not 'jwt'
-        HTTPException 401: If not authenticated or current password is incorrect
-        HTTPException 500: If password update fails (file write error)
+    Requires providing the current password for verification.
+    Only available when AUTH_PROVIDER=jwt.
     """
     if config.provider != AuthProvider.JWT:
         raise HTTPException(
@@ -316,14 +334,8 @@ async def change_password(
             detail="Password management only available with AUTH_PROVIDER=jwt"
         )
 
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
-
     # Verify current password
-    user = authenticate_user(current_user.username, password_data.current_password)
+    user = await authenticate_user(db, current_user.username, password_data.current_password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -331,7 +343,7 @@ async def change_password(
         )
 
     # Update password
-    success = update_user_password(current_user.username, password_data.new_password)
+    success = await update_user_password(db, int(current_user.id), password_data.new_password)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -344,7 +356,7 @@ async def change_password(
 
 
 # ============================================
-# AUTH INFO ENDPOINT (All Providers)
+# AUTH INFO ENDPOINT
 # ============================================
 
 @router.get("/info")
@@ -352,60 +364,16 @@ async def get_auth_info(config: AuthConfig = Depends(get_auth_config)) -> Dict[s
     """
     Get authentication configuration information for the frontend.
 
-    Returns the active authentication provider, whether authentication is required,
-    and provider-specific endpoints/documentation. This allows the frontend to
-    dynamically adapt its authentication flow based on the backend configuration.
-
-    Works with all authentication providers (JWT, Cloudron, Ory, none).
-
-    Args:
-        config: Authentication configuration (injected dependency)
-
-    Returns:
-        Dictionary with provider, required flag, login_endpoint, and docs:
-        - provider: 'jwt' | 'cloudron' | 'ory' | 'none'
-        - required: boolean indicating if authentication is mandatory
-        - login_endpoint: URL for authentication (provider-specific)
-        - docs: Human-readable documentation string
-
-    Example Response (JWT):
-        ```json
-        {
-            "provider": "jwt",
-            "required": true,
-            "login_endpoint": "/api/auth/login",
-            "docs": "Use POST /api/auth/login with username/password to get token"
-        }
-        ```
-
-    Example Response (Cloudron):
-        ```json
-        {
-            "provider": "cloudron",
-            "required": true,
-            "login_endpoint": "https://your-cloudron-domain/api/v1/oauth/dialog/authorize",
-            "docs": "Cloudron handles authentication via OAuth2"
-        }
-        ```
+    Returns the active authentication provider and login endpoint.
     """
     info = {
         "provider": config.provider,
         "required": config.required,
     }
 
-    # Add provider-specific info
     if config.provider == AuthProvider.JWT:
         info["login_endpoint"] = "/api/auth/login"
         info["docs"] = "Use POST /api/auth/login with username/password to get token"
-
-    elif config.provider == AuthProvider.CLOUDRON:
-        info["login_endpoint"] = "https://your-cloudron-domain/api/v1/oauth/dialog/authorize"
-        info["docs"] = "Cloudron handles authentication via OAuth2"
-
-    elif config.provider == AuthProvider.ORY:
-        info["login_endpoint"] = f"{config.ory_kratos_public_url}/self-service/login/browser"
-        info["docs"] = "Ory Kratos handles authentication via self-service flows"
-
     else:
         info["login_endpoint"] = None
         info["docs"] = "Authentication disabled (AUTH_PROVIDER=none)"

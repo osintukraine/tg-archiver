@@ -53,8 +53,15 @@ Thumbs.db
 logs/
 
 # Telegram sessions
-sessions/*.session
+sessions/
 *.session
+
+# Data files
+data/
+USTelegram.csv
+
+# Documentation (generated/local)
+docs/
 
 # Coverage
 .coverage

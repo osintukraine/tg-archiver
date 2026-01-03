@@ -27,8 +27,6 @@ from ..schemas import (
     AlbumMediaResponse,
     AlbumMediaItem,
     AdjacentMessages,
-    CuratedEntityMatch,
-    OpenSanctionsEntityMatch,
     MediaItemSimple,
 )
 from ..utils import get_media_url
@@ -103,8 +101,7 @@ async def get_adjacent_messages(
     Get previous and next message IDs for navigation.
 
     Returns the chronologically previous and next message IDs (by telegram_date).
-    Used for prev/next navigation buttons on individual message pages. Automatically
-    excludes spam messages from navigation to only show archived content.
+    Used for prev/next navigation buttons on individual message pages.
 
     Args:
         message_id: Database message ID to find adjacent messages for
@@ -130,7 +127,6 @@ async def get_adjacent_messages(
     prev_result = await db.execute(
         select(Message.id)
         .where(Message.telegram_date < message.telegram_date)
-        .where(Message.is_spam == False)  # Skip spam messages in navigation
         .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
         .order_by(desc(Message.telegram_date))
         .limit(1)
@@ -141,7 +137,6 @@ async def get_adjacent_messages(
     next_result = await db.execute(
         select(Message.id)
         .where(Message.telegram_date > message.telegram_date)
-        .where(Message.is_spam == False)  # Skip spam messages in navigation
         .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
         .order_by(Message.telegram_date.asc())
         .limit(1)
@@ -254,9 +249,7 @@ async def get_message(message_id: int, db: AsyncSession = Depends(get_db)):
     Retrieves complete message data including:
     - Message content (original and translated)
     - Media files and attachments
-    - AI-generated tags and classifications
-    - Entity mentions (curated entities and OpenSanctions)
-    - Geographic locations (multi-location support)
+    - Tags and classifications
     - Channel metadata for source verification
 
     Uses eager loading for optimal performance with related entities.
@@ -308,130 +301,9 @@ async def get_message(message_id: int, db: AsyncSession = Depends(get_db)):
         for tag in message.tags
     ] if message.tags else []
 
-    # Query curated entity matches from knowledge graph
-    curated_entities_query = text("""
-        SELECT
-            me.entity_id,
-            me.similarity_score,
-            me.match_type,
-            ce.entity_type,
-            ce.name,
-            ce.description,
-            ce.source_reference
-        FROM message_entities me
-        JOIN curated_entities ce ON me.entity_id = ce.id
-        WHERE me.message_id = :message_id
-        ORDER BY me.similarity_score DESC
-        LIMIT 20
-    """)
-
-    curated_result = await db.execute(
-        curated_entities_query,
-        {"message_id": message_id}
-    )
-
-    msg_dict['curated_entities'] = [
-        {
-            'entity_id': row.entity_id,
-            'entity_type': row.entity_type,
-            'name': row.name,
-            'description': row.description,
-            'similarity_score': float(row.similarity_score),
-            'match_type': row.match_type,
-            'source_reference': row.source_reference,
-        }
-        for row in curated_result
-    ]
-
-    # Query OpenSanctions entity matches (sanctions, PEPs, criminals)
-    opensanctions_entities_query = text("""
-        SELECT
-            ome.entity_id,
-            ome.match_score,
-            ome.match_method,
-            oe.opensanctions_id,
-            oe.entity_type,
-            oe.schema_type,
-            oe.name,
-            oe.description,
-            oe.risk_classification,
-            oe.datasets,
-            oe.aliases
-        FROM opensanctions_message_entities ome
-        JOIN opensanctions_entities oe ON ome.entity_id = oe.id
-        WHERE ome.message_id = :message_id
-        ORDER BY ome.match_score DESC
-        LIMIT 20
-    """)
-
-    opensanctions_result = await db.execute(
-        opensanctions_entities_query,
-        {"message_id": message_id}
-    )
-
-    msg_dict['opensanctions_entities'] = [
-        {
-            'entity_id': row.entity_id,
-            'opensanctions_id': row.opensanctions_id,
-            'entity_type': row.entity_type,
-            'schema_type': row.schema_type,
-            'name': row.name,
-            'description': row.description,
-            'risk_classification': row.risk_classification,
-            'datasets': list(row.datasets) if row.datasets else [],
-            'match_score': float(row.match_score),
-            'match_method': row.match_method,
-            'aliases': list(row.aliases) if row.aliases else None,
-        }
-        for row in opensanctions_result
-    ]
-
-    # Query all message locations (multi-location support with trajectories)
-    locations_query = text("""
-        SELECT
-            id,
-            message_id,
-            location_name,
-            latitude,
-            longitude,
-            extraction_method,
-            confidence,
-            sequence_order,
-            location_type,
-            created_at
-        FROM message_locations
-        WHERE message_id = :message_id
-        ORDER BY sequence_order ASC
-    """)
-
-    locations_result = await db.execute(
-        locations_query,
-        {"message_id": message_id}
-    )
-    location_rows = locations_result.fetchall()
-
-    # Build locations array
-    msg_dict['locations'] = [
-        {
-            'id': row.id,
-            'message_id': row.message_id,
-            'location_name': row.location_name,
-            'latitude': float(row.latitude) if row.latitude else None,
-            'longitude': float(row.longitude) if row.longitude else None,
-            'extraction_method': row.extraction_method,
-            'confidence': float(row.confidence) if row.confidence else None,
-            'sequence_order': row.sequence_order or 0,
-            'location_type': row.location_type or 'point',
-            'created_at': row.created_at,
-        }
-        for row in location_rows
-    ]
-
-    # Keep backward compatibility: first location as 'location'
-    if msg_dict['locations']:
-        msg_dict['location'] = msg_dict['locations'][0]
-    else:
-        msg_dict['location'] = None
+    # Geolocation not implemented in tg-archiver
+    msg_dict['locations'] = []
+    msg_dict['location'] = None
 
     # Add channel info for Telegram URL generation and country indicators
     if message.channel:
@@ -457,28 +329,15 @@ async def search_messages(
     # Filters
     channel_id: Optional[int] = Query(None, description="Filter by channel ID"),
     channel_username: Optional[str] = Query(None, description="Filter by channel username"),
-    channel_folder: Optional[str] = Query(None, description="Filter by channel folder pattern (e.g., '%UA', '%RU')"),
+    channel_folder: Optional[str] = Query(None, description="Filter by channel folder pattern (e.g., '%Category', 'Archive-%')"),
     topic: Optional[str] = Query(
-        None, description="Filter by topic (combat/civilian/diplomatic/equipment/general)"
+        None, description="Filter by topic (news/discussion/media/announcement/other)"
     ),
     has_media: Optional[bool] = Query(None, description="Filter messages with media"),
     media_type: Optional[str] = Query(
         None, description="Filter by media type (photo/video/document/audio/voice/sticker/animation)"
     ),
-    is_spam: Optional[bool] = Query(None, description="Include spam messages"),
-    spam_type: Optional[str] = Query(
-        None, description="Filter by spam type (financial/promotional/off_topic)"
-    ),
-    spam_review_status: Optional[str] = Query(
-        None, description="Filter by spam review status (pending/reviewed/false_positive/true_positive/reprocessed)"
-    ),
-    # New intelligence filters
-    importance_level: Optional[str] = Query(
-        None, description="Filter by importance level (high/medium/low)"
-    ),
-    sentiment: Optional[str] = Query(
-        None, description="Filter by content sentiment (positive/negative/neutral/urgent)"
-    ),
+    # Filters
     language: Optional[str] = Query(
         None, description="Filter by detected language (e.g., 'uk', 'ru', 'en')"
     ),
@@ -508,26 +367,23 @@ async def search_messages(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Search and filter messages with advanced full-text search and intelligence filters.
+    Search and filter messages with advanced full-text search.
 
     This is the primary message search endpoint, providing comprehensive filtering
-    capabilities for intelligence analysis. Uses PostgreSQL full-text search with
+    capabilities for message analysis. Uses PostgreSQL full-text search with
     GIN indexes for high-performance text queries (10-100x faster than ILIKE).
 
     Search Features:
     - Full-text search on message content (original + translated, weighted)
     - PostgreSQL tsvector with GIN indexing for performance
-    - 28+ filter parameters across content, metadata, and intelligence dimensions
+    - 25+ filter parameters across content, metadata, and filtering dimensions
     - Batch entity and location fetching for optimal performance
-    - Folder-based source filtering (e.g., %UA for Ukrainian, %RU for Russian)
-    - Default spam exclusion (override with is_spam=true)
+    - Folder-based source filtering (e.g., '%Category' for category-based organization)
 
-    Intelligence Filters:
-    - importance_level: Filter by AI-classified importance (high/medium/low)
-    - sentiment: Filter by content sentiment (positive/negative/neutral/urgent)
+    Content Filters:
     - language: Filter by detected language (uk/ru/en)
     - needs_human_review: Messages flagged for manual verification
-    - topic: OSINT topic classification (combat/civilian/diplomatic/equipment/general)
+    - topic: Topic classification (news/discussion/media/announcement/other)
 
     Engagement Filters:
     - min_views: Minimum view count threshold
@@ -535,28 +391,22 @@ async def search_messages(
     - has_comments: Messages with discussion threads
 
     Example Queries:
-    - /api/messages?q=Bakhmut&importance_level=high
-    - /api/messages?channel_username=ukraine_news&days=7
-    - /api/messages?channel_folder=%UA (Ukrainian sources)
-    - /api/messages?channel_folder=%RU (Russian sources)
-    - /api/messages?topic=combat&has_media=true&page=2
-    - /api/messages?sentiment=urgent&importance_level=high
-    - /api/messages?language=uk&needs_human_review=true
+    - /api/messages?q=keyword&topic=news
+    - /api/messages?channel_username=channel_name&days=7
+    - /api/messages?channel_folder=%Category (category-based filter)
+    - /api/messages?channel_folder=Archive-% (archive folder filter)
+    - /api/messages?topic=discussion&has_media=true&page=2
+    - /api/messages?language=en&needs_human_review=true
     - /api/messages?min_views=1000&min_forwards=100
 
     Args:
         q: Full-text search query (searches content and translations)
         channel_id: Filter by channel database ID
         channel_username: Filter by channel username
-        channel_folder: Filter by folder pattern (supports SQL LIKE, e.g., '%UA')
-        topic: Filter by OSINT topic classification
+        channel_folder: Filter by folder pattern (supports SQL LIKE, e.g., '%Category')
+        topic: Filter by topic classification
         has_media: Filter messages with/without media
         media_type: Filter by specific media type
-        is_spam: Include spam messages (default: False)
-        spam_type: Filter by spam classification type
-        spam_review_status: Filter by spam review status
-        importance_level: Filter by AI-classified importance level
-        sentiment: Filter by content sentiment
         language: Filter by detected language code
         needs_human_review: Filter messages flagged for review
         has_comments: Filter messages with discussion threads
@@ -601,10 +451,16 @@ async def search_messages(
     if q:
         # PostgreSQL full-text search using tsvector + GIN index
         # This is 10-100x faster than ILIKE for text search
-        # The search_vector column includes both content and content_translated
-        # with different weights (A for original, B for translated)
+        # The search_vector column uses 'simple' config (no language-specific stemming)
+        # which is better for multilingual content
+        #
+        # websearch_to_tsquery supports advanced syntax:
+        # - "quoted phrase" for exact phrases
+        # - word1 OR word2 for alternatives
+        # - -word to exclude terms
+        # Example: "keyword" OR "term" -exclude
         filters.append(
-            Message.search_vector.op('@@')(func.plainto_tsquery('english', q))
+            Message.search_vector.op('@@')(func.websearch_to_tsquery('simple', q))
         )
 
     # Channel filters
@@ -620,12 +476,12 @@ async def search_messages(
             filters.append(Channel.username == channel_username)
 
         if channel_folder:
-            # Support SQL LIKE patterns (e.g., '%UA', '%RU', 'Archive-%')
+            # Support SQL LIKE patterns (e.g., '%Category', 'Archive-%')
             filters.append(Channel.folder.like(channel_folder))
 
     # Topic filter
     if topic:
-        filters.append(Message.osint_topic == topic)
+        filters.append(Message.topic == topic)
 
     # Media filter
     if has_media is not None:
@@ -638,28 +494,8 @@ async def search_messages(
     if media_type:
         filters.append(Message.media_type == media_type)
 
-    # Spam filter (default: exclude spam)
-    if is_spam is None or not is_spam:
-        filters.append(Message.is_spam == False)
-
     # Hidden messages filter (always exclude from public search)
     filters.append(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))
-
-    # Spam type filter (only applies when is_spam=true)
-    if spam_type:
-        filters.append(Message.spam_type == spam_type)
-
-    # Spam review status filter
-    if spam_review_status:
-        filters.append(Message.spam_review_status == spam_review_status)
-
-    # Importance level filter (replaces osint_score for filtering)
-    if importance_level:
-        filters.append(Message.importance_level == importance_level)
-
-    # Sentiment filter
-    if sentiment:
-        filters.append(Message.content_sentiment == sentiment)
 
     # Language filter
     if language:
@@ -701,11 +537,12 @@ async def search_messages(
     total = total_result.scalar_one()
 
     # Apply sorting - default fallback to telegram_date (actual message time)
+    # Use NULLS LAST to ensure messages with NULL dates don't appear at top
     sort_column = getattr(Message, sort_by, Message.telegram_date)
     if sort_order == "desc":
-        query = query.order_by(desc(sort_column))
+        query = query.order_by(desc(sort_column).nulls_last())
     else:
-        query = query.order_by(sort_column)
+        query = query.order_by(sort_column.nulls_last())
 
     # Apply pagination
     offset = (page - 1) * page_size
@@ -720,125 +557,9 @@ async def search_messages(
     has_next = page < total_pages
     has_prev = page > 1
 
-    # Batch fetch curated entities for all messages (efficient single query)
-    message_ids = [msg.id for msg in messages]
-    curated_entities_batch_query = text("""
-        SELECT
-            me.message_id,
-            me.entity_id,
-            me.similarity_score,
-            me.match_type,
-            ce.entity_type,
-            ce.name,
-            ce.description,
-            ce.source_reference
-        FROM message_entities me
-        JOIN curated_entities ce ON me.entity_id = ce.id
-        WHERE me.message_id = ANY(:message_ids)
-        ORDER BY me.message_id, me.similarity_score DESC
-    """)
+    # Entity matching removed in tg-archiver (no AI)
 
-    curated_batch_result = await db.execute(
-        curated_entities_batch_query,
-        {"message_ids": message_ids}
-    )
-
-    # Group curated entities by message_id
-    curated_by_message = {}
-    for row in curated_batch_result:
-        if row.message_id not in curated_by_message:
-            curated_by_message[row.message_id] = []
-        curated_by_message[row.message_id].append({
-            'entity_id': row.entity_id,
-            'entity_type': row.entity_type,
-            'name': row.name,
-            'description': row.description,
-            'similarity_score': float(row.similarity_score),
-            'match_type': row.match_type,
-            'source_reference': row.source_reference,
-        })
-
-    # Batch fetch OpenSanctions entities for all messages
-    opensanctions_batch_query = text("""
-        SELECT
-            ome.message_id,
-            ome.entity_id,
-            ome.match_score,
-            ome.match_method,
-            oe.opensanctions_id,
-            oe.entity_type,
-            oe.schema_type,
-            oe.name,
-            oe.description,
-            oe.risk_classification,
-            oe.datasets,
-            oe.aliases
-        FROM opensanctions_message_entities ome
-        JOIN opensanctions_entities oe ON ome.entity_id = oe.id
-        WHERE ome.message_id = ANY(:message_ids)
-        ORDER BY ome.message_id, ome.match_score DESC
-    """)
-
-    opensanctions_batch_result = await db.execute(
-        opensanctions_batch_query,
-        {"message_ids": message_ids}
-    )
-
-    # Group OpenSanctions entities by message_id
-    opensanctions_by_message = {}
-    for row in opensanctions_batch_result:
-        if row.message_id not in opensanctions_by_message:
-            opensanctions_by_message[row.message_id] = []
-        opensanctions_by_message[row.message_id].append({
-            'entity_id': row.entity_id,
-            'opensanctions_id': row.opensanctions_id,
-            'entity_type': row.entity_type,
-            'schema_type': row.schema_type,
-            'name': row.name,
-            'description': row.description,
-            'risk_classification': row.risk_classification,
-            'datasets': list(row.datasets) if row.datasets else [],
-            'match_score': float(row.match_score),
-            'match_method': row.match_method,
-            'aliases': list(row.aliases) if row.aliases else None,
-        })
-
-    # Batch fetch locations for all messages
-    locations_batch_query = text("""
-        SELECT DISTINCT ON (message_id)
-            id,
-            message_id,
-            location_name,
-            latitude,
-            longitude,
-            extraction_method,
-            confidence,
-            created_at
-        FROM message_locations
-        WHERE message_id = ANY(:message_ids)
-        ORDER BY message_id, confidence DESC NULLS LAST
-    """)
-
-    locations_batch_result = await db.execute(
-        locations_batch_query,
-        {"message_ids": message_ids}
-    )
-
-    # Map locations by message_id (one location per message, highest confidence)
-    locations_by_message = {}
-    for row in locations_batch_result:
-        locations_by_message[row.message_id] = {
-            'id': row.id,
-            'message_id': row.message_id,
-            'location_name': row.location_name,
-            'latitude': float(row.latitude) if row.latitude else None,
-            'longitude': float(row.longitude) if row.longitude else None,
-            'extraction_method': row.extraction_method,
-            'confidence': float(row.confidence) if row.confidence else None,
-            'created_at': row.created_at.isoformat() if row.created_at else None,
-        }
-
-    # Convert messages to dict and add media URLs, tags, channel, and entities
+    # Convert messages to dict and add media URLs, tags, channel
     items = []
     for msg in messages:
         msg_dict = {c.name: getattr(msg, c.name) for c in msg.__table__.columns}
@@ -860,14 +581,8 @@ async def search_messages(
             for tag in msg.tags
         ] if msg.tags else []
 
-        # Add curated entity matches (from batch query above)
-        msg_dict['curated_entities'] = curated_by_message.get(msg.id, [])
-
-        # Add OpenSanctions entity matches (from batch query above)
-        msg_dict['opensanctions_entities'] = opensanctions_by_message.get(msg.id, [])
-
-        # Add location data (from batch query above)
-        msg_dict['location'] = locations_by_message.get(msg.id)
+        # Geolocation not implemented in tg-archiver
+        msg_dict['location'] = None
 
         # Add channel info for country indicators and metadata
         if msg.channel:

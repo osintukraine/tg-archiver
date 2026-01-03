@@ -8,6 +8,22 @@ export interface ChannelCategory {
   id: number;
   name: string;
   color: string;
+  description?: string;
+  channel_count?: number;
+}
+
+export interface MessageTopic {
+  id: number;
+  name: string;
+  label: string;
+  color: string;
+  description?: string;
+  message_count?: number;
+}
+
+export interface TelegramFolder {
+  name: string;
+  channel_count: number;
 }
 
 export interface Channel {
@@ -58,13 +74,6 @@ export interface Message {
   first_media_url: string | null;
   media_was_available: boolean | null;
   media_expired_at: string | null;
-
-  // Spam detection
-  is_spam: boolean;
-  spam_confidence: number | null;
-  spam_reason: string | null;
-  spam_type: string | null;  // 'financial' | 'promotional' | 'off_topic'
-  spam_review_status: string | null;  // 'pending' | 'reviewed' | 'false_positive' | 'true_positive' | 'reprocessed'
 
   // Classification
   topic: string | null;
@@ -157,10 +166,11 @@ export interface SearchParams {
   channel_id?: number;
   channel_username?: string;
   channel_folder?: string;  // Filter by folder pattern
+  category_id?: number;  // Filter by channel category
   // Content filters
   language?: string;  // Detected language code (e.g., 'uk', 'ru', 'en')
   has_comments?: boolean;  // Messages with discussion threads
-  topic?: string;
+  topic?: string;  // Message topic classification
   has_media?: boolean;
   media_type?: string;
   // Engagement filters

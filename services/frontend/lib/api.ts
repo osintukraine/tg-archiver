@@ -320,6 +320,27 @@ export async function getChannels(): Promise<Channel[]> {
 }
 
 /**
+ * Get all message topics for filtering
+ */
+export async function getTopics(): Promise<import('./types').MessageTopic[]> {
+  return fetchApi<import('./types').MessageTopic[]>('/api/system/topics');
+}
+
+/**
+ * Get all channel categories for filtering
+ */
+export async function getCategories(): Promise<import('./types').ChannelCategory[]> {
+  return fetchApi<import('./types').ChannelCategory[]>('/api/system/categories');
+}
+
+/**
+ * Get all Telegram folders for filtering
+ */
+export async function getFolders(): Promise<import('./types').TelegramFolder[]> {
+  return fetchApi<import('./types').TelegramFolder[]>('/api/system/folders');
+}
+
+/**
  * Get single channel by ID
  */
 export async function getChannel(id: number): Promise<Channel> {

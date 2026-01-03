@@ -1,7 +1,7 @@
 """
 Social Graph Utilities - Extract and Store Social Metadata
 
-Extracts social graph metadata from Telegram messages for OSINT influence mapping.
+Extracts social graph metadata from Telegram messages for network analysis.
 Handles user profiles, forwards, replies, and discussion metadata.
 
 Key Functions:

@@ -1,5 +1,5 @@
 """
-Observability module for OSINT Intelligence Platform.
+Observability module for Telegram Archiver.
 
 Provides:
 - Prometheus metrics (metrics.py)
@@ -26,11 +26,10 @@ from .metrics import (
     record_llm_request,
     record_media_archived,
     record_message_processed,
-    record_osint_topic,
+    record_topic,
     record_rss_generation,
     record_rule_evaluation,
     record_search_operation,
-    record_spam_detection,
 )
 
 __all__ = [
@@ -46,10 +45,9 @@ __all__ = [
     "api_metrics_server",
     # Helper functions
     "record_message_processed",
-    "record_spam_detection",
     "record_rule_evaluation",
     "record_llm_request",
-    "record_osint_topic",
+    "record_topic",
     "record_entity_extraction",
     "record_media_archived",
     "record_api_request",

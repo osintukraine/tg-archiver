@@ -1,5 +1,5 @@
 """
-Shared Python utilities for OSINT Intelligence Platform.
+Shared Python utilities for Telegram Archiver.
 
 This package contains code shared across all services:
 - Configuration management (Pydantic settings)

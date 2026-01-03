@@ -6,6 +6,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { GlassPanel } from './GlassPanel';
 import { ImmersiveControls } from './ImmersiveControls';
 import { RssTicker } from './RssTicker';
+import { RSS_ENABLED } from '@/lib/constants';
 
 const AUTO_ADVANCE_DELAY = 8000; // 8s for images
 
@@ -134,10 +135,12 @@ export function StreamView() {
         onPauseChange={setIsPaused}
       />
 
-      {/* RSS Ticker Layer */}
-      <RssTicker
-        enabled={layers.rss}
-      />
+      {/* RSS Ticker Layer - only when RSS feature is enabled */}
+      {RSS_ENABLED && (
+        <RssTicker
+          enabled={layers.rss}
+        />
+      )}
 
       {/* Controls overlay */}
       <div

@@ -21,6 +21,7 @@ from .message_actions import router as message_actions_router
 from .extraction import router as extraction_router
 from .folders import router as folders_router
 from .topics import router as topics_router
+from .import_channels import router as import_router
 
 __all__ = [
     'dashboard_router',
@@ -39,4 +40,5 @@ __all__ = [
     'extraction_router',
     'folders_router',
     'topics_router',
+    'import_router',
 ]

@@ -25,8 +25,8 @@ class StorageBox(Base):
 
     Example configurations:
         - storage-001: First box (default)
-        - russia-1: Russian channels
-        - ukraine-1: Ukrainian channels
+        - box-1: Primary storage
+        - box-2: Secondary storage
     """
 
     __tablename__ = "storage_boxes"

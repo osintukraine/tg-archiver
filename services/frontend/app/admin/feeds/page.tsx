@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Badge, StatCard, DataTable, Modal } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
+import { RSS_ENABLED } from '@/lib/constants';
 
 /**
  * Admin - RSS Feeds Management
  *
  * Manage external RSS feeds the platform ingests for the News page.
+ * Only available when NEXT_PUBLIC_RSS_ENABLED=true.
  */
 
 // ============================================================================
@@ -59,6 +62,20 @@ const CATEGORIES = ['news', 'official', 'aggregator', 'community', 'other'];
 // ============================================================================
 
 export default function FeedsPage() {
+  const router = useRouter();
+
+  // Redirect to admin dashboard if RSS feature is disabled
+  useEffect(() => {
+    if (!RSS_ENABLED) {
+      router.replace('/admin');
+    }
+  }, [router]);
+
+  // Don't render anything while redirecting
+  if (!RSS_ENABLED) {
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">

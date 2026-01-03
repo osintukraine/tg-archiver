@@ -25,10 +25,6 @@ class AboutStats(BaseModel):
     messages_formatted: str
     media_size_bytes: int
     media_size_formatted: str
-    entities: int
-    spam_blocked: int
-    spam_blocked_formatted: str
-    sanctions_matches: int
     timestamp: str
 
 
@@ -50,9 +46,6 @@ async def get_about_stats(db: AsyncSession = Depends(get_db)) -> AboutStats:
         - channels: Active monitored channels
         - messages: Total archived messages
         - media_size: Total media storage size
-        - entities: Curated entities tracked
-        - spam_blocked: Messages filtered as spam
-        - sanctions_matches: OpenSanctions entity matches
 
     All stats are pulled fresh from the database.
     """
@@ -61,10 +54,7 @@ async def get_about_stats(db: AsyncSession = Depends(get_db)) -> AboutStats:
         SELECT
             (SELECT COUNT(*) FROM channels WHERE active = true) as channels,
             (SELECT COUNT(*) FROM messages) as messages,
-            (SELECT COALESCE(SUM(file_size), 0) FROM media_files) as media_size,
-            (SELECT COUNT(*) FROM curated_entities) as entities,
-            (SELECT COUNT(*) FROM messages WHERE is_spam = true) as spam_blocked,
-            (SELECT COUNT(*) FROM opensanctions_message_entities) as sanctions_matches
+            (SELECT COALESCE(SUM(file_size), 0) FROM media_files) as media_size
     """))
     row = result.fetchone()
 
@@ -74,10 +64,6 @@ async def get_about_stats(db: AsyncSession = Depends(get_db)) -> AboutStats:
         messages_formatted=format_number(row.messages or 0),
         media_size_bytes=row.media_size or 0,
         media_size_formatted=format_bytes(row.media_size or 0),
-        entities=row.entities or 0,
-        spam_blocked=row.spam_blocked or 0,
-        spam_blocked_formatted=format_number(row.spam_blocked or 0),
-        sanctions_matches=row.sanctions_matches or 0,
         timestamp=datetime.utcnow().isoformat(),
     )
 
@@ -175,9 +161,9 @@ async def get_activity(
     # =========================================================================
     pulse_result = await db.execute(text("""
         SELECT
-            (SELECT COUNT(*) FROM messages WHERE created_at >= :hour_ago AND is_spam = false) as messages_last_hour,
-            (SELECT COUNT(*) FROM messages WHERE created_at >= :today_start AND is_spam = false) as messages_today,
-            (SELECT COUNT(DISTINCT channel_id) FROM messages WHERE created_at >= :day_ago AND is_spam = false) as channels_active_24h
+            (SELECT COUNT(*) FROM messages WHERE created_at >= :hour_ago) as messages_last_hour,
+            (SELECT COUNT(*) FROM messages WHERE created_at >= :today_start) as messages_today,
+            (SELECT COUNT(DISTINCT channel_id) FROM messages WHERE created_at >= :day_ago) as channels_active_24h
     """), {
         "hour_ago": hour_ago,
         "today_start": today_start,
@@ -215,7 +201,6 @@ async def get_activity(
                 COUNT(*) as count
             FROM messages
             WHERE created_at >= :start_time
-                AND is_spam = false
             GROUP BY bucket
             ORDER BY bucket ASC
         """)
@@ -229,7 +214,6 @@ async def get_activity(
                 COUNT(*) as count
             FROM messages
             WHERE created_at >= :start_time
-                AND is_spam = false
             GROUP BY bucket
             ORDER BY bucket ASC
         """)
@@ -264,12 +248,11 @@ async def get_activity(
 
     topics_result = await db.execute(text("""
         SELECT
-            COALESCE(osint_topic, 'unknown') as topic,
+            COALESCE(topic, 'unknown') as topic_name,
             COUNT(*) as count
         FROM messages
         WHERE created_at >= :start_time
-            AND is_spam = false
-        GROUP BY osint_topic
+        GROUP BY topic
         ORDER BY count DESC
     """), {"start_time": topics_start})
     topics_rows = topics_result.fetchall()
@@ -283,7 +266,7 @@ async def get_activity(
         if i < 8:
             percent = (row.count / topics_total * 100) if topics_total > 0 else 0
             topic_items.append(TopicItem(
-                topic=row.topic or "unknown",
+                topic=row.topic_name,
                 count=row.count,
                 percent=round(percent, 1),
             ))
@@ -317,7 +300,6 @@ async def get_activity(
         FROM channels c
         JOIN messages m ON m.channel_id = c.id
         WHERE m.created_at >= :day_ago
-            AND m.is_spam = false
         GROUP BY c.id, c.name, c.username
         ORDER BY message_count DESC
         LIMIT 5

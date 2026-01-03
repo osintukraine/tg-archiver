@@ -40,25 +40,7 @@ from ..utils.sql_safety import escape_ilike_pattern
 
 logger = logging.getLogger(__name__)
 
-
-def get_notifier(request: Request) -> Any:
-    """
-    Get notifier instance from application state.
-
-    Helper function to retrieve the event notifier from FastAPI app state for
-    emitting feed generation events. Used to track feed access and generation
-    metrics.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        Notifier instance from app.state.notifier, or None if not available
-    """
-    return request.app.state.notifier
-
-
-router = APIRouter(prefix="/rss", tags=["feeds"])
+router = APIRouter(prefix="/api/rss", tags=["feeds"])
 
 
 @router.get("/search")
@@ -74,12 +56,10 @@ async def feed_search(
     q: Optional[str] = Query(None, description="Search query"),
     channel_id: Optional[int] = Query(None, description="Filter by channel ID"),
     channel_username: Optional[str] = Query(None, description="Filter by channel username"),
-    channel_folder: Optional[str] = Query(None, description="Filter by channel folder pattern"),
-    importance_level: Optional[str] = Query(None, description="Filter by importance level (high/medium/low)"),
+    channel_folder: Optional[str] = Query(None, max_length=64, description="Filter by channel folder pattern"),
     topic: Optional[str] = Query(None, description="Filter by topic"),
     has_media: Optional[bool] = Query(None, description="Filter messages with media"),
     media_type: Optional[str] = Query(None, description="Filter by specific media type"),
-    sentiment: Optional[str] = Query(None, description="Filter by sentiment"),
     language: Optional[str] = Query(None, description="Filter by language"),
     days: Optional[int] = Query(None, ge=1, le=365, description="Last N days"),
     date_from: Optional[str] = Query(None, description="Start date (ISO format)"),
@@ -101,8 +81,7 @@ async def feed_search(
     to create highly specific feed subscriptions.
 
     The feed title and description are dynamically generated based on applied filters,
-    and feed URLs include all parameters for proper autodiscovery. Spam messages are
-    always excluded from feeds.
+    and feed URLs include all parameters for proper autodiscovery.
 
     Args:
         request: FastAPI request object (for base URL construction)
@@ -111,11 +90,9 @@ async def feed_search(
         channel_id: Filter by specific channel database ID
         channel_username: Filter by channel username (without @ prefix)
         channel_folder: Filter by Telegram folder name pattern (ILIKE match)
-        importance_level: Filter by LLM-assigned importance (high/medium/low)
-        topic: Filter by OSINT topic classification
+        topic: Filter by topic classification
         has_media: If True, only messages with media; if False, only text-only messages
         media_type: Filter by specific media type (photo, video, document, etc.)
-        sentiment: Filter by content sentiment (positive, negative, neutral)
         language: Filter by detected language code
         days: Show messages from last N days (1-365)
         date_from: Start date for date range filter (ISO format)
@@ -132,16 +109,15 @@ async def feed_search(
         JSON feeds use application/feed+json.
 
     Examples:
-        /rss/search?q=Bakhmut&importance_level=high
-        /rss/search?q=Bakhmut&format=json
-        /rss/search?channel_username=ukraine_news&days=7&format=atom
-        /rss/search?topic=combat&has_media=true&limit=100
+        /rss/search?q=keyword&format=json
+        /rss/search?channel_username=channel_name&days=7&format=atom
+        /rss/search?topic=general&has_media=true&limit=100
     """
     # Parse format
     feed_format = FeedFormat(format.lower() if format else "rss")
 
     # Build feed title and description
-    title_parts = ["OSINT Intelligence"]
+    title_parts = ["Telegram Archive"]
     desc_parts = []
 
     if q:
@@ -157,17 +133,9 @@ async def feed_search(
         title_parts.append(f"Folder: {folder_name}")
         desc_parts.append(f"Folder pattern: {folder_name}")
 
-    if importance_level:
-        title_parts.append(f"Importance: {importance_level}")
-        desc_parts.append(f"Importance level: {importance_level}")
-
     if topic:
         title_parts.append(f"Topic: {topic}")
         desc_parts.append(f"Topic: {topic}")
-
-    if sentiment:
-        title_parts.append(f"Sentiment: {sentiment}")
-        desc_parts.append(f"Sentiment: {sentiment}")
 
     if has_media:
         title_parts.append("with Media")
@@ -211,18 +179,15 @@ async def feed_search(
     if channel_folder:
         if not channel_username:  # Avoid double join
             query_stmt = query_stmt.join(Channel, Message.channel_id == Channel.id)
-        # NOTE: Don't escape channel_folder - wildcards are intentional for RSS feeds
-        # The pattern is user-configured when creating the feed token, not arbitrary input
-        # Users expect %UA to match "Archive-UA", etc.
-        filters.append(Channel.folder.ilike(f"%{channel_folder}%"))
-
-    # Importance level filter
-    if importance_level is not None:
-        filters.append(Message.importance_level == importance_level)
+        # NOTE: % and _ wildcards are intentional for folder pattern matching
+        # (e.g., "Archive%" matches "Archive-Russia", "Archive-Ukraine")
+        # Escape backslashes to prevent ILIKE escape sequence injection
+        folder_pattern = channel_folder.replace("\\", "\\\\")
+        filters.append(Channel.folder.ilike(f"%{folder_pattern}%"))
 
     # Topic filter
     if topic:
-        filters.append(Message.osint_topic == topic)
+        filters.append(Message.topic == topic)
 
     # Media filter
     if has_media is not None:
@@ -234,10 +199,6 @@ async def feed_search(
     if media_type:
         filters.append(Message.media_type == media_type)
 
-    # Sentiment filter
-    if sentiment:
-        filters.append(Message.content_sentiment == sentiment)
-
     # Language filter
     if language:
         filters.append(Message.language_detected == language)
@@ -248,9 +209,6 @@ async def feed_search(
 
     if min_forwards:
         filters.append(Message.forwards >= min_forwards)
-
-    # Always exclude spam in feeds
-    filters.append(Message.is_spam == False)
 
     # Always exclude hidden messages in feeds
     filters.append(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))
@@ -278,8 +236,8 @@ async def feed_search(
     if filters:
         query_stmt = query_stmt.where(and_(*filters))
 
-    # Order by most recent first
-    query_stmt = query_stmt.order_by(desc(Message.telegram_date)).limit(limit)
+    # Order by most recent first (NULLS LAST for proper chronological order)
+    query_stmt = query_stmt.order_by(desc(Message.telegram_date).nulls_last()).limit(limit)
 
     # Execute query
     result = await db.execute(query_stmt)
@@ -300,9 +258,7 @@ async def feed_search(
             "channel_id": channel_id,
             "channel_username": channel_username,
             "channel_folder": channel_folder,
-            "importance_level": importance_level,
             "topic": topic,
-            "sentiment": sentiment,
             "language": language,
             "has_media": has_media,
             "media_type": media_type,
@@ -325,24 +281,6 @@ async def feed_search(
         format=feed_format,
     )
 
-    # Emit feed.generated event
-    notifier = get_notifier(request)
-    if notifier:
-        await notifier.emit(
-            "feed.generated",
-            data={
-                "feed_type": "search",
-                "format": format,
-                "query": q or "none",
-                "channel_username": channel_username,
-                "importance_level": importance_level,
-                "topic": topic,
-                "message_count": len(messages),
-            },
-            priority="min",
-            tags=["feed", format]
-        )
-
     # Record subscription for authenticated access
     if feed_auth.authenticated and feed_auth.token:
         try:
@@ -356,11 +294,9 @@ async def feed_search(
                     "channel_id": channel_id,
                     "channel_username": channel_username,
                     "channel_folder": channel_folder,
-                    "importance_level": importance_level,
                     "topic": topic,
                     "has_media": has_media,
                     "media_type": media_type,
-                    "sentiment": sentiment,
                     "language": language,
                     "days": days,
                     "date_from": date_from,
@@ -388,7 +324,6 @@ async def feed_channel(
         description="Output format: rss, atom, or json",
         pattern="^(rss|atom|json)$",
     ),
-    importance_level: Optional[str] = Query(None, description="Filter by importance level"),
     days: Optional[int] = Query(default=30, ge=1, le=365, description="Last N days"),
     limit: int = Query(default=50, ge=1, le=100, description="Max items in feed"),
     db: AsyncSession = Depends(get_db),
@@ -403,13 +338,12 @@ async def feed_channel(
     Telegram bio.
 
     This endpoint maintains compatibility with production systems that rely on
-    channel-specific feed URLs. Spam messages are always excluded.
+    channel-specific feed URLs.
 
     Args:
         request: FastAPI request object (for base URL construction)
         username: Channel username (without @ prefix)
         format: Output format - "rss" (RSS 2.0), "atom" (Atom 1.0), or "json" (JSON Feed 1.1)
-        importance_level: Optional filter by importance level (high/medium/low)
         days: Show messages from last N days (default 30, range 1-365)
         limit: Maximum number of items in feed (1-100, default 50)
         db: Database session
@@ -423,9 +357,9 @@ async def feed_channel(
         404: Channel with specified username not found (returned as formatted error)
 
     Examples:
-        /rss/channel/ukraine_news
-        /rss/channel/ukraine_news?format=json
-        /rss/channel/combat_reports?importance_level=high&format=atom
+        /rss/channel/channel_name
+        /rss/channel/channel_name?format=json
+        /rss/channel/my_channel?format=atom
     """
     feed_format = FeedFormat(format.lower() if format else "rss")
 
@@ -451,19 +385,15 @@ async def feed_channel(
 
     # Apply filters
     filters = [
-        Message.is_spam == False,
         or_(Message.is_hidden == False, Message.is_hidden.is_(None))  # Exclude hidden messages
     ]
-
-    if importance_level is not None:
-        filters.append(Message.importance_level == importance_level)
 
     if days:
         cutoff = datetime.utcnow() - timedelta(days=days)
         filters.append(Message.telegram_date >= cutoff)
 
     query_stmt = query_stmt.where(and_(*filters))
-    query_stmt = query_stmt.order_by(desc(Message.telegram_date)).limit(limit)
+    query_stmt = query_stmt.order_by(desc(Message.telegram_date).nulls_last()).limit(limit)
 
     # Execute query
     result = await db.execute(query_stmt)
@@ -478,8 +408,6 @@ async def feed_channel(
         title = f"{channel.name} (@{username})"
 
     description = channel.description or f"Feed for Telegram channel @{username}"
-    if importance_level:
-        description += f" | Importance level: {importance_level}"
 
     generator = FeedGenerator(base_url)
     feed_content = generator.generate(
@@ -489,22 +417,6 @@ async def feed_channel(
         feed_url=feed_url,
         format=feed_format,
     )
-
-    # Emit event
-    notifier = get_notifier(request)
-    if notifier:
-        await notifier.emit(
-            "feed.generated",
-            data={
-                "feed_type": "channel",
-                "format": format,
-                "channel_username": username,
-                "importance_level": importance_level,
-                "message_count": len(messages),
-            },
-            priority="min",
-            tags=["feed", format, "channel"]
-        )
 
     # Record subscription for authenticated access
     if feed_auth.authenticated and feed_auth.token:
@@ -516,7 +428,6 @@ async def feed_channel(
                 params={
                     "format": format,
                     "username": username,
-                    "importance_level": importance_level,
                     "days": days,
                     "limit": limit,
                 },
@@ -537,31 +448,25 @@ async def feed_topic(
         description="Output format: rss, atom, or json",
         pattern="^(rss|atom|json)$",
     ),
-    importance_level: Optional[str] = Query("high", description="Filter by importance level"),
     days: Optional[int] = Query(default=7, ge=1, le=365, description="Last N days"),
     limit: int = Query(default=50, ge=1, le=100, description="Max items in feed"),
     db: AsyncSession = Depends(get_db),
     feed_auth: FeedAuthResult = Depends(verify_feed_token),
 ) -> Response:
     """
-    Generate feed for a specific OSINT topic.
+    Generate feed for a specific topic.
 
     Topic-based feed aggregating messages across all channels that have been
-    classified into a specific OSINT category by the LLM classifier. Topics are
-    assigned during message processing based on content analysis.
-
-    By default, filters to high-importance messages only (most common use case for
-    topic feeds), but importance level can be adjusted or removed. Spam messages
-    are always excluded.
+    classified into a specific category. Topics are assigned during message
+    processing based on content analysis.
 
     Valid topics are validated against a hardcoded list. Invalid topics return
     a 400 error with the complete list of valid options.
 
     Args:
         request: FastAPI request object (for base URL construction)
-        topic: OSINT topic slug (must be one of the valid topics listed below)
+        topic: Topic slug (must be one of the valid topics listed below)
         format: Output format - "rss" (RSS 2.0), "atom" (Atom 1.0), or "json" (JSON Feed 1.1)
-        importance_level: Filter by importance level (default "high")
         days: Show messages from last N days (default 7, range 1-365)
         limit: Maximum number of items in feed (1-100, default 50)
         db: Database session
@@ -575,23 +480,21 @@ async def feed_topic(
         400: Invalid topic provided (returned as formatted error with valid topic list)
 
     Valid Topics:
-        combat, equipment, casualties, movements, infrastructure,
-        humanitarian, diplomatic, intelligence, propaganda, units,
-        locations, general
+        news, announcement, discussion, media, important,
+        archive, offtopic, other
 
     Examples:
-        /rss/topic/combat
-        /rss/topic/combat?format=json
-        /rss/topic/equipment?importance_level=high&format=atom
-        /rss/topic/humanitarian?importance_level=medium&days=14
+        /rss/topic/news
+        /rss/topic/news?format=json
+        /rss/topic/discussion?format=atom
+        /rss/topic/media?days=14
     """
     feed_format = FeedFormat(format.lower() if format else "rss")
 
-    # Validate topic
+    # Validate topic - generic categories for any Telegram archive
     valid_topics = [
-        "combat", "equipment", "casualties", "movements", "infrastructure",
-        "humanitarian", "diplomatic", "intelligence", "propaganda",
-        "units", "locations", "general"
+        "news", "announcement", "discussion", "media", "important",
+        "archive", "offtopic", "other"
     ]
     if topic not in valid_topics:
         error_msg = f"Invalid topic. Valid topics: {', '.join(valid_topics)}"
@@ -607,13 +510,9 @@ async def feed_topic(
 
     # Build query with eager loading
     filters = [
-        Message.is_spam == False,
         or_(Message.is_hidden == False, Message.is_hidden.is_(None)),  # Exclude hidden messages
-        Message.osint_topic == topic,
+        Message.topic == topic,
     ]
-
-    if importance_level is not None:
-        filters.append(Message.importance_level == importance_level)
 
     if days:
         cutoff = datetime.utcnow() - timedelta(days=days)
@@ -626,7 +525,7 @@ async def feed_topic(
             selectinload(Message.channel),
         )
         .where(and_(*filters))
-        .order_by(desc(Message.telegram_date))
+        .order_by(desc(Message.telegram_date).nulls_last())
         .limit(limit)
     )
 
@@ -638,8 +537,8 @@ async def feed_topic(
     base_url = str(request.base_url).rstrip("/")
     feed_url = f"{base_url}/rss/topic/{topic}?format={format}"
 
-    title = f"OSINT Intelligence | Topic: {topic.title()}"
-    description = f"Messages classified as '{topic}' with importance level '{importance_level}' from last {days} days"
+    title = f"Telegram Archive | Topic: {topic.title()}"
+    description = f"Messages classified as '{topic}' from last {days} days"
 
     generator = FeedGenerator(base_url)
     feed_content = generator.generate(
@@ -649,22 +548,6 @@ async def feed_topic(
         feed_url=feed_url,
         format=feed_format,
     )
-
-    # Emit event
-    notifier = get_notifier(request)
-    if notifier:
-        await notifier.emit(
-            "feed.generated",
-            data={
-                "feed_type": "topic",
-                "format": format,
-                "topic": topic,
-                "importance_level": importance_level,
-                "message_count": len(messages),
-            },
-            priority="min",
-            tags=["feed", format, "topic"]
-        )
 
     # Record subscription for authenticated access
     if feed_auth.authenticated and feed_auth.token:
@@ -676,7 +559,6 @@ async def feed_topic(
                 params={
                     "format": format,
                     "topic": topic,
-                    "importance_level": importance_level,
                     "days": days,
                     "limit": limit,
                 },

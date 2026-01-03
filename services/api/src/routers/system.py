@@ -20,8 +20,17 @@ from ..database import get_db
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
-# Ollama hosts from settings (supports external endpoints)
-OLLAMA_HOST = settings.OLLAMA_BASE_URL
+
+@router.get("/config")
+async def get_public_config() -> Dict[str, Any]:
+    """
+    Returns public configuration settings for the frontend.
+
+    These settings control UI behavior based on backend capabilities.
+    """
+    return {
+        "translation_enabled": settings.TRANSLATION_ENABLED,
+    }
 
 
 @router.get("/health")
@@ -29,14 +38,11 @@ async def get_system_health(
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Returns health status of all platform services.
+    Returns health status of all tg-archiver services.
 
-    Checks ALL services from docker-compose.yml (28 total):
-    - Core Infrastructure: postgres, redis, minio, ollama
-    - Application Services: listener, processor, enricher, api, frontend, notifier, nocodb, rss-ingestor, opensanctions, entity-ingestion
-    - Monitoring: prometheus, grafana, alertmanager
-    - Exporters: postgres-exporter, redis-exporter, cadvisor, node-exporter
-    - Infrastructure: watchtower, ntfy, keycloak, oauth2-proxy, caddy, dashy
+    Checks services from docker-compose.yml:
+    - Core Infrastructure: postgres, redis, minio
+    - Application Services: listener, processor, api, frontend
 
     Returns:
         dict: Service statuses and metrics
@@ -49,38 +55,12 @@ async def get_system_health(
         check_postgres_health(db),
         check_redis_health(),
         check_minio_health(),
-        check_ollama_health(),
 
         # Application Services
         check_listener_health(db),
         check_processor_health(),
-        check_enricher_health(),
         check_api_health(),
         check_frontend_health(),
-        check_notifier_health(),
-        check_nocodb_health(),
-        check_rss_ingestor_health(),
-        check_opensanctions_health(),
-        check_entity_ingestion_health(),
-
-        # Monitoring
-        check_prometheus_health(),
-        check_grafana_health(),
-        check_alertmanager_health(),
-
-        # Exporters
-        check_postgres_exporter_health(),
-        check_redis_exporter_health(),
-        check_cadvisor_health(),
-        check_node_exporter_health(),
-
-        # Infrastructure
-        check_watchtower_health(),
-        check_ntfy_health(),
-        check_keycloak_health(),
-        check_oauth2_proxy_health(),
-        check_caddy_health(),
-        check_dashy_health(),
     ]
 
     # Execute all checks concurrently
@@ -339,24 +319,6 @@ async def check_minio_health() -> Dict[str, Any]:
     return await _check_http_health("minio", "http://minio:9000/minio/health/live")
 
 
-async def check_ollama_health() -> Dict[str, Any]:
-    """Check Ollama LLM service health (realtime instance)."""
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(f"{OLLAMA_HOST}/api/tags")
-            if response.status_code == 200:
-                models = response.json().get("models", [])
-                return {
-                    "name": "ollama",
-                    "status": "healthy",
-                    "metrics": {"models_loaded": len(models)}
-                }
-            else:
-                return {"name": "ollama", "status": "degraded"}
-    except Exception:
-        return {"name": "ollama", "status": "down"}
-
-
 # Application Services
 async def check_enricher_health() -> Dict[str, Any]:
     """Check enricher service health (process-based, no HTTP endpoint)."""
@@ -375,11 +337,6 @@ async def check_frontend_health() -> Dict[str, Any]:
     return await _check_http_health("frontend", "http://frontend:3000/", expected_status=200)
 
 
-async def check_notifier_health() -> Dict[str, Any]:
-    """Check notifier service health."""
-    return await _check_http_health("notifier", "http://notifier:8000/health")
-
-
 async def check_nocodb_health() -> Dict[str, Any]:
     """Check NocoDB database UI health."""
     return await _check_http_health("nocodb", "http://nocodb:8080/api/v1/health")
@@ -390,14 +347,6 @@ async def check_rss_ingestor_health() -> Dict[str, Any]:
     return {"name": "rss-ingestor", "status": "unknown"}
 
 
-async def check_opensanctions_health() -> Dict[str, Any]:
-    """Check OpenSanctions service health (optional service)."""
-    return {"name": "opensanctions", "status": "unknown"}
-
-
-async def check_entity_ingestion_health() -> Dict[str, Any]:
-    """Check entity ingestion service health (optional service)."""
-    return {"name": "entity-ingestion", "status": "unknown"}
 
 
 # Monitoring Stack
@@ -491,8 +440,6 @@ async def get_pipeline_status() -> Dict[str, Any]:
     - Are all messages processed? (queue lag)
     - Are translations complete?
     - Is media being archived?
-    - Is the API responding?
-    - Is LLM classification working?
 
     Returns:
         dict: Pipeline status with boolean flags and metrics
@@ -503,8 +450,6 @@ async def get_pipeline_status() -> Dict[str, Any]:
     processing = await check_processing_status_standalone()
     translation = await check_translation_status_standalone()
     media = await check_media_status_standalone()
-    classification = await check_classification_status_standalone()
-    enrichment = await check_enrichment_status_standalone()
 
     # Calculate overall health
     all_ok = all([
@@ -512,7 +457,6 @@ async def get_pipeline_status() -> Dict[str, Any]:
         processing.get("ok", False),
         translation.get("ok", False),
         media.get("ok", False),
-        classification.get("ok", False),
     ])
 
     return {
@@ -523,8 +467,6 @@ async def get_pipeline_status() -> Dict[str, Any]:
             "processing": processing,
             "translation": translation,
             "media": media,
-            "classification": classification,
-            "enrichment": enrichment,
         },
         "summary": {
             "queue_lag": queue.get("lag", 0),
@@ -674,76 +616,8 @@ async def check_media_status(db: AsyncSession) -> Dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-async def check_classification_status(db: AsyncSession) -> Dict[str, Any]:
-    """Check LLM classification status."""
-    try:
-        # Check prompt stats
-        result = await db.execute(text("""
-            SELECT
-                name, version, usage_count, avg_latency_ms, error_count, is_active
-            FROM llm_prompts
-            WHERE task = 'message_classification' AND is_active = true
-            LIMIT 1
-        """))
-        row = result.fetchone()
-
-        if not row:
-            return {"ok": False, "error": "No active classification prompt"}
-
-        name, version, usage, latency_ms, errors, active = row
-        latency_s = (latency_ms / 1000) if latency_ms else 0
-        error_rate = (errors / usage * 100) if usage > 0 else 0
-
-        # OK if latency < 120s and error rate < 10%
-        ok = latency_s < 120 and error_rate < 10
-
-        return {
-            "ok": ok,
-            "prompt_name": name,
-            "prompt_version": version,
-            "usage_count": usage,
-            "avg_latency_seconds": round(latency_s, 1),
-            "error_count": errors,
-            "error_rate_percent": round(error_rate, 1),
-            "description": f"v{version}, {round(latency_s)}s avg" if ok else f"slow ({round(latency_s)}s) or errors"
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
 
 
-async def check_enrichment_status(db: AsyncSession) -> Dict[str, Any]:
-    """Check enrichment task status."""
-    try:
-        # Check for messages with embeddings (indicates enrichment ran)
-        # Note: AI tags are stored in message_tags table, but embeddings are a more
-        # direct indicator of enrichment pipeline health
-        result = await db.execute(text("""
-            SELECT
-                COUNT(*) FILTER (WHERE content_embedding IS NOT NULL) as enriched,
-                COUNT(*) FILTER (WHERE content_embedding IS NULL) as not_enriched,
-                COUNT(*) as total
-            FROM messages
-            WHERE created_at > NOW() - INTERVAL '24 hours'
-        """))
-        row = result.fetchone()
-
-        enriched = row[0] or 0
-        not_enriched = row[1] or 0
-        total = row[2] or 0
-
-        pct_enriched = (enriched / total * 100) if total > 0 else 0
-
-        # Enrichment is background, so just report status
-        return {
-            "ok": True,  # Enrichment is optional
-            "enriched": enriched,
-            "not_enriched": not_enriched,
-            "total_24h": total,
-            "percent_enriched": round(pct_enriched, 1),
-            "description": f"{pct_enriched:.0f}% have embeddings"
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
 
 
 # =============================================================================
@@ -828,8 +702,8 @@ async def check_media_status_standalone() -> Dict[str, Any]:
             # Check messages with media_type that have entries in message_media junction
             result = await db.execute(text("""
                 SELECT
-                    COUNT(*) FILTER (WHERE m.media_type IS NOT NULL AND mm.media_id IS NULL) as not_archived,
-                    COUNT(*) FILTER (WHERE m.media_type IS NOT NULL AND mm.media_id IS NOT NULL) as archived,
+                    COUNT(*) FILTER (WHERE m.media_type IS NOT NULL AND mm.media_file_id IS NULL) as not_archived,
+                    COUNT(*) FILTER (WHERE m.media_type IS NOT NULL AND mm.media_file_id IS NOT NULL) as archived,
                     COUNT(*) FILTER (WHERE m.media_type IS NOT NULL) as total_with_media
                 FROM messages m
                 LEFT JOIN message_media mm ON m.id = mm.message_id
@@ -856,312 +730,106 @@ async def check_media_status_standalone() -> Dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-async def check_classification_status_standalone() -> Dict[str, Any]:
-    """Check LLM classification status (standalone version)."""
-    try:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                SELECT
-                    name, version, usage_count, avg_latency_ms, error_count, is_active
-                FROM llm_prompts
-                WHERE task = 'message_classification' AND is_active = true
-                LIMIT 1
-            """))
-            row = result.fetchone()
+# =============================================================================
+# Public Lookup Endpoints - No authentication required
+# =============================================================================
 
-            if not row:
-                return {"ok": False, "error": "No active classification prompt"}
-
-            name, version, usage, latency_ms, errors, active = row
-            latency_s = (latency_ms / 1000) if latency_ms else 0
-            error_rate = (errors / usage * 100) if usage > 0 else 0
-
-            ok = latency_s < 120 and error_rate < 10
-
-            return {
-                "ok": ok,
-                "prompt_name": name,
-                "prompt_version": version,
-                "usage_count": usage,
-                "avg_latency_seconds": round(latency_s, 1),
-                "error_count": errors,
-                "error_rate_percent": round(error_rate, 1),
-                "description": f"v{version}, {round(latency_s)}s avg" if ok else f"slow ({round(latency_s)}s) or errors"
-            }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-async def check_enrichment_status_standalone() -> Dict[str, Any]:
-    """Check enrichment task status (standalone version)."""
-    try:
-        async with AsyncSessionLocal() as db:
-            # Check for messages with embeddings (indicates enrichment ran)
-            result = await db.execute(text("""
-                SELECT
-                    COUNT(*) FILTER (WHERE content_embedding IS NOT NULL) as enriched,
-                    COUNT(*) FILTER (WHERE content_embedding IS NULL) as not_enriched,
-                    COUNT(*) as total
-                FROM messages
-                WHERE created_at > NOW() - INTERVAL '24 hours'
-            """))
-            row = result.fetchone()
-
-            enriched = row[0] or 0
-            not_enriched = row[1] or 0
-            total = row[2] or 0
-
-            pct_enriched = (enriched / total * 100) if total > 0 else 0
-
-            return {
-                "ok": True,  # Enrichment is background, not critical
-                "enriched": enriched,
-                "not_enriched": not_enriched,
-                "total_24h": total,
-                "percent_enriched": round(pct_enriched, 1),
-                "description": f"{pct_enriched:.0f}% have embeddings"
-            }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-# ============================================================================
-# DECISION AUDIT LOG ENDPOINTS
-# ============================================================================
-
-@router.get("/audit")
-async def get_decision_audit_log(
-    limit: int = 50,
-    offset: int = 0,
-    decision_type: str = None,
-    verification_status: str = None,
-    channel_id: int = None,
+@router.get("/topics")
+async def get_topics(
     db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
+) -> List[Dict[str, Any]]:
     """
-    Get recent LLM classification decisions with full audit trail.
+    Get all active message topics for filtering.
 
-    Query params:
-        limit: Number of decisions to return (default 50, max 200)
-        offset: Pagination offset
-        decision_type: Filter by type (classification, spam_filter, etc.)
-        verification_status: Filter by status (unverified, verified_correct, flagged, etc.)
-        channel_id: Filter by channel
-
-    Returns:
-        List of decisions with LLM analysis and reasoning
+    Public endpoint - no authentication required.
+    Used by search filters to populate topic dropdown.
     """
-    from models.decision_log import DecisionLog
-    from models.channel import Channel
-    from models.message import Message
-    from sqlalchemy import select, desc
+    result = await db.execute(text("""
+        SELECT
+            mt.id, mt.name, mt.label, mt.color, mt.description,
+            COUNT(m.id) as message_count
+        FROM message_topics mt
+        LEFT JOIN messages m ON m.topic = mt.name
+        WHERE mt.is_active = true
+        GROUP BY mt.id, mt.name, mt.label, mt.color, mt.description, mt.sort_order
+        ORDER BY mt.sort_order, mt.label
+    """))
 
-    try:
-        # Build query
-        query = select(
-            DecisionLog,
-            Channel.name.label("channel_name"),
-            Channel.username.label("channel_username"),
-            Message.content.label("message_content"),
-        ).outerjoin(
-            Channel, DecisionLog.channel_id == Channel.id
-        ).outerjoin(
-            Message, DecisionLog.message_id == Message.id
-        ).order_by(desc(DecisionLog.created_at))
-
-        # Apply filters
-        if decision_type:
-            query = query.where(DecisionLog.decision_type == decision_type)
-        if verification_status:
-            query = query.where(DecisionLog.verification_status == verification_status)
-        if channel_id:
-            query = query.where(DecisionLog.channel_id == channel_id)
-
-        # Apply pagination
-        limit = min(limit, 200)  # Cap at 200
-        query = query.limit(limit).offset(offset)
-
-        result = await db.execute(query)
-        rows = result.fetchall()
-
-        decisions = []
-        for row in rows:
-            decision = row[0]
-            decisions.append({
-                "id": decision.id,
-                "message_id": decision.message_id,
-                "telegram_message_id": decision.telegram_message_id,
-                "channel_id": decision.channel_id,
-                "channel_name": row.channel_name or row.channel_username,
-                "message_preview": (row.message_content[:200] + "...") if row.message_content and len(row.message_content) > 200 else row.message_content,
-                "decision_type": decision.decision_type,
-                "decision_value": decision.decision_value,
-                "decision_source": decision.decision_source,
-                "llm_analysis": decision.llm_analysis,
-                "llm_reasoning": decision.llm_reasoning,
-                "processing_time_ms": decision.processing_time_ms,
-                "model_used": decision.model_used,
-                "prompt_version": decision.prompt_version,
-                "verification_status": decision.verification_status,
-                "verified_by": decision.verified_by,
-                "verified_at": decision.verified_at.isoformat() if decision.verified_at else None,
-                "reprocess_requested": decision.reprocess_requested,
-                "created_at": decision.created_at.isoformat() if decision.created_at else None,
-            })
-
-        # Get total count
-        count_query = select(text("COUNT(*)")).select_from(DecisionLog)
-        if decision_type:
-            count_query = count_query.where(DecisionLog.decision_type == decision_type)
-        if verification_status:
-            count_query = count_query.where(DecisionLog.verification_status == verification_status)
-        if channel_id:
-            count_query = count_query.where(DecisionLog.channel_id == channel_id)
-
-        count_result = await db.execute(count_query)
-        total = count_result.scalar() or 0
-
-        return {
-            "decisions": decisions,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "has_more": offset + len(decisions) < total
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+            "label": row[2],
+            "color": row[3],
+            "description": row[4],
+            "message_count": row[5] or 0
         }
+        for row in result.fetchall()
+    ]
 
-    except Exception as e:
-        return {"error": str(e), "decisions": [], "total": 0}
 
-
-@router.get("/audit/stats")
-async def get_audit_stats(
+@router.get("/categories")
+async def get_categories(
     db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
+) -> List[Dict[str, Any]]:
     """
-    Get decision audit statistics for dashboard.
+    Get all channel categories for filtering.
 
-    Returns:
-        Summary of decisions by type, status, and time period
+    Public endpoint - no authentication required.
+    Used by search filters to populate category dropdown.
     """
-    try:
-        result = await db.execute(text("""
-            SELECT
-                -- Overall counts
-                COUNT(*) as total_decisions,
-                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour') as decisions_last_hour,
-                COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as decisions_last_24h,
+    result = await db.execute(text("""
+        SELECT
+            cc.id, cc.name, cc.color, cc.description,
+            COUNT(c.id) as channel_count
+        FROM channel_categories cc
+        LEFT JOIN channels c ON c.category_id = cc.id AND c.active = true
+        GROUP BY cc.id, cc.name, cc.color, cc.description, cc.sort_order
+        ORDER BY cc.sort_order, cc.name
+    """))
 
-                -- By verification status
-                COUNT(*) FILTER (WHERE verification_status = 'unverified') as unverified,
-                COUNT(*) FILTER (WHERE verification_status = 'verified_correct') as verified_correct,
-                COUNT(*) FILTER (WHERE verification_status = 'verified_incorrect') as verified_incorrect,
-                COUNT(*) FILTER (WHERE verification_status = 'flagged') as flagged,
-                COUNT(*) FILTER (WHERE reprocess_requested = true) as pending_reprocess,
-
-                -- By decision outcome
-                COUNT(*) FILTER (WHERE (decision_value->>'is_spam')::boolean = true) as spam_decisions,
-                COUNT(*) FILTER (WHERE (decision_value->>'should_archive')::boolean = true) as archive_decisions,
-                COUNT(*) FILTER (WHERE (decision_value->>'is_ukraine_relevant')::boolean = false) as off_topic_decisions,
-
-                -- Performance
-                AVG(processing_time_ms) FILTER (WHERE processing_time_ms > 0) as avg_processing_ms,
-                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY processing_time_ms)
-                    FILTER (WHERE processing_time_ms > 0) as p95_processing_ms,
-
-                -- By source
-                COUNT(*) FILTER (WHERE decision_source LIKE 'llm_%') as llm_decisions,
-                COUNT(*) FILTER (WHERE decision_source = 'fallback') as fallback_decisions
-
-            FROM decision_log
-        """))
-
-        row = result.fetchone()
-
-        return {
-            "total_decisions": row[0] or 0,
-            "decisions_last_hour": row[1] or 0,
-            "decisions_last_24h": row[2] or 0,
-            "verification": {
-                "unverified": row[3] or 0,
-                "verified_correct": row[4] or 0,
-                "verified_incorrect": row[5] or 0,
-                "flagged": row[6] or 0,
-                "pending_reprocess": row[7] or 0,
-            },
-            "outcomes": {
-                "spam": row[8] or 0,
-                "archived": row[9] or 0,
-                "off_topic": row[10] or 0,
-            },
-            "performance": {
-                "avg_ms": round(row[11] or 0, 1),
-                "p95_ms": round(row[12] or 0, 1),
-            },
-            "sources": {
-                "llm": row[13] or 0,
-                "fallback": row[14] or 0,
-            }
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+            "color": row[2],
+            "description": row[3],
+            "channel_count": row[4] or 0
         }
+        for row in result.fetchall()
+    ]
 
-    except Exception as e:
-        return {"error": str(e)}
 
-
-@router.post("/audit/{decision_id}/verify")
-async def verify_decision(
-    decision_id: int,
-    status: str,
-    notes: str = None,
+@router.get("/folders")
+async def get_folders(
     db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
+) -> List[Dict[str, Any]]:
     """
-    Mark a decision as verified or flagged for review.
+    Get all unique Telegram folders with channel counts.
 
-    Args:
-        decision_id: The decision log ID
-        status: New status (verified_correct, verified_incorrect, flagged)
-        notes: Optional verification notes
-
-    Returns:
-        Updated decision
+    Public endpoint - no authentication required.
+    Telegram folders are used to organize monitored channels.
     """
-    from sqlalchemy import update
+    result = await db.execute(text("""
+        SELECT
+            folder,
+            COUNT(*) as channel_count
+        FROM channels
+        WHERE folder IS NOT NULL AND active = true
+        GROUP BY folder
+        ORDER BY folder
+    """))
 
-    try:
-        # Validate status
-        valid_statuses = ["verified_correct", "verified_incorrect", "flagged", "reprocessed"]
-        if status not in valid_statuses:
-            return {"error": f"Invalid status. Must be one of: {valid_statuses}"}
-
-        # Update the decision
-        from models.decision_log import DecisionLog
-
-        result = await db.execute(
-            update(DecisionLog)
-            .where(DecisionLog.id == decision_id)
-            .values(
-                verification_status=status,
-                verified_by="api:user",  # TODO: Get from auth context
-                verified_at=datetime.utcnow(),
-                verification_notes=notes,
-                reprocess_requested=(status == "flagged" or status == "verified_incorrect"),
-            )
-            .returning(DecisionLog.id)
-        )
-
-        updated_id = result.scalar_one_or_none()
-        if not updated_id:
-            return {"error": f"Decision {decision_id} not found"}
-
-        await db.commit()
-
-        return {
-            "success": True,
-            "decision_id": decision_id,
-            "new_status": status,
-            "reprocess_requested": status in ["flagged", "verified_incorrect"]
+    return [
+        {
+            "name": row[0],
+            "channel_count": row[1] or 0
         }
+        for row in result.fetchall()
+    ]
 
-    except Exception as e:
-        await db.rollback()
-        return {"error": str(e)}
+
+
+
+
+

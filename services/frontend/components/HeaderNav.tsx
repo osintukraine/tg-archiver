@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useImmersive } from '@/contexts/ImmersiveContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { SITE_NAME } from '@/lib/constants';
+import { SITE_NAME, RSS_ENABLED } from '@/lib/constants';
 
 // Build-time flag for translation feature
 const TRANSLATION_ENABLED = process.env.NEXT_PUBLIC_TRANSLATION_ENABLED === 'true';
@@ -143,7 +143,8 @@ export function HeaderNav() {
   const navItems = [
     { href: '/', label: 'Browse', match: (p: string) => p === '/' },
     { href: '/channels', label: 'Channels', match: (p: string) => p === '/channels' || p?.startsWith('/channels/') },
-    { href: '/news', label: 'News', match: (p: string) => p === '/news' },
+    // Only show News when external RSS feature is enabled
+    ...(RSS_ENABLED ? [{ href: '/news', label: 'News', match: (p: string) => p === '/news' }] : []),
     { href: '/search', label: 'Search', match: (p: string) => p === '/search' },
     { href: '/about', label: 'About', match: (p: string) => p === '/about' },
   ];

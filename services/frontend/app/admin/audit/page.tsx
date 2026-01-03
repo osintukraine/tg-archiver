@@ -7,7 +7,7 @@ import { adminApi } from '@/lib/admin-api'
  * Admin Audit Log
  *
  * View admin moderation actions on messages.
- * Tracks hide/unhide, spam marking, topic changes, etc.
+ * Tracks hide/unhide, topic changes, etc.
  */
 
 interface AdminAction {
@@ -35,8 +35,6 @@ const ACTION_LABELS: Record<string, { label: string; color: string; icon: string
   'message.hidden': { label: 'Hidden', color: 'bg-gray-500/20 text-gray-400', icon: '👁️‍🗨️' },
   'message.unhidden': { label: 'Unhidden', color: 'bg-blue-500/20 text-blue-400', icon: '👁️' },
   'message.deleted': { label: 'Deleted', color: 'bg-red-500/20 text-red-400', icon: '🗑️' },
-  'message.marked_spam': { label: 'Marked Spam', color: 'bg-orange-500/20 text-orange-400', icon: '🚫' },
-  'message.unmarked_spam': { label: 'Unmarked Spam', color: 'bg-green-500/20 text-green-400', icon: '✅' },
   'message.quarantined': { label: 'Quarantined', color: 'bg-yellow-500/20 text-yellow-400', icon: '⚠️' },
   'message.note_added': { label: 'Note Added', color: 'bg-blue-500/20 text-blue-400', icon: '📝' },
   'message.topic_changed': { label: 'Topic Changed', color: 'bg-purple-500/20 text-purple-400', icon: '🏷️' },

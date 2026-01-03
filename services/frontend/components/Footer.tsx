@@ -8,6 +8,7 @@ import {
   Database,
   FileText,
   Code,
+  BookOpen,
 } from 'lucide-react';
 
 export function Footer() {
@@ -22,7 +23,7 @@ export function Footer() {
               {SITE_NAME}
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Self-hosted Telegram channel archiver. Simple, reliable, and privacy-focused.
+              Self-hosted Telegram channel archiver with full-text search, media storage, and RSS feeds.
             </p>
           </div>
 
@@ -74,7 +75,16 @@ export function Footer() {
                   className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
                 >
                   <Code className="w-4 h-4" />
-                  API Documentation
+                  API Docs (Swagger)
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/redoc"
+                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  API Docs (ReDoc)
                 </a>
               </li>
               <li>
@@ -96,14 +106,18 @@ export function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
             <p className="text-xs text-gray-500 dark:text-gray-500">
-              Powered by tg-archiver
+              tg-archiver — open source
             </p>
-            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
-              <span>PostgreSQL</span>
-              <span className="text-gray-300 dark:text-gray-700">|</span>
-              <span>MinIO</span>
-              <span className="text-gray-300 dark:text-gray-700">|</span>
+            <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-500">
               <span>Next.js</span>
+              <span className="text-gray-300 dark:text-gray-700">•</span>
+              <span>FastAPI</span>
+              <span className="text-gray-300 dark:text-gray-700">•</span>
+              <span>PostgreSQL</span>
+              <span className="text-gray-300 dark:text-gray-700">•</span>
+              <span>Redis</span>
+              <span className="text-gray-300 dark:text-gray-700">•</span>
+              <span>MinIO</span>
             </div>
           </div>
         </div>

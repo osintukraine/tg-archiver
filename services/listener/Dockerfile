@@ -35,8 +35,16 @@ ENV PYTHONPATH="/shared/python:${PYTHONPATH}"
 # Copy service code
 COPY services/listener/src ./src
 
-# Create directories for data persistence
-RUN mkdir -p /data/sessions /var/log/listener
+# Create non-root user for security
+RUN groupadd --system --gid 1001 listener && \
+    useradd --system --uid 1001 --gid listener listener
+
+# Create directories for data persistence and set ownership
+RUN mkdir -p /data/sessions /var/log/listener && \
+    chown -R listener:listener /app /data /var/log/listener
+
+# Switch to non-root user
+USER listener
 
 # Health check - verifies message activity (not just container running)
 # Port 8002 is the dedicated health endpoint that checks if messages are flowing

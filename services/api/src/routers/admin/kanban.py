@@ -1,16 +1,15 @@
 """
-Admin Urgency Kanban API
+Admin Message Board API
 
-Provides urgency-based message lanes for prioritized review.
+Provides engagement-based message lanes for prioritized review.
 """
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
+from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional, Dict
-from enum import Enum
 
 from ...database import get_db
 from ...dependencies import AdminUser
@@ -19,23 +18,12 @@ from config.settings import settings
 router = APIRouter(prefix="/api/admin/kanban", tags=["admin-kanban"])
 
 
-class UrgencyLane(str, Enum):
-    critical = "Critical"
-    high = "High"
-    medium = "Medium"
-    low = "Low"
-    normal = "Normal"
-
-
-class KanbanItem(BaseModel):
-    """Kanban card item."""
+class BoardItem(BaseModel):
+    """Board card item."""
     message_id: int
     date: datetime
     title: str
-    urgency_lane: str
-    osint_topic: Optional[str]
-    importance_level: Optional[str]
-    sentiment: Optional[str]
+    lane: str
     views: Optional[int]
     forwards: Optional[int]
     channel: str
@@ -43,106 +31,115 @@ class KanbanItem(BaseModel):
     has_media: bool
 
 
-class KanbanLane(BaseModel):
-    """A kanban lane with items."""
+class BoardLane(BaseModel):
+    """A board lane with items."""
     name: str
     count: int
-    items: List[KanbanItem]
+    items: List[BoardItem]
 
 
-class KanbanResponse(BaseModel):
-    """Full kanban board response."""
-    lanes: Dict[str, KanbanLane]
+class BoardResponse(BaseModel):
+    """Full board response."""
+    lanes: Dict[str, BoardLane]
     total_items: int
 
 
-class KanbanStatsResponse(BaseModel):
-    """Kanban statistics."""
+class BoardStatsResponse(BaseModel):
+    """Board statistics."""
     by_lane: Dict[str, int]
-    by_sentiment: Dict[str, int]
-    by_importance: Dict[str, int]
-    avg_urgency: float
+    total_messages: int
+    with_media: int
 
 
-@router.get("/", response_model=KanbanResponse)
+@router.get("/", response_model=BoardResponse)
 async def get_kanban_board(
     admin: AdminUser,
-    days: int = Query(7, ge=1, le=30),
-    importance: Optional[str] = None,
+    days: int = Query(0, ge=0, le=3650),
     channel: Optional[str] = None,
     limit_per_lane: int = Query(20, ge=5, le=50),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get urgency kanban board.
+    Get message board organized by engagement.
 
-    Returns messages organized by urgency lanes (Critical/High/Medium/Low/Normal).
+    Returns messages organized by engagement lanes:
+    - Trending: High engagement (views > 10k or forwards > 100)
+    - Popular: Above average engagement
+    - Recent: Recently posted
+    - Quiet: Low engagement
+
+    Set days=0 for all time.
     """
-    # Return s3_key directly - frontend uses getMediaUrl() to build proper URL
-    # This matches the pattern in messages.py (public API)
+    # Calculate engagement thresholds
+    # days=0 means all time (no date filter)
+    date_filter = "WHERE telegram_date >= NOW() - INTERVAL '1 day' * :days" if days > 0 else ""
+    threshold_query = f"""
+        SELECT
+            PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY COALESCE(views, 0)) as p90_views,
+            PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY COALESCE(forwards, 0)) as p90_forwards,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY COALESCE(views, 0)) as p50_views
+        FROM messages
+        {date_filter}
+    """
+    threshold_result = await db.execute(text(threshold_query), {"days": days})
+    thresholds = threshold_result.fetchone()
+    p90_views = thresholds[0] or 10000
+    p90_forwards = thresholds[1] or 100
+    p50_views = thresholds[2] or 1000
 
-    # Use osint_topic for lane assignment (semantic urgency based on content type)
-    # Critical: combat, casualties, movements (active military operations)
-    # High: equipment, units, propaganda (military intelligence)
-    # Medium: diplomatic, humanitarian (strategic context)
-    # Low: general, uncertain, NULL (background/unclassified)
-    base_query = """
+    base_query = f"""
         WITH ranked_messages AS (
             SELECT
                 m.id as message_id,
                 m.telegram_date as date,
                 LEFT(COALESCE(m.content_translated, m.content), 150) as title,
                 CASE
-                    WHEN m.osint_topic IN ('combat', 'casualties', 'movements') THEN 'Critical'
-                    WHEN m.osint_topic IN ('equipment', 'units', 'propaganda') THEN 'High'
-                    WHEN m.osint_topic IN ('diplomatic', 'humanitarian') THEN 'Medium'
-                    ELSE 'Low'
-                END as urgency_lane,
-                m.osint_topic,
-                m.importance_level,
-                m.content_sentiment as sentiment,
-                c.name || CASE WHEN c.verified THEN ' ✓' ELSE '' END as channel,
+                    WHEN COALESCE(m.views, 0) >= :p90_views OR COALESCE(m.forwards, 0) >= :p90_forwards THEN 'Trending'
+                    WHEN COALESCE(m.views, 0) >= :p50_views THEN 'Popular'
+                    WHEN m.telegram_date >= NOW() - INTERVAL '2 days' THEN 'Recent'
+                    ELSE 'Quiet'
+                END as lane,
+                c.name || CASE WHEN c.verified THEN ' ' || chr(10003) ELSE '' END as channel,
                 m.media_type,
                 mf.s3_key,
                 m.views,
                 m.forwards,
                 ROW_NUMBER() OVER (
                     PARTITION BY CASE
-                        WHEN m.osint_topic IN ('combat', 'casualties', 'movements') THEN 'Critical'
-                        WHEN m.osint_topic IN ('equipment', 'units', 'propaganda') THEN 'High'
-                        WHEN m.osint_topic IN ('diplomatic', 'humanitarian') THEN 'Medium'
-                        ELSE 'Low'
+                        WHEN COALESCE(m.views, 0) >= :p90_views OR COALESCE(m.forwards, 0) >= :p90_forwards THEN 'Trending'
+                        WHEN COALESCE(m.views, 0) >= :p50_views THEN 'Popular'
+                        WHEN m.telegram_date >= NOW() - INTERVAL '2 days' THEN 'Recent'
+                        ELSE 'Quiet'
                     END
                     ORDER BY m.telegram_date DESC
                 ) as row_num
             FROM messages m
             LEFT JOIN channels c ON c.id = m.channel_id
             LEFT JOIN message_media mm ON mm.message_id = m.id
-            LEFT JOIN media_files mf ON mf.id = mm.media_id
-            WHERE m.is_spam = false
-            AND m.telegram_date >= NOW() - INTERVAL '1 day' * :days
+            LEFT JOIN media_files mf ON mf.id = mm.media_file_id
+            {date_filter}
     """
 
-    params = {"days": days, "limit": limit_per_lane}
-
-    if importance:
-        base_query += " AND m.importance_level = :importance"
-        params["importance"] = importance
+    params = {
+        "days": days,
+        "limit": limit_per_lane,
+        "p90_views": p90_views,
+        "p90_forwards": p90_forwards,
+        "p50_views": p50_views,
+    }
 
     if channel:
-        base_query += " AND (c.name ILIKE :channel OR c.username ILIKE :channel)"
+        channel_condition = "WHERE" if days == 0 else "AND"
+        base_query += f" {channel_condition} (c.name ILIKE :channel OR c.username ILIKE :channel)"
         params["channel"] = f"%{channel}%"
 
-    base_query += f"""
+    base_query += """
         )
         SELECT
             message_id,
             date,
             title,
-            urgency_lane,
-            osint_topic,
-            importance_level,
-            sentiment,
+            lane,
             channel,
             media_type,
             views,
@@ -156,105 +153,104 @@ async def get_kanban_board(
     result = await db.execute(text(base_query), params)
     rows = result.fetchall()
 
-    # Organize into lanes (based on osint_topic classification)
+    # Organize into lanes
     lanes_data = {
-        "Critical": [],  # combat, casualties, movements
-        "High": [],      # equipment, units, propaganda
-        "Medium": [],    # diplomatic, humanitarian
-        "Low": [],       # general, uncertain, NULL
+        "Trending": [],
+        "Popular": [],
+        "Recent": [],
+        "Quiet": [],
     }
 
-    # Column order: message_id, date, title, urgency_lane, osint_topic,
-    #               importance_level, sentiment, channel, media_type, views, forwards, thumbnail_url
     for row in rows:
-        item = KanbanItem(
+        item = BoardItem(
             message_id=row[0],
             date=row[1],
             title=row[2] or "(No content)",
-            urgency_lane=row[3],
-            osint_topic=row[4],
-            importance_level=row[5],
-            sentiment=row[6],
-            channel=row[7] or "Unknown",
-            views=row[9],
-            forwards=row[10],
-            thumbnail_url=row[11],
-            has_media=row[8] is not None,
+            lane=row[3],
+            channel=row[4] or "Unknown",
+            views=row[6],
+            forwards=row[7],
+            thumbnail_url=row[8],
+            has_media=row[5] is not None,
         )
-        if item.urgency_lane in lanes_data:
-            lanes_data[item.urgency_lane].append(item)
+        if item.lane in lanes_data:
+            lanes_data[item.lane].append(item)
 
     # Build response
     lanes = {}
     total = 0
     for lane_name, items in lanes_data.items():
-        lanes[lane_name] = KanbanLane(
+        lanes[lane_name] = BoardLane(
             name=lane_name,
             count=len(items),
             items=items,
         )
         total += len(items)
 
-    return KanbanResponse(lanes=lanes, total_items=total)
+    return BoardResponse(lanes=lanes, total_items=total)
 
 
-@router.get("/stats", response_model=KanbanStatsResponse)
+@router.get("/stats", response_model=BoardStatsResponse)
 async def get_kanban_stats(
     admin: AdminUser,
-    days: int = Query(7, ge=1, le=30),
+    days: int = Query(0, ge=0, le=3650),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get kanban statistics for the dashboard."""
+    """Get board statistics for the dashboard. Set days=0 for all time."""
 
-    # By lane - using osint_topic for semantic urgency classification
-    lane_result = await db.execute(text("""
+    # days=0 means all time (no date filter)
+    date_filter = "WHERE telegram_date >= NOW() - INTERVAL '1 day' * :days" if days > 0 else ""
+
+    # Get thresholds first
+    threshold_query = f"""
+        SELECT
+            PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY COALESCE(views, 0)) as p90_views,
+            PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY COALESCE(forwards, 0)) as p90_forwards,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY COALESCE(views, 0)) as p50_views
+        FROM messages
+        {date_filter}
+    """
+    threshold_result = await db.execute(text(threshold_query), {"days": days})
+    thresholds = threshold_result.fetchone()
+    p90_views = thresholds[0] or 10000
+    p90_forwards = thresholds[1] or 100
+    p50_views = thresholds[2] or 1000
+
+    # By lane
+    lane_result = await db.execute(text(f"""
         SELECT
             CASE
-                WHEN osint_topic IN ('combat', 'casualties', 'movements') THEN 'Critical'
-                WHEN osint_topic IN ('equipment', 'units', 'propaganda') THEN 'High'
-                WHEN osint_topic IN ('diplomatic', 'humanitarian') THEN 'Medium'
-                ELSE 'Low'
+                WHEN COALESCE(views, 0) >= :p90_views OR COALESCE(forwards, 0) >= :p90_forwards THEN 'Trending'
+                WHEN COALESCE(views, 0) >= :p50_views THEN 'Popular'
+                WHEN telegram_date >= NOW() - INTERVAL '2 days' THEN 'Recent'
+                ELSE 'Quiet'
             END as lane,
             COUNT(*)
         FROM messages
-        WHERE is_spam = false
-        AND telegram_date >= NOW() - INTERVAL '1 day' * :days
+        {date_filter}
         GROUP BY 1
-    """), {"days": days})
+    """), {"days": days, "p90_views": p90_views, "p90_forwards": p90_forwards, "p50_views": p50_views})
     by_lane = {row[0]: row[1] for row in lane_result.fetchall()}
 
-    # By sentiment
-    sentiment_result = await db.execute(text("""
-        SELECT COALESCE(content_sentiment, 'unknown'), COUNT(*)
+    # Total messages
+    total_result = await db.execute(text(f"""
+        SELECT COUNT(*)
         FROM messages
-        WHERE is_spam = false
-        AND telegram_date >= NOW() - INTERVAL '1 day' * :days
-        GROUP BY content_sentiment
+        {date_filter}
     """), {"days": days})
-    by_sentiment = {row[0]: row[1] for row in sentiment_result.fetchall()}
+    total_messages = total_result.scalar() or 0
 
-    # By importance
-    importance_result = await db.execute(text("""
-        SELECT COALESCE(importance_level, 'unknown'), COUNT(*)
+    # With media
+    media_filter = "WHERE media_type IS NOT NULL" if days == 0 else f"{date_filter} AND media_type IS NOT NULL"
+    media_result = await db.execute(text(f"""
+        SELECT COUNT(*)
         FROM messages
-        WHERE is_spam = false
-        AND telegram_date >= NOW() - INTERVAL '1 day' * :days
-        GROUP BY importance_level
+        {media_filter}
     """), {"days": days})
-    by_importance = {row[0]: row[1] for row in importance_result.fetchall()}
+    with_media = media_result.scalar() or 0
 
-    # Average engagement score (views + forwards*10)
-    avg_result = await db.execute(text("""
-        SELECT AVG(COALESCE(views, 0) + COALESCE(forwards, 0) * 10)
-        FROM messages
-        WHERE is_spam = false
-        AND telegram_date >= NOW() - INTERVAL '1 day' * :days
-    """), {"days": days})
-    avg_urgency = avg_result.scalar() or 0
-
-    return KanbanStatsResponse(
+    return BoardStatsResponse(
         by_lane=by_lane,
-        by_sentiment=by_sentiment,
-        by_importance=by_importance,
-        avg_urgency=round(avg_urgency, 1),
+        total_messages=total_messages,
+        with_media=with_media,
     )

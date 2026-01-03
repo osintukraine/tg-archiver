@@ -2,8 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import type { SearchParams, Channel } from '@/lib/types';
-import { getChannels, API_URL } from '@/lib/api';
+import type { SearchParams, Channel, MessageTopic, ChannelCategory, TelegramFolder } from '@/lib/types';
+import { getChannels, getTopics, getCategories, getFolders, API_URL } from '@/lib/api';
 import { getAuthHeaders } from '@/lib/auth-utils';
 
 interface SearchFiltersProps {
@@ -53,9 +53,27 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
     }
   }, [isCollapsed]);
 
+  // Topic filter state
+  const [topic, setTopic] = useState(initialParams.topic || '');
+
+  // Category filter state (filter channels by category)
+  const [categoryId, setCategoryId] = useState(initialParams.category_id?.toString() || '');
+
   // Channels state
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(true);
+
+  // Topics state
+  const [topics, setTopics] = useState<MessageTopic[]>([]);
+  const [topicsLoading, setTopicsLoading] = useState(true);
+
+  // Categories state
+  const [categories, setCategories] = useState<ChannelCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Folders state
+  const [folders, setFolders] = useState<TelegramFolder[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(true);
 
   // Fetch channels on mount
   useEffect(() => {
@@ -73,11 +91,61 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
     loadChannels();
   }, []);
 
+  // Fetch topics on mount
+  useEffect(() => {
+    const loadTopics = async () => {
+      try {
+        const data = await getTopics();
+        setTopics(data);
+      } catch (error) {
+        console.error('Failed to load topics:', error);
+      } finally {
+        setTopicsLoading(false);
+      }
+    };
+
+    loadTopics();
+  }, []);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const data = await getCategories();
+        setCategories(data);
+      } catch (error) {
+        console.error('Failed to load categories:', error);
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    loadCategories();
+  }, []);
+
+  // Fetch folders on mount
+  useEffect(() => {
+    const loadFolders = async () => {
+      try {
+        const data = await getFolders();
+        setFolders(data);
+      } catch (error) {
+        console.error('Failed to load folders:', error);
+      } finally {
+        setFoldersLoading(false);
+      }
+    };
+
+    loadFolders();
+  }, []);
+
   // Build URL from filter state
   const buildFilterUrl = (overrides: Partial<{
     query: string;
     channelUsername: string;
     channelFolder: string;
+    topic: string;
+    categoryId: string;
     hasMedia: string;
     mediaType: string;
     language: string;
@@ -95,6 +163,8 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
     const q = overrides.query !== undefined ? overrides.query : query;
     const ch = overrides.channelUsername !== undefined ? overrides.channelUsername : channelUsername;
     const cf = overrides.channelFolder !== undefined ? overrides.channelFolder : channelFolder;
+    const tp = overrides.topic !== undefined ? overrides.topic : topic;
+    const cat = overrides.categoryId !== undefined ? overrides.categoryId : categoryId;
     const hm = overrides.hasMedia !== undefined ? overrides.hasMedia : hasMedia;
     const mt = overrides.mediaType !== undefined ? overrides.mediaType : mediaType;
     const lang = overrides.language !== undefined ? overrides.language : language;
@@ -110,6 +180,8 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
     if (q.trim()) params.set('q', q.trim());
     if (ch.trim()) params.set('channel_username', ch.trim());
     if (cf.trim()) params.set('channel_folder', cf.trim());
+    if (tp) params.set('topic', tp);
+    if (cat) params.set('category_id', cat);
     if (hm !== 'any') params.set('has_media', hm);
     if (mt) params.set('media_type', mt);
     if (lang) params.set('language', lang);
@@ -136,7 +208,10 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
   // Count active filters
   const activeFilterCount = [
     query.trim(),
-    channelUsername.trim() || channelFolder.trim(),
+    channelUsername.trim(),
+    channelFolder.trim(),
+    topic,
+    categoryId,
     hasMedia !== 'any',
     mediaType,
     language,
@@ -153,6 +228,8 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
     setQuery('');
     setChannelUsername('');
     setChannelFolder('');
+    setTopic('');
+    setCategoryId('');
     setHasMedia('any');
     setMediaType('');
     setLanguage('');
@@ -479,6 +556,81 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
             </div>
           </div>
 
+          {/* Filter Grid - Topic, Category, Folder */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Topic Filter */}
+            <div>
+              <label htmlFor="topic" className="block text-sm font-medium mb-2">
+                Topic {topicsLoading && <span className="text-text-tertiary text-xs">(loading...)</span>}
+              </label>
+              <select
+                id="topic"
+                value={topic}
+                onChange={(e) => {
+                  setTopic(e.target.value);
+                  router.push(buildFilterUrl({ topic: e.target.value }));
+                }}
+                disabled={topicsLoading}
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+              >
+                <option value="">All Topics</option>
+                {!topicsLoading && topics.map(t => (
+                  <option key={t.id} value={t.name}>
+                    {t.label} ({t.message_count || 0})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Category Filter */}
+            <div>
+              <label htmlFor="category" className="block text-sm font-medium mb-2">
+                Category {categoriesLoading && <span className="text-text-tertiary text-xs">(loading...)</span>}
+              </label>
+              <select
+                id="category"
+                value={categoryId}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  router.push(buildFilterUrl({ categoryId: e.target.value }));
+                }}
+                disabled={categoriesLoading}
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+              >
+                <option value="">All Categories</option>
+                {!categoriesLoading && categories.map(c => (
+                  <option key={c.id} value={c.id.toString()}>
+                    {c.name} ({c.channel_count || 0} channels)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Folder Filter */}
+            <div>
+              <label htmlFor="folder" className="block text-sm font-medium mb-2">
+                Telegram Folder {foldersLoading && <span className="text-text-tertiary text-xs">(loading...)</span>}
+              </label>
+              <select
+                id="folder"
+                value={channelFolder}
+                onChange={(e) => {
+                  setChannelFolder(e.target.value);
+                  router.push(buildFilterUrl({ channelFolder: e.target.value }));
+                }}
+                disabled={foldersLoading}
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+              >
+                <option value="">All Folders</option>
+                {!foldersLoading && folders.map(f => (
+                  <option key={f.name} value={f.name}>
+                    {f.name} ({f.channel_count} channels)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {/* Filter Grid - Additional Filters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Has Comments Filter */}
@@ -697,6 +849,21 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                 {channelUsername && (
                   <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary text-sm rounded-full">
                     Channel: {channelUsername}
+                  </span>
+                )}
+                {channelFolder && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-500/10 text-purple-400 text-sm rounded-full">
+                    Folder: {channelFolder}
+                  </span>
+                )}
+                {topic && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500/10 text-amber-400 text-sm rounded-full">
+                    Topic: {topics.find(t => t.name === topic)?.label || topic}
+                  </span>
+                )}
+                {categoryId && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-500/10 text-emerald-400 text-sm rounded-full">
+                    Category: {categories.find(c => c.id.toString() === categoryId)?.name || categoryId}
                   </span>
                 )}
                 {hasMedia !== 'any' && (

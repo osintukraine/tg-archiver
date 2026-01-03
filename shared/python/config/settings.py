@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # =============================================================================
     # PLATFORM IDENTITY
     # =============================================================================
-    PLATFORM_NAME: str = Field(default="OSINT Intelligence Platform", description="Platform name for UI and API")
+    PLATFORM_NAME: str = Field(default="Telegram Archiver", description="Platform name for UI and API")
 
     # =============================================================================
     # ENVIRONMENT
@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     # =============================================================================
     POSTGRES_HOST: str = Field(default="postgres", description="PostgreSQL host")
     POSTGRES_PORT: int = Field(default=5432, description="PostgreSQL port")
-    POSTGRES_DB: str = Field(default="osint_platform", description="PostgreSQL database")
-    POSTGRES_USER: str = Field(default="osint_user", description="PostgreSQL user")
+    POSTGRES_DB: str = Field(default="tg_archiver", description="PostgreSQL database")
+    POSTGRES_USER: str = Field(default="tg_user", description="PostgreSQL user")
     POSTGRES_PASSWORD: str = Field(..., description="PostgreSQL password")
     POSTGRES_POOL_SIZE: int = Field(default=40, description="Connection pool size (increased for 500+ channels)")
     POSTGRES_MAX_OVERFLOW: int = Field(default=40, description="Max pool overflow (100% overflow for burst traffic)")
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = Field(..., description="MinIO access key")
     MINIO_SECRET_KEY: str = Field(..., description="MinIO secret key")
     MINIO_BUCKET_NAME: str = Field(
-        default="osint-media", description="MinIO bucket name"
+        default="tg-media", description="MinIO bucket name"
     )
     MINIO_SECURE: bool = Field(default=False, description="Use HTTPS for MinIO")
     MINIO_PUBLIC_URL: str = Field(
@@ -97,7 +97,7 @@ class Settings(BaseSettings):
         default=Path("/data/sessions"), description="Session file directory"
     )
     TELEGRAM_SESSION_NAME: str = Field(
-        default="osint_platform", description="Session file name"
+        default="tg_archiver", description="Session file name"
     )
     TELEGRAM_RATE_LIMIT_PER_CHANNEL: int = Field(
         default=20, description="Messages per minute per channel"
@@ -106,7 +106,7 @@ class Settings(BaseSettings):
     # Multi-account support: identifies which account this listener represents
     # Used for enrichment routing (each account monitors different channels)
     SOURCE_ACCOUNT: str = Field(
-        default="default", description="Account name (default, russia, ukraine)"
+        default="default", description="Account name (default, account_1, account_2)"
     )
 
     # =============================================================================
@@ -114,24 +114,24 @@ class Settings(BaseSettings):
     # =============================================================================
     # If these are set, enrichment service can use multiple Telegram clients
     # for different accounts (doubles rate limits, isolates risk)
-    TELEGRAM_API_ID_RUSSIA: Optional[int] = Field(
-        None, description="Telegram API ID (Russia account)"
+    TELEGRAM_API_ID_ACCOUNT_1: Optional[int] = Field(
+        None, description="Telegram API ID (Account 1)"
     )
-    TELEGRAM_API_HASH_RUSSIA: Optional[str] = Field(
-        None, description="Telegram API hash (Russia account)"
+    TELEGRAM_API_HASH_ACCOUNT_1: Optional[str] = Field(
+        None, description="Telegram API hash (Account 1)"
     )
-    TELEGRAM_PHONE_RUSSIA: Optional[str] = Field(
-        None, description="Phone number (Russia account)"
+    TELEGRAM_PHONE_ACCOUNT_1: Optional[str] = Field(
+        None, description="Phone number (Account 1)"
     )
 
-    TELEGRAM_API_ID_UKRAINE: Optional[int] = Field(
-        None, description="Telegram API ID (Ukraine account)"
+    TELEGRAM_API_ID_ACCOUNT_2: Optional[int] = Field(
+        None, description="Telegram API ID (Account 2)"
     )
-    TELEGRAM_API_HASH_UKRAINE: Optional[str] = Field(
-        None, description="Telegram API hash (Ukraine account)"
+    TELEGRAM_API_HASH_ACCOUNT_2: Optional[str] = Field(
+        None, description="Telegram API hash (Account 2)"
     )
-    TELEGRAM_PHONE_UKRAINE: Optional[str] = Field(
-        None, description="Phone number (Ukraine account)"
+    TELEGRAM_PHONE_ACCOUNT_2: Optional[str] = Field(
+        None, description="Phone number (Account 2)"
     )
 
     # =============================================================================
@@ -142,10 +142,10 @@ class Settings(BaseSettings):
         default=300, description="Seconds between folder syncs (5 minutes)"
     )
     FOLDER_ARCHIVE_ALL_PATTERN: str = Field(
-        default="Archive", description="Folder pattern for archive_all rule (7 chars, allows 'Archive-UA')"
+        default="Archive", description="Folder pattern for archive_all rule (7 chars, e.g. 'Archive-1')"
     )
     FOLDER_MONITORING_PATTERN: str = Field(
-        default="Monitor", description="Folder pattern for selective_archive rule (7 chars, allows 'Monitor-RU')"
+        default="Monitor", description="Folder pattern for selective_archive rule (7 chars, e.g. 'Monitor-1')"
     )
     FOLDER_TEST_PATTERN: str = Field(
         default="Test", description="Folder pattern for test environment (4 chars)"
@@ -153,8 +153,8 @@ class Settings(BaseSettings):
     FOLDER_STAGING_PATTERN: str = Field(
         default="Staging", description="Folder pattern for staging environment (7 chars)"
     )
-    MONITORING_OSINT_THRESHOLD: int = Field(
-        default=70, description="Min OSINT score for selective archival"
+    MONITORING_RELEVANCE_THRESHOLD: int = Field(
+        default=70, description="Min relevance score for selective archival"
     )
 
     # =============================================================================
@@ -209,7 +209,7 @@ class Settings(BaseSettings):
         default="http://ollama:11434", description="Ollama API endpoint"
     )
     OLLAMA_MODEL: str = Field(
-        default="qwen2.5:3b", description="Ollama model to use (qwen2.5:3b recommended for RU/UK content)"
+        default="qwen2.5:3b", description="Ollama model to use (qwen2.5:3b recommended for multilingual content)"
     )
     OLLAMA_TIMEOUT: int = Field(default=30, description="LLM request timeout (seconds)")
     OLLAMA_NUM_PREDICT: int = Field(
@@ -223,15 +223,6 @@ class Settings(BaseSettings):
         default="unified",
         description="Classifier mode: unified (one call) or modular (sequential task prompts)"
     )
-    LLM_MODULAR_EARLY_EXIT: bool = Field(
-        default=True,
-        description="Stop after spam detection if spam=true (modular mode only)"
-    )
-    LLM_MODULAR_SPAM_MODEL: Optional[str] = Field(
-        default=None,
-        description="Override model for spam detection in modular mode (e.g., qwen2.5:0.5b)"
-    )
-
     # External LLM Endpoint Support
     # Enable these settings to use a remote Ollama instance (e.g., Contabo hosted DeepSeek)
     OLLAMA_API_KEY: Optional[str] = Field(
@@ -261,29 +252,17 @@ class Settings(BaseSettings):
         default=False,
         description="Use fast embedding-based classification for backfill (skips LLM)"
     )
-    EMBEDDING_SPAM_FILTER_ENABLED: bool = Field(
-        default=True,
-        description="Enable embedding-based spam filter (requires sentence-transformers)"
-    )
-    EMBEDDING_SPAM_MODEL: str = Field(
+    EMBEDDING_MODEL: str = Field(
         default="all-MiniLM-L6-v2",
         description="Sentence-transformers model for embedding-based classification"
-    )
-    EMBEDDING_SPAM_THRESHOLD: float = Field(
-        default=0.75,
-        description="Cosine similarity threshold for spam detection (0.0-1.0)"
     )
     EMBEDDING_OFF_TOPIC_THRESHOLD: float = Field(
         default=0.70,
         description="Cosine similarity threshold for off-topic detection (0.0-1.0)"
     )
-    EMBEDDING_UKRAINE_KEYWORD_CHECK: bool = Field(
+    EMBEDDING_TOPIC_KEYWORD_CHECK: bool = Field(
         default=True,
-        description="Check for Ukraine-related keywords (adds relevance signal)"
-    )
-    EMBEDDING_CACHE_REFRESH_INTERVAL: int = Field(
-        default=300,
-        description="Seconds between spam examples cache refresh (300 = 5 minutes)"
+        description="Check for topic-related keywords (adds relevance signal)"
     )
 
     # =============================================================================
@@ -313,7 +292,6 @@ class Settings(BaseSettings):
     WORKER_BATCH_SIZE: int = Field(default=50, description="Messages per batch")
     WORKER_TIMEOUT: int = Field(default=300, description="Worker timeout (seconds)")
     PROCESSOR_BATCH_SIZE: int = Field(default=10, description="Messages per XREADGROUP call")
-    SPAM_FILTER_ENABLED: bool = Field(default=True, description="Enable spam filtering")
     ENTITY_EXTRACTION_ENABLED: bool = Field(default=True, description="Enable entity extraction")
 
     # =============================================================================
@@ -338,7 +316,7 @@ class Settings(BaseSettings):
         default=Path("/data/media"), description="Media storage directory"
     )
     LOG_PATH: Path = Field(
-        default=Path("/var/log/osint-platform"), description="Log directory"
+        default=Path("/var/log/tg-archiver"), description="Log directory"
     )
 
     # =============================================================================
@@ -358,7 +336,7 @@ class Settings(BaseSettings):
                 return None
         return v
 
-    @field_validator("TELEGRAM_API_ID_RUSSIA", "TELEGRAM_API_ID_UKRAINE", mode="before")
+    @field_validator("TELEGRAM_API_ID_ACCOUNT_1", "TELEGRAM_API_ID_ACCOUNT_2", mode="before")
     @classmethod
     def parse_multi_account_api_ids(cls, v):
         """Parse multi-account Telegram API IDs, allowing None/placeholder values."""
@@ -460,24 +438,24 @@ class Settings(BaseSettings):
         Check if multi-account credentials are configured.
 
         Returns:
-            True if at least one country-specific account is configured
+            True if at least one additional account is configured
         """
-        has_russia = all([
-            self.TELEGRAM_API_ID_RUSSIA,
-            self.TELEGRAM_API_HASH_RUSSIA,
+        has_account_1 = all([
+            self.TELEGRAM_API_ID_ACCOUNT_1,
+            self.TELEGRAM_API_HASH_ACCOUNT_1,
         ])
-        has_ukraine = all([
-            self.TELEGRAM_API_ID_UKRAINE,
-            self.TELEGRAM_API_HASH_UKRAINE,
+        has_account_2 = all([
+            self.TELEGRAM_API_ID_ACCOUNT_2,
+            self.TELEGRAM_API_HASH_ACCOUNT_2,
         ])
-        return has_russia or has_ukraine
+        return has_account_1 or has_account_2
 
     def get_available_accounts(self) -> list[str]:
         """
         Get list of available Telegram accounts based on configuration.
 
         Returns:
-            List of account names (e.g., ['default'], ['default', 'russia', 'ukraine'])
+            List of account names (e.g., ['default'], ['default', 'account_1', 'account_2'])
         """
         accounts = []
 
@@ -485,13 +463,13 @@ class Settings(BaseSettings):
         if self.TELEGRAM_API_ID and self.TELEGRAM_API_HASH:
             accounts.append("default")
 
-        # Russia account
-        if self.TELEGRAM_API_ID_RUSSIA and self.TELEGRAM_API_HASH_RUSSIA:
-            accounts.append("russia")
+        # Account 1
+        if self.TELEGRAM_API_ID_ACCOUNT_1 and self.TELEGRAM_API_HASH_ACCOUNT_1:
+            accounts.append("account_1")
 
-        # Ukraine account
-        if self.TELEGRAM_API_ID_UKRAINE and self.TELEGRAM_API_HASH_UKRAINE:
-            accounts.append("ukraine")
+        # Account 2
+        if self.TELEGRAM_API_ID_ACCOUNT_2 and self.TELEGRAM_API_HASH_ACCOUNT_2:
+            accounts.append("account_2")
 
         return accounts
 
@@ -500,13 +478,13 @@ class Settings(BaseSettings):
         Get credentials for a specific Telegram account.
 
         Args:
-            account_name: "default", "russia", or "ukraine"
+            account_name: "default", "account_1", or "account_2"
 
         Returns:
             Dict with api_id, api_hash, phone or None if not configured
 
         Example:
-            >>> settings.get_account_credentials("russia")
+            >>> settings.get_account_credentials("account_1")
             {"api_id": 12345, "api_hash": "abc123", "phone": "+1234567890"}
         """
         if account_name == "default":
@@ -516,19 +494,19 @@ class Settings(BaseSettings):
                     "api_hash": self.TELEGRAM_API_HASH,
                     "phone": self.TELEGRAM_PHONE,
                 }
-        elif account_name == "russia":
-            if self.TELEGRAM_API_ID_RUSSIA and self.TELEGRAM_API_HASH_RUSSIA:
+        elif account_name == "account_1":
+            if self.TELEGRAM_API_ID_ACCOUNT_1 and self.TELEGRAM_API_HASH_ACCOUNT_1:
                 return {
-                    "api_id": self.TELEGRAM_API_ID_RUSSIA,
-                    "api_hash": self.TELEGRAM_API_HASH_RUSSIA,
-                    "phone": self.TELEGRAM_PHONE_RUSSIA,
+                    "api_id": self.TELEGRAM_API_ID_ACCOUNT_1,
+                    "api_hash": self.TELEGRAM_API_HASH_ACCOUNT_1,
+                    "phone": self.TELEGRAM_PHONE_ACCOUNT_1,
                 }
-        elif account_name == "ukraine":
-            if self.TELEGRAM_API_ID_UKRAINE and self.TELEGRAM_API_HASH_UKRAINE:
+        elif account_name == "account_2":
+            if self.TELEGRAM_API_ID_ACCOUNT_2 and self.TELEGRAM_API_HASH_ACCOUNT_2:
                 return {
-                    "api_id": self.TELEGRAM_API_ID_UKRAINE,
-                    "api_hash": self.TELEGRAM_API_HASH_UKRAINE,
-                    "phone": self.TELEGRAM_PHONE_UKRAINE,
+                    "api_id": self.TELEGRAM_API_ID_ACCOUNT_2,
+                    "api_hash": self.TELEGRAM_API_HASH_ACCOUNT_2,
+                    "phone": self.TELEGRAM_PHONE_ACCOUNT_2,
                 }
 
         return None
@@ -544,11 +522,11 @@ class Settings(BaseSettings):
             >>> settings.get_all_account_credentials()
             {
                 "default": {"api_id": 123, "api_hash": "abc", "phone": "+123"},
-                "russia": {"api_id": 456, "api_hash": "def", "phone": "+456"},
+                "account_1": {"api_id": 456, "api_hash": "def", "phone": "+456"},
             }
         """
         accounts = {}
-        for account_name in ["default", "russia", "ukraine"]:
+        for account_name in ["default", "account_1", "account_2"]:
             creds = self.get_account_credentials(account_name)
             if creds:
                 accounts[account_name] = creds

@@ -1,0 +1,102 @@
+# Caddyfile for tg-archiver - Development configuration
+# ============================================================================
+# Single entry point for all services at http://localhost
+# No HTTPS in development - Caddy handles routing only
+
+{
+    # Global options
+    admin off
+    auto_https off
+}
+
+:80 {
+    # ========================================================================
+    # API Routes
+    # ========================================================================
+    handle /api/* {
+        reverse_proxy api:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    # API documentation
+    handle /docs {
+        reverse_proxy api:8000
+    }
+
+    handle /redoc {
+        reverse_proxy api:8000
+    }
+
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    # ========================================================================
+    # Media Files - MinIO S3 Storage
+    # ========================================================================
+    # S3 keys are stored as "media/xx/yy/hash.jpg"
+    # Route: /media/xx/yy/hash.jpg → minio:9000/tg-archive-media/media/xx/yy/hash.jpg
+
+    handle /media/* {
+        # Rewrite to include bucket name before proxying
+        # /media/ab/cd/hash.jpg → /tg-archive-media/media/ab/cd/hash.jpg
+        rewrite * /tg-archive-media{uri}
+        reverse_proxy minio:9000 {
+            header_up Host minio:9000
+        }
+    }
+
+    # ========================================================================
+    # Static Assets & Frontend
+    # ========================================================================
+    handle /_next/* {
+        reverse_proxy frontend:3000
+    }
+
+    handle /static/* {
+        reverse_proxy frontend:3000
+    }
+
+    handle /favicon.ico {
+        reverse_proxy frontend:3000
+    }
+
+    # ========================================================================
+    # Frontend - Catch-all (Next.js handles routing)
+    # ========================================================================
+    handle /* {
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # ========================================================================
+    # Compression
+    # ========================================================================
+    encode {
+        gzip 6
+        zstd
+        minimum_length 1024
+    }
+
+    # ========================================================================
+    # Logging
+    # ========================================================================
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

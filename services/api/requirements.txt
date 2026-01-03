@@ -9,8 +9,10 @@ fastapi==0.127.1
 uvicorn[standard]==0.40.0
 
 # Authentication
-python-jose[cryptography]==3.5.0
+# PyJWT - actively maintained JWT library (replaced python-jose which was last updated 2020)
+PyJWT[crypto]==2.8.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # Pin bcrypt for passlib compatibility
 python-multipart==0.0.6
 
 # CORS
@@ -32,16 +34,8 @@ structlog==23.3.0
 # Validation
 email-validator==2.1.0
 
-# HTTP client (for calling Ollama)
-# ollama 0.4.7+ requires httpx>=0.27,<0.29
+# HTTP client
 httpx==0.28.1
-
-# LLM integration (for validation service)
-# ollama 0.4.7 supports httpx 0.28.x (unlike 0.4.3 which required <0.28)
-ollama==0.4.7
-
-# Vector support (for pgvector integration)
-pgvector==0.3.6
 
 # OpenAPI/Swagger docs (included with FastAPI)
 # GraphQL (Phase 2)

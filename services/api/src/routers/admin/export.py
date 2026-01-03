@@ -61,11 +61,7 @@ class ExportFilters(BaseModel):
         None, description="Start date (ISO format: YYYY-MM-DD)"
     )
     date_to: Optional[str] = Field(None, description="End date (ISO format: YYYY-MM-DD)")
-    importance_level: Optional[str] = Field(
-        None, description="Filter by importance (high/medium/low)"
-    )
-    topics: Optional[list[str]] = Field(None, description="Filter by OSINT topics")
-    is_spam: Optional[bool] = Field(None, description="Include/exclude spam")
+    topics: Optional[list[str]] = Field(None, description="Filter by message topics")
     has_media: Optional[bool] = Field(None, description="Filter by media presence")
     media_types: Optional[list[str]] = Field(
         None, description="Filter by media types (photo/video/document)"
@@ -85,7 +81,7 @@ class ExportRequest(BaseModel):
 
     export_type: str = Field(
         default="messages",
-        description="Type of data to export: messages, channels, entities, decision_log",
+        description="Type of data to export: messages, channels",
     )
     format: str = Field(
         default="json", description="Output format: json, csv, jsonl"
@@ -224,14 +220,8 @@ async def build_message_query_filters(
             pass
 
     # Classification filters
-    if filters.importance_level:
-        conditions.append(Message.importance_level == filters.importance_level)
-
     if filters.topics:
-        conditions.append(Message.osint_topic.in_(filters.topics))
-
-    if filters.is_spam is not None:
-        conditions.append(Message.is_spam == filters.is_spam)
+        conditions.append(Message.topic.in_(filters.topics))
 
     # Media filters
     if filters.has_media is not None:
@@ -339,7 +329,7 @@ async def get_export_profiles(admin: AdminUser) -> Dict[str, Any]:
         },
         "full": {
             "name": "Full",
-            "description": "All fields except embeddings and internal hashes",
+            "description": "All exportable fields except internal hashes",
             "columns": MESSAGE_EXPORT_PROFILES["full"],
             "estimated_size_per_row_bytes": 2000,
         },
@@ -355,7 +345,7 @@ async def get_export_profiles(admin: AdminUser) -> Dict[str, Any]:
     return {
         "profiles": profiles,
         "formats": ["json", "csv", "jsonl"],
-        "export_types": ["messages", "channels", "entities", "decision_log"],
+        "export_types": ["messages", "channels"],
     }
 
 

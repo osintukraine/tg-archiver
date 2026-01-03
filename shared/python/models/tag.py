@@ -35,10 +35,10 @@ class MessageTag(Base):
     - Manual tagging by analysts
 
     Tag types:
-    - keyword: Single-word descriptors (e.g., "tank", "civilian")
-    - topic: Broader categories (e.g., "military_operation", "humanitarian")
-    - entity: Named entities (e.g., "Bakhmut", "47th Brigade")
-    - emotion: Emotional tone (e.g., "fear", "hope", "anger")
+    - keyword: Single-word descriptors (e.g., "announcement", "update")
+    - topic: Broader categories (e.g., "news", "discussion")
+    - entity: Named entities (e.g., "company_name", "person_name")
+    - emotion: Emotional tone (e.g., "positive", "negative", "neutral")
     - urgency: Urgency indicators (e.g., "breaking", "developing")
     """
 
@@ -62,8 +62,8 @@ class MessageTag(Base):
     tag: Mapped[str] = mapped_column(
         String(100), nullable=False, index=True
     )  # Tag text (lowercase, normalized)
-    tag_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True
+    tag_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, server_default="keyword", index=True
     )  # 'keyword', 'topic', 'entity', 'emotion', 'urgency'
 
     # Confidence score (0.00-1.00)
@@ -74,10 +74,10 @@ class MessageTag(Base):
         index=True,
     )
 
-    # Generation metadata
-    generated_by: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # 'ollama:llama3.2', 'rule_based', 'manual'
+    # Generation source (renamed from generated_by to match DB)
+    source: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="llm"
+    )  # 'llm', 'rule_based', 'manual'
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(

@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from models import Channel, ImportJob, ImportJobChannel, ImportJobLog
 
@@ -449,12 +450,20 @@ async def upload_csv(
         )
         existing_usernames = {r[0].lower() for r in result.fetchall() if r[0]}
 
+    # Extract client IP (strip port if present)
+    client_ip = None
+    if request.client:
+        client_ip = request.client.host
+        # Handle cases where host includes port (e.g., from proxy)
+        if client_ip and ":" in client_ip and not client_ip.startswith("["):
+            client_ip = client_ip.split(":")[0]
+
     # Create import job
     job = ImportJob(
         filename=file.filename,
         status="uploading",
         total_channels=len(channels),
-        created_by_ip=request.client.host if request.client else None,
+        created_by_ip=client_ip,
         user_agent=request.headers.get("user-agent"),
     )
     db.add(job)
@@ -582,7 +591,9 @@ async def get_import_job(
         raise HTTPException(status_code=400, detail="Invalid job ID format")
 
     result = await db.execute(
-        select(ImportJob).where(ImportJob.id == job_uuid)
+        select(ImportJob)
+        .options(selectinload(ImportJob.channels))
+        .where(ImportJob.id == job_uuid)
     )
     job = result.scalar_one_or_none()
 

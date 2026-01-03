@@ -69,7 +69,7 @@ class RSSFeedGenerator:
         fg.link(href=feed_url, rel="self")
         fg.link(href=self.base_url, rel="alternate")
         fg.language("en")
-        fg.generator("OSINT Intelligence Platform RSS Engine")
+        fg.generator("Telegram Archive RSS Engine")
 
         # Add logo if available
         if hasattr(settings, "PLATFORM_LOGO_URL"):
@@ -112,11 +112,7 @@ class RSSFeedGenerator:
         if len(message.content or "") > 100:
             content_preview += "..."
 
-        # Include importance level in title if available
-        if message.importance_level:
-            title = f"[{message.importance_level.upper()}] {content_preview}"
-        else:
-            title = content_preview
+        title = content_preview
 
         fe.title(title)
 
@@ -136,13 +132,10 @@ class RSSFeedGenerator:
             description_parts.append(f"<p><strong>Translation:</strong></p>")
             description_parts.append(f"<p>{self._escape_html(message.content_translated)}</p>")
 
-        # OSINT metadata
-        if message.importance_level or message.osint_topic:
-            description_parts.append(f"<p><strong>OSINT Analysis:</strong></p>")
-            if message.importance_level:
-                description_parts.append(f"<p>Importance: {message.importance_level.upper()}</p>")
-            if message.osint_topic:
-                description_parts.append(f"<p>Topic: {message.osint_topic}</p>")
+        # Classification metadata
+        if message.topic:
+            description_parts.append(f"<p><strong>Classification:</strong></p>")
+            description_parts.append(f"<p>Topic: {message.topic}</p>")
 
         # Entities
         if message.entities:
@@ -166,11 +159,8 @@ class RSSFeedGenerator:
         fe.author(name=f"Channel {message.channel_id}")
 
         # Categories (topic classification)
-        if message.osint_topic:
-            fe.category(term=message.osint_topic)
-
-        if message.is_spam:
-            fe.category(term="spam")
+        if message.topic:
+            fe.category(term=message.topic)
 
         # Media enclosure (if has media)
         if message.media_type and message.media_url_telegram:

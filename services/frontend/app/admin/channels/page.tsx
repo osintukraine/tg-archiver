@@ -565,7 +565,6 @@ export default function ChannelsPage() {
               <div className="glass p-3 space-y-2">
                 <div className="text-sm font-medium text-text-secondary">Quality Metrics</div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>Spam Rate: {(selectedChannel.quality_metrics.spam_rate || 0).toFixed(1)}%</div>
                   <div>Off-topic Rate: {(selectedChannel.quality_metrics.off_topic_rate || 0).toFixed(1)}%</div>
                   <div>Total Messages: {selectedChannel.quality_metrics.total_messages_received || 0}</div>
                   <div>High Quality: {selectedChannel.quality_metrics.high_quality_messages || 0}</div>

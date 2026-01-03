@@ -11,7 +11,7 @@ Import jobs support:
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
@@ -19,8 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 
-if TYPE_CHECKING:
-    from typing import List
+# TYPE_CHECKING block removed - using lowercase list[] syntax
 
 
 class ImportJob(Base):
@@ -74,13 +73,13 @@ class ImportJob(Base):
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     # Relationships
-    channels: Mapped["List[ImportJobChannel]"] = relationship(
+    channels: Mapped[list["ImportJobChannel"]] = relationship(
         "ImportJobChannel",
         back_populates="import_job",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    logs: Mapped["List[ImportJobLog]"] = relationship(
+    logs: Mapped[list["ImportJobLog"]] = relationship(
         "ImportJobLog",
         back_populates="import_job",
         cascade="all, delete-orphan",

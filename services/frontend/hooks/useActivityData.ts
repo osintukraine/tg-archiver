@@ -10,6 +10,7 @@ import {
   ChannelsActivityData,
   VolumeTimeframe,
   TopicsTimeframe,
+  PlatformStats,
 } from '@/types/about';
 
 // Default pulse data when API unavailable
@@ -142,4 +143,46 @@ export const usePulseData = (refreshInterval = 30000) => {
   });
 
   return { pulse, isLoading, isFetching, error };
+};
+
+// Default platform stats when API unavailable
+const DEFAULT_STATS: PlatformStats = {
+  channels: 0,
+  messages: 0,
+  messages_formatted: '0',
+  media_size_bytes: 0,
+  media_size_formatted: '0 B',
+  timestamp: new Date().toISOString(),
+};
+
+/**
+ * Hook for fetching platform summary statistics.
+ * Provides lifetime totals for the platform.
+ */
+export const usePlatformStats = () => {
+  const query = useQuery<PlatformStats>({
+    queryKey: ['about', 'stats'],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/about/stats`);
+        if (!res.ok) {
+          console.error('Stats API error:', res.status);
+          return DEFAULT_STATS;
+        }
+        return res.json();
+      } catch (error) {
+        console.error('Stats fetch error:', error);
+        return DEFAULT_STATS;
+      }
+    },
+    staleTime: 60000, // 1 minute
+    gcTime: 300000, // 5 minutes
+    retry: 2,
+  });
+
+  return {
+    stats: query.data ?? DEFAULT_STATS,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 };

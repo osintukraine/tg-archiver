@@ -86,27 +86,26 @@ async def _fetch_pipeline_from_prometheus() -> dict:
     # Fetch all metrics in parallel
     raw = await asyncio.gather(
         # Pipeline active
-        prom.get_scalar("osint_pipeline_active", 0),
+        prom.get_scalar("tg_pipeline_active", 0),
 
         # Listener metrics
-        prom.get_scalar("osint:messages_processed:rate5m", 0),
+        prom.get_scalar("tg:messages_processed:rate5m", 0),
 
         # Queue metrics
-        prom.get_scalar("osint_queue_messages_pending", 0),
+        prom.get_scalar("tg_queue_messages_pending", 0),
         prom.get_scalar("redis_queue_depth", 0),
 
         # Processor metrics
-        prom.get_scalar("osint:messages_archived:rate5m", 0),
-        prom.get_scalar("histogram_quantile(0.95, rate(osint_processing_duration_seconds_bucket[5m]))", 0),
-        prom.get_scalar("osint_messages_spam_total", 0),
-        prom.get_scalar("osint_messages_archived_total", 0),
+        prom.get_scalar("tg:messages_archived:rate5m", 0),
+        prom.get_scalar("histogram_quantile(0.95, rate(tg_processing_duration_seconds_bucket[5m]))", 0),
+        prom.get_scalar("tg_messages_archived_total", 0),
 
         # Database
-        prom.get_scalar("osint_database_connections_active", 0),
+        prom.get_scalar("tg_database_connections_active", 0),
 
         # API
-        prom.get_scalar("rate(api_requests_total[5m])", 0),
-        prom.get_scalar("histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m]))", 0),
+        prom.get_scalar("rate(tg_api_requests_total[5m])", 0),
+        prom.get_scalar("histogram_quantile(0.95, rate(tg_api_request_duration_seconds_bucket[5m]))", 0),
 
         # Enrichment by task
         prom.query('enrichment_queue_depth'),
@@ -116,8 +115,8 @@ async def _fetch_pipeline_from_prometheus() -> dict:
         prom.query('enrichment_task_status'),
 
         # LLM
-        prom.get_scalar("osint:llm_requests:rate5m", 0),
-        prom.get_scalar("osint:llm_response:avg_duration_seconds", 0),
+        prom.get_scalar("tg:llm_requests:rate5m", 0),
+        prom.get_scalar("tg:llm_response:avg_duration_seconds", 0),
 
         return_exceptions=True
     )
@@ -168,13 +167,12 @@ async def _fetch_pipeline_from_prometheus() -> dict:
         "throughput": round(processor_throughput, 2),
         "latency_ms": round(processor_latency, 1) if processor_latency > 0 else None,
         "details": {
-            "spam_total": int(safe(6)),
-            "archived_total": int(safe(7))
+            "archived_total": int(safe(6))
         }
     })
 
     # 4. PostgreSQL
-    db_connections = int(safe(8))
+    db_connections = int(safe(7))
     stages.append({
         "id": "postgres",
         "name": "PostgreSQL",
@@ -184,8 +182,8 @@ async def _fetch_pipeline_from_prometheus() -> dict:
     })
 
     # 5. API Service
-    api_rps = safe(9)
-    api_latency = safe(10) * 1000
+    api_rps = safe(8)
+    api_latency = safe(9) * 1000
     stages.append({
         "id": "api",
         "name": "API Service",
@@ -197,11 +195,11 @@ async def _fetch_pipeline_from_prometheus() -> dict:
 
     # Build enrichment workers from vector results
     enrichment_workers = _build_enrichment_workers_dicts(
-        queue_depths=safe_list(11),
-        queue_lags=safe_list(12),
-        processed=safe_list(13),
-        errors=safe_list(14),
-        status=safe_list(15)
+        queue_depths=safe_list(10),
+        queue_lags=safe_list(11),
+        processed=safe_list(12),
+        errors=safe_list(13),
+        status=safe_list(14)
     )
 
     # Add enrichment as a stage
@@ -226,8 +224,8 @@ async def _fetch_pipeline_from_prometheus() -> dict:
     })
 
     # KPIs for the dashboard
-    llm_rate = safe(16)
-    llm_latency = safe(17)
+    llm_rate = safe(15)
+    llm_latency = safe(16)
     kpi = {
         "messages_per_second": round(listener_throughput, 2),
         "archive_rate": round(processor_throughput, 2),

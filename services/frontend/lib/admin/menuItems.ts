@@ -1,5 +1,7 @@
 // services/frontend/lib/admin/menuItems.ts
 
+import { RSS_ENABLED } from '@/lib/constants';
+
 /**
  * Admin Navigation Menu Items
  *
@@ -50,7 +52,8 @@ export const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
     header: 'Data',
     order: 2,
     items: [
-      { href: '/admin/feeds', title: 'RSS Feeds', icon: 'rss' },
+      // RSS Feeds only shown when external RSS feature is enabled
+      ...(RSS_ENABLED ? [{ href: '/admin/feeds', title: 'RSS Feeds', icon: 'rss', description: 'External news sources' }] : []),
       { href: '/admin/export', title: 'Data Export', icon: 'export' },
     ],
   },
@@ -66,7 +69,6 @@ export const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
     order: 4,
     items: [
       { href: '/admin/config', title: 'Platform Settings', icon: 'config', description: 'Runtime configuration' },
-      { href: '/admin/stats', title: 'Statistics', icon: 'stats' },
       { href: '/admin/audit', title: 'Audit Log', icon: 'audit' },
     ],
   },

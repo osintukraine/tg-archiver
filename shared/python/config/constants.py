@@ -1,5 +1,5 @@
 """
-Shared configuration constants for OSINT Intelligence Platform.
+Shared configuration constants for Telegram Archiver.
 
 This module centralizes magic numbers and default values that are used
 across multiple services. Services can override these via environment

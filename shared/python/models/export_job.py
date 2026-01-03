@@ -63,8 +63,8 @@ class ExportJob(Base):
     )
     # Example filters:
     # {"channel_ids": [1, 2, 3], "date_from": "2024-01-01", "date_to": "2024-12-31"}
-    # {"importance_level": "high", "topics": ["combat", "equipment"]}
-    # {"is_spam": false, "has_media": true}
+    # {"topics": ["news", "announcement"]}
+    # {"has_media": true}
 
     # Column selection (for custom profile)
     columns: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
@@ -164,9 +164,7 @@ MESSAGE_EXPORT_PROFILES = {
         "telegram_date",
         "views",
         "forwards",
-        "osint_topic",
-        "importance_level",
-        "is_spam",
+        "topic",
         "language_detected",
         "media_type",
     ],
@@ -192,32 +190,16 @@ MESSAGE_EXPORT_PROFILES = {
         "media_type",
         "media_url_telegram",
         "grouped_id",
-        "is_spam",
-        "spam_confidence",
-        "spam_reason",
-        "spam_type",
-        "osint_topic",
-        "importance_level",
-        "needs_human_review",
-        "reviewed_by",
-        "reviewed_at",
+        "topic",
         "entities",
-        "content_sentiment",
-        "content_urgency_level",
-        "content_complexity",
-        "key_phrases",
-        "summary",
         "created_at",
         "updated_at",
     ],
 }
 
-# Columns that should NEVER be exported (heavyweight data)
+# Columns that should NEVER be exported (heavyweight or internal data)
 EXPORT_EXCLUDED_COLUMNS = [
-    "content_embedding",  # ~6KB per row, useless outside vector search
     "search_vector",  # tsvector for search, internal use only
-    "embedding_model",  # Internal tracking
-    "embedding_generated_at",  # Internal tracking
     "hash_algorithm",  # Internal tracking
     "hash_generated_at",  # Internal tracking
     "hash_version",  # Internal tracking

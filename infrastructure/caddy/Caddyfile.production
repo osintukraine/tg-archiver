@@ -1,0 +1,132 @@
+# Caddyfile for tg-archiver - Production configuration
+# ============================================================================
+# HTTPS with automatic certificate management via Let's Encrypt
+# Replace {$DOMAIN} with your actual domain (e.g., archive.example.com)
+
+{
+    # Global options
+    admin off
+    # Email for Let's Encrypt notifications
+    email {$ACME_EMAIL:admin@example.com}
+}
+
+# Redirect HTTP to HTTPS
+http://{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} permanent
+}
+
+# Main HTTPS site
+https://{$DOMAIN} {
+    # ========================================================================
+    # Security Headers (additional to API middleware)
+    # ========================================================================
+    header {
+        # HSTS - enforce HTTPS for 1 year
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server header
+        -Server
+    }
+
+    # ========================================================================
+    # API Routes
+    # ========================================================================
+    handle /api/* {
+        reverse_proxy api:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    # API documentation
+    handle /docs {
+        reverse_proxy api:8000
+    }
+
+    handle /redoc {
+        reverse_proxy api:8000
+    }
+
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    # ========================================================================
+    # Media Files - MinIO S3 Storage
+    # ========================================================================
+    handle /media/* {
+        rewrite * /tg-archive-media{uri}
+        reverse_proxy minio:9000 {
+            header_up Host minio:9000
+        }
+    }
+
+    # ========================================================================
+    # Static Assets & Frontend
+    # ========================================================================
+    handle /_next/* {
+        reverse_proxy frontend:3000
+    }
+
+    handle /static/* {
+        reverse_proxy frontend:3000
+    }
+
+    handle /favicon.ico {
+        reverse_proxy frontend:3000
+    }
+
+    # ========================================================================
+    # Frontend - Catch-all (Next.js handles routing)
+    # ========================================================================
+    handle /* {
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    # ========================================================================
+    # Compression
+    # ========================================================================
+    encode {
+        gzip 6
+        zstd
+        minimum_length 1024
+    }
+
+    # ========================================================================
+    # Logging
+    # ========================================================================
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+
+    # ========================================================================
+    # TLS Configuration
+    # ========================================================================
+    tls {
+        # Use modern TLS only
+        protocols tls1.2 tls1.3
+        # Prefer server cipher suites
+        ciphers TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    }
+}

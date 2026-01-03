@@ -53,7 +53,6 @@ class OverviewMetrics(BaseModel):
 
     # Error rates
     enrichment_error_rate: float
-    spam_rate_percent: float
 
     # Service health summary
     services_healthy: int
@@ -81,7 +80,6 @@ def _empty_metrics(cached: bool = False) -> dict:
         "database_connections": 0,
         "redis_memory_mb": 0,
         "enrichment_error_rate": 0,
-        "spam_rate_percent": 0,
         "services_healthy": 0,
         "services_total": 0,
         "prometheus_available": False,
@@ -123,7 +121,6 @@ async def _fetch_overview_from_prometheus() -> dict:
 
         # Error rates
         prom.get_scalar(PrometheusMetrics.ERROR_ENRICHMENT_RATE, 0),
-        prom.get_scalar(PrometheusMetrics.ERROR_SPAM_RATE, 0),
 
         return_exceptions=True
     )
@@ -148,7 +145,6 @@ async def _fetch_overview_from_prometheus() -> dict:
     db_conns = int(safe_get(9))
     redis_mem = safe_get(10)
     error_rate = safe_get(11)
-    spam_rate = safe_get(12)
 
     # Calculate services health
     services_healthy = sum([
@@ -172,7 +168,6 @@ async def _fetch_overview_from_prometheus() -> dict:
         "database_connections": db_conns,
         "redis_memory_mb": round(redis_mem / (1024 * 1024), 1),
         "enrichment_error_rate": round(error_rate, 4),
-        "spam_rate_percent": round(spam_rate * 100, 1) if spam_rate < 1 else round(spam_rate, 1),
         "services_healthy": services_healthy,
         "services_total": 4,
         "prometheus_available": True,

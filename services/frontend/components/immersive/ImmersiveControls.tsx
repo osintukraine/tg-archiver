@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useImmersive } from '@/contexts/ImmersiveContext';
+import { RSS_ENABLED } from '@/lib/constants';
 
 export function ImmersiveControls() {
   const {
@@ -66,21 +67,25 @@ export function ImmersiveControls() {
               )}
             </button>
 
-            {/* RSS layer toggle */}
-            <button
-              onClick={() => toggleLayer('rss')}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
-                layers.rss
-                  ? 'bg-blue-500/80 text-white'
-                  : 'bg-black/60 text-white hover:bg-black/80'
-              }`}
-              title="Toggle RSS News Ticker"
-            >
-              <span className="text-sm font-medium">RSS</span>
-            </button>
+            {/* RSS layer toggle - only when RSS feature is enabled */}
+            {RSS_ENABLED && (
+              <>
+                <button
+                  onClick={() => toggleLayer('rss')}
+                  className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
+                    layers.rss
+                      ? 'bg-blue-500/80 text-white'
+                      : 'bg-black/60 text-white hover:bg-black/80'
+                  }`}
+                  title="Toggle RSS News Ticker"
+                >
+                  <span className="text-sm font-medium">RSS</span>
+                </button>
 
-            {/* Divider */}
-            <div className="w-px h-6 bg-white/20" />
+                {/* Divider */}
+                <div className="w-px h-6 bg-white/20" />
+              </>
+            )}
 
             {/* Sort mode toggle */}
             <button
@@ -190,19 +195,21 @@ export function ImmersiveControls() {
               </div>
             </div>
 
-            {/* Layer toggles explanation */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold text-cyan-400 uppercase tracking-wide mb-3">Overlay Layers</h3>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="bg-blue-500/80 text-white text-xs font-medium px-2 py-0.5 rounded">RSS</span>
-                    <span className="text-white">News Ticker</span>
+            {/* Layer toggles explanation - only when RSS feature is enabled */}
+            {RSS_ENABLED && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-cyan-400 uppercase tracking-wide mb-3">Overlay Layers</h3>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="bg-blue-500/80 text-white text-xs font-medium px-2 py-0.5 rounded">RSS</span>
+                      <span className="text-white">News Ticker</span>
+                    </div>
+                    <p className="text-white/60 text-xs">Shows latest RSS news headlines scrolling at the top. Click headlines to open articles.</p>
                   </div>
-                  <p className="text-white/60 text-xs">Shows latest RSS news headlines scrolling at the top. Click headlines to open articles.</p>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Queue controls explanation */}
             <div className="mb-6">

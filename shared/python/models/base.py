@@ -10,7 +10,7 @@ from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from shared.python.config import settings
+from config import settings
 
 # Naming convention for constraints (helps with Alembic migrations)
 convention = {

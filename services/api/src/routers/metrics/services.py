@@ -70,11 +70,11 @@ class ServicesMetrics(BaseModel):
 SERVICE_DEFINITIONS = [
     # Core services
     {"name": "listener", "display": "Telegram Listener", "category": "core",
-     "up_metric": "up{job='listener'}", "rate_metric": "osint:messages_processed:rate5m"},
+     "up_metric": "up{job='listener'}", "rate_metric": "tg:messages_processed:rate5m"},
     {"name": "processor", "display": "Processor Workers", "category": "core",
-     "up_metric": "up{job='processor'}", "rate_metric": "osint:messages_archived:rate5m"},
+     "up_metric": "up{job='processor'}", "rate_metric": "tg:messages_archived:rate5m"},
     {"name": "api", "display": "REST API", "category": "core",
-     "up_metric": "up{job='api'}", "rate_metric": "rate(api_requests_total[5m])"},
+     "up_metric": "up{job='api'}", "rate_metric": "rate(tg_api_requests_total[5m])"},
     {"name": "frontend", "display": "Next.js Frontend", "category": "core",
      "up_metric": "up{job='frontend'}"},
 

@@ -60,3 +60,13 @@ export interface ActivityData {
   channels: ChannelsActivityData;
   timestamp: string;
 }
+
+// Platform Stats Types (for /api/about/stats)
+export interface PlatformStats {
+  channels: number;
+  messages: number;
+  messages_formatted: string;
+  media_size_bytes: number;
+  media_size_formatted: string;
+  timestamp: string;
+}

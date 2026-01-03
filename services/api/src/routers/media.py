@@ -36,7 +36,7 @@ STORAGE_BASE_URL = os.environ.get("HETZNER_STORAGE_URL", "")
 # MINIO_PUBLIC_URL is browser-accessible (for redirects)
 # MINIO_URL is Docker-internal (for server-to-server communication)
 MINIO_PUBLIC_URL = os.environ.get("MINIO_PUBLIC_URL", "http://localhost:9000")
-MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "osint-media")
+MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "tg-media")
 
 # Redis connection pool for media routing (shared across workers)
 redis_pool: Optional[redis.ConnectionPool] = None
@@ -100,7 +100,7 @@ async def route_media_request(
 
     **Cache Strategy:**
     - Key format: media:route:{clean_hash}
-    - Value: storage_box_id (e.g., "russia-1", "ukraine-1", "default")
+    - Value: storage_box_id (e.g., "box-1", "box-2", "default")
     - TTL: 7 days (media locations rarely change)
     - Expected hit rate: 99%+ after warm-up period
 
@@ -128,8 +128,8 @@ async def route_media_request(
 
     Example:
         GET /api/media/internal/media-redirect/ab/cd/abcd1234.jpg
-        → 307 redirect to /minio-russia-1/osint-media/ab/cd/abcd1234.jpg (multi-box)
-        → 307 redirect to http://storage.example.com:8081/russia-1/ab/cd/abcd1234.jpg (legacy)
+        → 307 redirect to /minio-box-1/tg-media/ab/cd/abcd1234.jpg (multi-box)
+        → 307 redirect to http://storage.example.com:8081/box-1/ab/cd/abcd1234.jpg (legacy)
     """
     # Extract clean hash (remove path structure and extension)
     # "ab/cd/abcd1234.jpg" → "abcd1234"
@@ -182,10 +182,10 @@ async def route_media_request(
     # Production: Route to storage box's MinIO endpoint
     # Development: Single MinIO (minio:9000)
 
-    # Get MinIO endpoint from database for multi-box routing
+    # Get storage endpoint from database for multi-box routing
     box_result = await db.execute(
         text("""
-            SELECT minio_endpoint, minio_port
+            SELECT endpoint
             FROM storage_boxes
             WHERE id = :box_id
         """),
@@ -194,12 +194,11 @@ async def route_media_request(
     box_row = box_result.fetchone()
 
     if box_row and box_row[0]:
-        # Multi-box: route to specific MinIO container via Caddy
-        minio_host = box_row[0]
-        minio_port = box_row[1] or 9000
+        # Multi-box: route to specific storage endpoint via Caddy
+        storage_endpoint = box_row[0]
         # Use Caddy route for browser-accessible URL
         redirect_url = f"/minio-{storage_box}/{MINIO_BUCKET}/{file_hash}"
-        logger.debug(f"Multi-box routing: {storage_box} -> {minio_host}:{minio_port}")
+        logger.debug(f"Multi-box routing: {storage_box} -> {storage_endpoint}")
     elif STORAGE_BASE_URL:
         # Legacy: Hetzner storage URL
         redirect_url = f"{STORAGE_BASE_URL}/{storage_box}/{file_hash}"
@@ -224,7 +223,7 @@ async def invalidate_media_cache(file_hash: str) -> Dict[str, Any]:
     endpoint during storage operations that change file locations.
 
     **Common Use Cases:**
-    - Migrating files between storage boxes (russia-1 to ukraine-1)
+    - Migrating files between storage boxes (box-1 to box-2)
     - Rebalancing storage across boxes
     - Fixing incorrect routing after manual database updates
     - Testing cache behavior in development
@@ -341,7 +340,6 @@ async def get_media_gallery(
     ),
     # Standard filters
     channel_id: Optional[int] = Query(None, description="Filter by channel"),
-    importance_level: Optional[str] = Query(None, description="Filter by importance level (high/medium/low)"),
     topic: Optional[str] = Query(None, description="Filter by topic"),
     days: Optional[int] = Query(None, ge=1, le=365, description="Last N days"),
     # Pagination
@@ -362,13 +360,13 @@ async def get_media_gallery(
     """
     Get paginated media gallery with metadata.
 
-    Returns non-spam messages with media attachments, optimized for gallery views
+    Returns messages with media attachments, optimized for gallery views
     with infinite scroll pagination. Supports comprehensive filtering and sorting
     for building media-focused UI components.
 
     **Business Logic:**
-    1. Filter non-spam messages with media_type set (media present)
-    2. Apply optional filters: media_type, channel_id, importance_level, topic, date range
+    1. Filter messages with media_type set (media present)
+    2. Apply optional filters: media_type, channel_id, topic, date range
     3. Count total matching messages for pagination metadata
     4. Sort by created_at (platform ingestion time) or telegram_date (original post time)
     5. Apply pagination with offset/limit
@@ -377,8 +375,7 @@ async def get_media_gallery(
     **Filtering Options:**
     - media_type: photo, video, document, audio, voice, animation
     - channel_id: Database channel ID (FK to channels.id)
-    - importance_level: high, medium, low (LLM-classified)
-    - topic: OSINT topic tag (e.g., "military", "infrastructure")
+    - topic: Topic tag (e.g., "news", "discussion")
     - days: Messages from last N days (1-365)
 
     **Sorting:**
@@ -405,8 +402,7 @@ async def get_media_gallery(
     Args:
         media_type: Filter by media type (photo, video, document, audio, voice, animation)
         channel_id: Filter by channel database ID
-        importance_level: Filter by importance level (high, medium, low)
-        topic: Filter by OSINT topic tag
+        topic: Filter by topic tag
         days: Include messages from last N days (1-365)
         page: Page number (1-indexed)
         page_size: Items per page (1-100, default 30)
@@ -428,15 +424,14 @@ async def get_media_gallery(
         GET /api/media/gallery?media_type=photo&page_size=50
         → Returns first 50 photos with pagination metadata
 
-        GET /api/media/gallery?channel_id=1&importance_level=high&days=7
-        → Returns high-importance media from channel 1 in last 7 days
+        GET /api/media/gallery?channel_id=1&days=7
+        → Returns media from channel 1 in last 7 days
 
         GET /api/media/gallery?media_type=video&sort_by=telegram_date&sort_order=asc
         → Returns all videos sorted by original post date (oldest first)
     """
     # Build filters
     filters = [
-        Message.is_spam == False,
         Message.media_type.isnot(None),  # Only messages with media
     ]
 
@@ -444,10 +439,8 @@ async def get_media_gallery(
         filters.append(Message.media_type == media_type)
     if channel_id:
         filters.append(Message.channel_id == channel_id)
-    if importance_level is not None:
-        filters.append(Message.importance_level == importance_level)
     if topic:
-        filters.append(Message.osint_topic == topic)
+        filters.append(Message.topic == topic)
     if days:
         cutoff = datetime.utcnow() - timedelta(days=days)
         filters.append(Message.created_at >= cutoff)
@@ -460,16 +453,16 @@ async def get_media_gallery(
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
 
-    # Apply sorting
+    # Apply sorting with NULLS LAST for proper chronological order
     if sort_by == "telegram_date":
         sort_column = Message.telegram_date
     else:
         sort_column = Message.created_at
 
     if sort_order == "asc":
-        query = query.order_by(sort_column)
+        query = query.order_by(sort_column.nulls_last())
     else:
-        query = query.order_by(desc(sort_column))
+        query = query.order_by(desc(sort_column).nulls_last())
 
     # Apply pagination
     offset = (page - 1) * page_size
@@ -492,8 +485,7 @@ async def get_media_gallery(
                 message_id=message.id,
                 channel_id=message.channel_id,
                 content=content_preview,
-                importance_level=message.importance_level,
-                osint_topic=message.osint_topic,
+                topic=message.topic,
                 created_at=message.created_at,
                 # Media metadata (from Message table)
                 media_type=message.media_type,
@@ -537,7 +529,7 @@ async def get_media_stats(
     within specified time range.
 
     **Business Logic:**
-    1. Filter non-spam messages with media_type set
+    1. Filter messages with media_type set
     2. Apply optional channel_id filter
     3. Apply date range filter (created_at >= cutoff)
     4. Group by media_type and count messages
@@ -590,7 +582,7 @@ async def get_media_stats(
         GET /api/media/stats?channel_id=1&days=7
         → Returns media stats for channel 1 in last 7 days
     """
-    filters = [Message.is_spam == False, Message.media_type.isnot(None)]
+    filters = [Message.media_type.isnot(None)]
 
     if channel_id:
         filters.append(Message.channel_id == channel_id)

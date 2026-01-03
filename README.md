@@ -12,7 +12,7 @@ Archive messages from Telegram channels with media storage, translation support,
 - **Full-Text Search**: PostgreSQL tsvector-powered search across content and translations
 - **RSS Feeds**: Generate RSS/Atom/JSON feeds for archived channels
 - **Social Graph**: Track forwards, replies, comments, and engagement metrics
-- **Spam Filtering**: Built-in spam detection keeps archives clean
+- **Topic Classification**: Admin-defined topic taxonomy for message categorization
 - **Backfill**: Automatically fetch historical messages when adding new channels
 - **Self-Hosted**: Complete data sovereignty - your data stays on your infrastructure
 
@@ -169,7 +169,7 @@ docker-compose logs -f
 
 tg-archiver uses **Telegram's native folder feature** for channel management - no admin panel needed!
 
-### Adding Channels
+### Adding Channels (Folder Method)
 
 1. Find a channel in Telegram
 2. Long-press (mobile) or right-click (desktop) → **Add to Folder**
@@ -190,6 +190,57 @@ FOLDER_ARCHIVE_ALL_PATTERN=my-archive
 ```
 
 **Note:** Telegram folder names are limited to 12 characters.
+
+---
+
+## Bulk Channel Import (CSV)
+
+For importing many channels at once, use the CSV import feature in the admin panel.
+
+### How to Import
+
+1. Go to **Admin** → **Import Channels** (`/admin/import`)
+2. Prepare a CSV file with your channels
+3. Drag-and-drop or click to upload
+4. Review the validation results
+5. Select channels and target folders
+6. Click **Start Import**
+
+### CSV Format
+
+```csv
+channel_id,channel_username,target_folder,notes
+-1001234567890,channelname,tg-archiver,Optional notes
+,anotherchannel,tg-archiver,Username only (ID will be resolved)
+-1009876543210,,tg-archiver,ID only
+```
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| `channel_id` | One of ID or username | Telegram channel ID (negative number) |
+| `channel_username` | One of ID or username | Channel username (without @) |
+| `target_folder` | Yes | Target Telegram folder name |
+| `notes` | No | Optional notes for reference |
+
+### Import Process
+
+1. **Validation** - Each channel is validated (exists, accessible, not duplicate)
+2. **Folder Creation** - Target folders are created in Telegram if they don't exist
+3. **Channel Addition** - Channels are added to the specified folders
+4. **Monitoring Starts** - Listener automatically picks up new channels
+
+### Import Status
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Waiting to be processed |
+| `validating` | Checking channel accessibility |
+| `valid` | Ready to import |
+| `invalid` | Cannot be imported (see error) |
+| `importing` | Being added to folder |
+| `completed` | Successfully imported |
+| `failed` | Import failed (see error) |
+| `skipped` | Skipped (already monitored or deselected) |
 
 ---
 
@@ -400,6 +451,109 @@ POSTGRES_HOST=localhost python -m src.main
 cd services/frontend
 npm install
 npm run dev
+```
+
+---
+
+## Production Deployment
+
+### Security Checklist
+
+Before deploying to production, ensure you've configured proper security:
+
+#### 1. Generate Secure Secrets
+
+```bash
+# Generate JWT secret (64 characters minimum)
+openssl rand -hex 64
+
+# Generate Redis password
+openssl rand -base64 32
+
+# Generate PostgreSQL password
+openssl rand -base64 24
+```
+
+#### 2. Configure Production Environment
+
+Create or update your `.env` file:
+
+```bash
+# Environment mode
+ENVIRONMENT=production
+
+# Strong passwords (use generated values above)
+POSTGRES_PASSWORD=your_generated_postgres_password
+JWT_SECRET_KEY=your_generated_64_char_jwt_secret
+JWT_ADMIN_PASSWORD=your_strong_admin_password
+REDIS_PASSWORD=your_generated_redis_password
+MINIO_SECRET_KEY=your_minio_secret_at_least_32_chars
+
+# Security features
+CSRF_ENABLED=true
+TOKEN_BLACKLIST_FAIL_MODE=closed
+```
+
+#### 3. Enable HTTPS
+
+Use the production Caddyfile with automatic HTTPS:
+
+```bash
+# Set your domain
+export DOMAIN=archive.yourdomain.com
+export ACME_EMAIL=admin@yourdomain.com
+
+# Use production Caddy config
+cp infrastructure/caddy/Caddyfile.production infrastructure/caddy/Caddyfile
+```
+
+#### 4. Deploy
+
+```bash
+# Build with production settings
+docker-compose build
+
+# Start services
+docker-compose up -d
+
+# Verify all services are healthy
+docker-compose ps
+```
+
+### Security Features
+
+| Feature | Description | Config Variable |
+|---------|-------------|-----------------|
+| **HTTPS** | TLS 1.2+ with automatic Let's Encrypt | Caddyfile.production |
+| **Rate Limiting** | 5 login attempts per minute | Built-in |
+| **CSRF Protection** | Double-submit cookie pattern | `CSRF_ENABLED=true` |
+| **Token Invalidation** | Logout blacklists JWT tokens | Built-in |
+| **Secure Cookies** | HttpOnly, SameSite=Strict, Secure | `ENVIRONMENT=production` |
+| **Password Policy** | Minimum 8 characters | Built-in |
+| **Non-root Containers** | All services run as non-root | Built-in |
+| **Redis Auth** | Password-protected Redis | `REDIS_PASSWORD` |
+
+### Production Architecture
+
+```
+Internet → Caddy (HTTPS:443) → Internal Docker Network
+                │
+                ├── /api/*     → api:8000
+                ├── /media/*   → minio:9000
+                └── /*         → frontend:3000
+```
+
+Only Caddy is exposed to the internet. All other services communicate internally.
+
+### Backup Recommendations
+
+```bash
+# Database backup
+docker-compose exec postgres pg_dump -U archiver tg_archiver > backup.sql
+
+# Media backup (MinIO data)
+docker run --rm -v tg-archiver_minio_data:/data -v $(pwd):/backup \
+  alpine tar czf /backup/minio-backup.tar.gz /data
 ```
 
 ---

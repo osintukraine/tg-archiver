@@ -1,11 +1,10 @@
 """
-Message Model - Telegram messages with AI enrichment
+Message Model - Telegram messages
 
-Messages are enriched with:
-- Spam filtering (before expensive operations)
-- Language detection and translation (DeepL Pro)
-- OSINT value scoring (Ollama LLM)
-- Entity extraction (spaCy)
+Messages include:
+- Language detection and translation
+- Topic classification
+- Entity extraction (regex-based)
 """
 
 from datetime import datetime
@@ -14,7 +13,6 @@ from typing import Optional
 from sqlalchemy import (
     BigInteger,
     Boolean,
-    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -24,24 +22,24 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
+# Removed for tg-archiver (no embeddings)
+# from pgvector.sqlalchemy import Vector
 
 from .base import Base
 
 
 class Message(Base):
     """
-    Telegram messages with AI enrichment and optional translation.
+    Telegram messages with optional translation.
 
     Processing flow:
-    1. Spam filter (before downloading media or calling LLM)
-    2. Language detection
-    3. Translation (if needed and enabled)
-    4. Media archival (content-addressed storage)
-    5. LLM enrichment (OSINT scoring)
-    6. Entity extraction (spaCy)
+    1. Language detection
+    2. Translation (if needed and enabled)
+    3. Media archival (content-addressed storage)
+    4. Topic classification
+    5. Entity extraction
     """
 
     __tablename__ = "messages"
@@ -93,68 +91,20 @@ class Message(Base):
         BigInteger, nullable=True, index=True
     )  # Telegram's grouped_id for media albums
 
-    # Spam detection (runs BEFORE expensive operations)
-    is_spam: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    spam_confidence: Mapped[Optional[float]] = mapped_column(
-        Numeric(3, 2), nullable=True
-    )  # 0.00-1.00
-    spam_reason: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # Why was it marked as spam? e.g., "Financial spam: Bank card number detected"
-    spam_type: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True, index=True
-    )  # 'financial', 'promotional', 'off_topic'
-    spam_review_status: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True, index=True, default='pending'
-    )  # 'pending', 'reviewed', 'false_positive', 'true_positive', 'reprocessed'
-
-    # Hidden messages (auto-hidden off-topic propaganda)
+    # Hidden messages (admin moderation)
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
-    # LLM Classification (2025-11-30: Chain-of-thought semantic analysis)
-    osint_topic: Mapped[Optional[str]] = mapped_column(
+    # Admin overrides
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Topic classification (references message_topics.name)
+    topic: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True, index=True
-    )  # 'combat', 'equipment', 'casualties', 'infrastructure', 'humanitarian', 'diplomatic', 'general'
-    importance_level: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True, index=True
-    )  # 'high', 'medium', 'low' - LLM-classified importance
-
-    entities: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True
-    )  # spaCy extracted entities
-
-    # AI Enrichment - Vector embeddings (pgvector)
-    content_embedding: Mapped[Optional[Vector]] = mapped_column(
-        Vector(384), nullable=True
-    )  # 384-dimensional embeddings from all-MiniLM-L6-v2
-    embedding_model: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )  # Track which model generated embedding
-    embedding_generated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
     )
 
-    # AI Enrichment - Derived metadata from LLM analysis
-    content_sentiment: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # 'positive', 'negative', 'neutral', 'urgent'
-    content_urgency_level: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        CheckConstraint("content_urgency_level >= 0 AND content_urgency_level <= 100", name="urgency_level_range"),
-        nullable=True,
-        index=True,
-    )  # 0-100 urgency score
-    content_complexity: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )  # 'simple', 'moderate', 'complex'
-    key_phrases: Mapped[Optional[list[str]]] = mapped_column(
-        ARRAY(Text), nullable=True
-    )  # Array of extracted key phrases
-    summary: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )  # AI-generated summary (50-100 words)
-    summary_generated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    # Entity extraction (regex-based: hashtags, mentions, URLs)
+    entities: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True
     )
 
     # Selective archival metadata
@@ -225,14 +175,6 @@ class Message(Base):
     hash_generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     hash_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    # Event timeline (which event cluster this message belongs to)
-    # FK to events is defined at DB level (init.sql)
-    primary_event_id: Mapped[Optional[int]] = mapped_column(
-        BigInteger,
-        nullable=True,
-        index=True,
-    )
-
     # Relationships
     channel: Mapped["Channel"] = relationship("Channel", back_populates="messages", lazy="selectin")
     media: Mapped[list["MessageMedia"]] = relationship(
@@ -241,24 +183,9 @@ class Message(Base):
     tags: Mapped[list["MessageTag"]] = relationship(
         "MessageTag", back_populates="message", cascade="all, delete-orphan"
     )
-    entity_matches: Mapped[list["MessageEntity"]] = relationship(
-        "MessageEntity", back_populates="message", cascade="all, delete-orphan"
-    )
-    # Event relationships
-    event_links: Mapped[list["EventMessage"]] = relationship(
-        "EventMessage", back_populates="message", cascade="all, delete-orphan"
-    )
-    # Decision audit trail
-    decisions: Mapped[list["DecisionLog"]] = relationship(
-        "DecisionLog", back_populates="message", cascade="all, delete-orphan"
-    )
     # Comments from discussion groups
     comments: Mapped[list["MessageComment"]] = relationship(
         "MessageComment", back_populates="parent_message", cascade="all, delete-orphan"
-    )
-    # Viral tracking (for enhanced comment polling)
-    viral_tracking: Mapped[Optional["ViralPost"]] = relationship(
-        "ViralPost", back_populates="message", uselist=False, cascade="all, delete-orphan"
     )
 
     @property
@@ -288,4 +215,4 @@ class Message(Base):
         return None
 
     def __repr__(self) -> str:
-        return f"<Message(id={self.id}, channel_id={self.channel_id}, is_spam={self.is_spam}, importance={self.importance_level})>"
+        return f"<Message(id={self.id}, channel_id={self.channel_id}, message_id={self.message_id})>"

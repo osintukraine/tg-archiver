@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ExternalLink, Clock, User, Rss, RefreshCw } from 'lucide-react';
+import { RSS_ENABLED } from '@/lib/constants';
 
 // Use relative URLs when behind proxy, or NEXT_PUBLIC_API_URL for direct access
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -94,10 +96,18 @@ function ArticleCard({ article }: { article: RssArticle }) {
 }
 
 export default function NewsPage() {
+  const router = useRouter();
   const [articles, setArticles] = useState<RssArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hours, setHours] = useState(24);
+
+  // Redirect to home if RSS feature is disabled
+  useEffect(() => {
+    if (!RSS_ENABLED) {
+      router.replace('/');
+    }
+  }, [router]);
 
   const fetchArticles = useCallback(async () => {
     setLoading(true);

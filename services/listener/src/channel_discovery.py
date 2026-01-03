@@ -1,32 +1,26 @@
 """
-Channel Discovery Service - Folder-Based Management
+Channel Discovery Service - Folder-Based Management (tg-archiver)
 
-Automatically discovers channels from Telegram folders using native Telegram app.
-Eliminates admin panel by leveraging Telegram's built-in folder feature.
+Simplified channel discovery for tg-archiver standalone deployment.
+Discovers channels from a SINGLE Telegram folder configured via .env.
 
 Architecture:
-1. User creates folders in Telegram app (mobile/desktop)
-2. User drags channels into folders (uses PREFIX matching):
-   - "Archive*" → Archive everything after spam filter (e.g., "Archive", "Archive-UA", "Archive-RU")
-   - "Monitor*" → Archive only OSINT score ≥70 (e.g., "Monitor", "Monitor-UA", "Monitoring")
-   - "Test*" → Test environment (e.g., "Test", "Test-UA")
-   - "Staging*" → Staging environment (e.g., "Staging", "Staging-Prod")
+1. User creates a folder in Telegram app (e.g., "tg-archiver")
+2. User drags channels into the folder
 3. ChannelDiscovery reads folder structure via Telethon API
-4. Maps folder names to processing rules using regex prefix matching
-5. Syncs with PostgreSQL database
-6. Background task checks for changes every 5 minutes
+4. Matches ONLY the folder name from FOLDER_ARCHIVE_ALL_PATTERN
+5. All discovered channels get "archive_all" rule
+6. Background task syncs every 5 minutes
 
-Benefits:
-- No admin panel needed (saves 2-3 weeks development)
-- Channel names visible (not just IDs)
-- No duplicate detection (Telegram prevents adding same channel twice)
-- Mobile-friendly management
-- Scales from 10 to 1000+ channels easily
+Configuration (.env):
+    FOLDER_ARCHIVE_ALL_PATTERN=tg-archiver
+
+Note: This version uses EXACT folder name matching instead of regex patterns.
+Only one folder is monitored.
 """
 
 import asyncio
 import logging
-import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -45,8 +39,12 @@ from .backfill_service import BackfillService
 from config.settings import settings
 from models.base import AsyncSessionLocal
 from models.channel import Channel
+from audit.audit_logger import AuditLogger
 
 logger = logging.getLogger(__name__)
+
+# Audit logger for platform events
+audit = AuditLogger("listener")
 
 
 class ChannelDiscovery:
@@ -54,18 +52,13 @@ class ChannelDiscovery:
     Discovers channels from Telegram folders and syncs with database.
 
     Uses Telethon GetDialogFiltersRequest to read user's folder structure.
+    Simplified for tg-archiver: only monitors ONE folder (FOLDER_ARCHIVE_ALL_PATTERN).
     """
 
-    # Folder naming patterns mapped to processing rules
-    # Note: Telegram folder names limited to 12 characters
-    FOLDER_RULES = {
-        r"^Archive": "archive_all",  # Archive everything after spam filter (e.g., Archive-UA)
-        r"^Monitor": "selective_archive",  # Only high importance messages (e.g., Monitor-UA)
-        r"^Discover": "discovery",  # Auto-joined channels from forward chain (e.g., Discover-UA)
-    }
+    # tg-archiver: No hardcoded patterns - folder name comes from settings
 
     def __init__(
-        self, client: TelegramClient, backfill_service: Optional[BackfillService] = None, notifier=None
+        self, client: TelegramClient, backfill_service: Optional[BackfillService] = None
     ):
         """
         Initialize ChannelDiscovery.
@@ -73,11 +66,9 @@ class ChannelDiscovery:
         Args:
             client: Authenticated Telethon client
             backfill_service: Optional BackfillService for historical message fetching
-            notifier: Optional NotificationClient for emitting events
         """
         self.client = client
         self.backfill_service = backfill_service
-        self.notifier = notifier
         self._discovery_count = 0
 
     async def discover_channels(self) -> list[Channel]:
@@ -155,21 +146,6 @@ class ChannelDiscovery:
                             f"Discovered: {channel.name} (@{channel.username or 'private'}) "
                             f"in folder '{folder.title}' → rule '{rule}'"
                         )
-
-                        # Emit channel.discovered event
-                        if self.notifier:
-                            await self.notifier.emit(
-                                "channel.discovered",
-                                data={
-                                    "channel": channel.name,
-                                    "username": channel.username or "private",
-                                    "folder": folder.title.text,
-                                    "rule": rule,
-                                    "verified": channel.verified,
-                                },
-                                priority="default",
-                                tags=["discovery", "telegram"]
-                            )
 
                     except Exception as e:
                         logger.error(f"Error processing channel in folder: {e}")
@@ -274,6 +250,17 @@ class ChannelDiscovery:
                         f"Added new channel: {discovered.name} (@{discovered.username or 'private'})"
                     )
 
+                    # Log to audit trail
+                    await audit.log_channel_discovered(
+                        session=session,
+                        channel_id=discovered.telegram_id,
+                        channel_name=discovered.name,
+                        username=discovered.username,
+                        folder=discovered.folder,
+                        rule=discovered.rule,
+                        verified=discovered.verified,
+                    )
+
                     # Trigger backfill if enabled and mode is on_discovery
                     await self._trigger_backfill_if_enabled(discovered)
 
@@ -297,18 +284,14 @@ class ChannelDiscovery:
                     f"(@{channel.username or 'private'})"
                 )
 
-                # Emit channel.removed event
-                if self.notifier:
-                    await self.notifier.emit(
-                        "channel.removed",
-                        data={
-                            "channel": channel.name,
-                            "username": channel.username or "private",
-                            "folder": channel.folder,
-                        },
-                        priority="default",
-                        tags=["discovery", "telegram"]
-                    )
+                # Log to audit trail
+                await audit.log_channel_removed(
+                    session=session,
+                    channel_id=channel.id,
+                    channel_name=channel.name,
+                    username=channel.username,
+                    folder=channel.folder or "unknown",
+                )
 
             await session.commit()
 
@@ -323,6 +306,16 @@ class ChannelDiscovery:
                 f"{stats['removed']} removed, "
                 f"{stats['total_active']} total active"
             )
+
+            # Log sync stats to audit (only if there were changes)
+            if stats["added"] > 0 or stats["removed"] > 0:
+                await audit.log_sync_stats(
+                    session=session,
+                    added=stats["added"],
+                    updated=stats["updated"],
+                    removed=stats["removed"],
+                    total_active=stats["total_active"],
+                )
 
             return stats
 
@@ -368,23 +361,26 @@ class ChannelDiscovery:
 
     def _get_rule_for_folder(self, folder_name: str) -> Optional[str]:
         """
-        Determine processing rule based on folder name pattern.
+        Check if folder name matches the configured folder (exact match).
+
+        tg-archiver uses EXACT folder name matching from FOLDER_ARCHIVE_ALL_PATTERN.
+        Only one folder is monitored, and all channels get "archive_all" rule.
 
         Args:
             folder_name: Name of Telegram folder
 
         Returns:
-            Processing rule or None if no pattern matches
+            "archive_all" if folder matches, None otherwise
 
         Examples:
-            "Must-Archive-Russia" → "archive_all"
-            "Monitoring-Ukraine" → "selective_archive"
-            "Test-Channels" → "test"
-            "Personal" → None (no match)
+            Configured: FOLDER_ARCHIVE_ALL_PATTERN=tg-archiver
+            "tg-archiver" → "archive_all"
+            "Archive-UA" → None (no match)
+            "Discover-RU" → None (no match)
         """
-        for pattern, rule in self.FOLDER_RULES.items():
-            if re.match(pattern, folder_name, re.IGNORECASE):
-                return rule
+        # Exact match against configured folder name (case-insensitive)
+        if folder_name.lower() == settings.FOLDER_ARCHIVE_ALL_PATTERN.lower():
+            return "archive_all"
 
         return None
 
@@ -702,19 +698,6 @@ class ChannelDiscovery:
                     f"Gap backfill completed for {db_channel.name}: "
                     f"{stats.get('messages_fetched', 0)} messages fetched"
                 )
-
-                # Emit notification
-                if self.notifier:
-                    await self.notifier.emit(
-                        "channel.gap_filled",
-                        data={
-                            "channel": db_channel.name,
-                            "messages_fetched": stats.get("messages_fetched", 0),
-                            "gap_hours": (datetime.now(timezone.utc) - from_date).total_seconds() / 3600,
-                        },
-                        priority="default",
-                        tags=["backfill", "resilience"],
-                    )
 
         except FloodWaitError as e:
             logger.warning(

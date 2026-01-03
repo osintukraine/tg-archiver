@@ -21,8 +21,11 @@ import {
   ChevronRight,
   Loader2,
   Zap,
+  Database,
+  HardDrive,
+  MessageSquare,
 } from 'lucide-react';
-import { useActivityData } from '@/hooks/useActivityData';
+import { useActivityData, usePlatformStats } from '@/hooks/useActivityData';
 import {
   VolumeTimeframe,
   TopicsTimeframe,
@@ -154,6 +157,8 @@ export default function ActivityTab() {
     topicsTimeframe,
   });
 
+  const { stats, isLoading: statsLoading } = usePlatformStats();
+
   // Format X-axis labels based on granularity
   const formatXAxis = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -219,6 +224,40 @@ export default function ActivityTab() {
               pulse.status === 'slow' ? 'bg-yellow-500' : 'bg-gray-400'
             }`} />
             {pulse.status === 'active' ? 'Live' : pulse.status === 'slow' ? 'Slow' : 'Idle'}
+          </div>
+        </div>
+      </div>
+
+      {/* Platform Summary Stats */}
+      <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/50 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+          <Database className="w-5 h-5" />
+          Platform Summary
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Channels</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {statsLoading ? '...' : stats.channels.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" />
+              Total Messages
+            </div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {statsLoading ? '...' : stats.messages_formatted}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-1">
+              <HardDrive className="w-3 h-3" />
+              Media Storage
+            </div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {statsLoading ? '...' : stats.media_size_formatted}
+            </div>
           </div>
         </div>
       </div>

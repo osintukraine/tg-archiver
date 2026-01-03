@@ -1,5 +1,5 @@
 """
-Structured JSON Logging for OSINT Intelligence Platform.
+Structured JSON Logging for Telegram Archiver.
 
 Provides consistent JSON-formatted logs across all services for log aggregation (Loki).
 
@@ -11,12 +11,12 @@ Usage:
 
     # In any module:
     logger = get_logger(__name__)
-    logger.info("Processing message", extra={"message_id": 123, "channel": "militaryinfo"})
+    logger.info("Processing message", extra={"message_id": 123, "channel": "example_channel"})
 
 Output format:
     {"timestamp": "2025-12-01T00:45:00.123Z", "level": "INFO", "service": "processor",
      "logger": "message_processor", "message": "Processing message",
-     "message_id": 123, "channel": "militaryinfo", "trace_id": "abc123"}
+     "message_id": 123, "channel": "example_channel", "trace_id": "abc123"}
 """
 
 import logging

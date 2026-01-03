@@ -34,13 +34,18 @@ ENV PYTHONPATH="/shared/python:${PYTHONPATH}"
 # Copy service code
 COPY services/api/src ./src
 
-# Copy Alembic configuration and migrations for database initialization
-# This ensures migrations are available for fresh deployments
-COPY alembic.ini ./alembic.ini
-COPY migrations ./migrations
+# Note: No Alembic migrations - using init.sql for fresh installs
 
-# Create directories for logs
-RUN mkdir -p /var/log/api
+# Create non-root user for security
+RUN groupadd --system --gid 1001 api && \
+    useradd --system --uid 1001 --gid api api
+
+# Create directories for logs and set ownership
+RUN mkdir -p /var/log/api && \
+    chown -R api:api /app /var/log/api
+
+# Switch to non-root user
+USER api
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

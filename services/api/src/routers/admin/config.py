@@ -5,7 +5,7 @@ Provides runtime platform configuration management.
 Settings are stored in the database and grouped by category.
 """
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
@@ -47,26 +47,6 @@ class ConfigUpdateRequest(BaseModel):
 class ConfigBulkUpdateRequest(BaseModel):
     """Request to update multiple config values."""
     updates: Dict[str, str]  # key -> value
-
-
-class ModelConfigItem(BaseModel):
-    """Model configuration item."""
-    id: int
-    task: str
-    model_id: str
-    enabled: bool
-    priority: int
-    override_config: Optional[Dict[str, Any]]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
-
-
-class ModelConfigUpdateRequest(BaseModel):
-    """Request to update model configuration."""
-    model_id: Optional[str] = None
-    enabled: Optional[bool] = None
-    priority: Optional[int] = None
-    override_config: Optional[Dict[str, Any]] = None
 
 
 @router.get("/", response_model=ConfigListResponse)
@@ -405,284 +385,6 @@ async def bulk_update_config(
     }
 
 
-# Model Configuration Endpoints
-
-@router.get("/models/")
-async def get_model_configs(
-    admin: AdminUser,
-    task: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
-) -> List[ModelConfigItem]:
-    """
-    Get model configurations.
-
-    Returns LLM model configurations for AI enrichment tasks.
-    Each task (e.g., "classification", "tagging", "embedding") can have
-    multiple model configurations with different priorities for fallback.
-
-    Args:
-        admin: Authenticated admin user (from dependency injection)
-        task: Optional task filter (e.g., "classification", "tagging")
-        db: Database session (from dependency injection)
-
-    Returns:
-        List of ModelConfigItem ordered by task and priority.
-        Higher priority models are tried first in fallback chains.
-
-    Example Response:
-        [
-            {
-                "id": 1,
-                "task": "classification",
-                "model_id": "qwen2.5:3b",
-                "enabled": true,
-                "priority": 1,
-                "override_config": {"temperature": 0.7},
-                "created_at": "2024-01-01T00:00:00",
-                "updated_at": "2024-01-01T00:00:00"
-            }
-        ]
-
-    Security:
-        Only admin users can access this endpoint.
-    """
-    query = """
-        SELECT id, task, model_id, enabled, priority, override_config, created_at, updated_at
-        FROM model_configuration
-        WHERE 1=1
-    """
-    params = {}
-
-    if task:
-        query += " AND task = :task"
-        params["task"] = task
-
-    query += " ORDER BY task, priority"
-
-    result = await db.execute(text(query), params)
-    rows = result.fetchall()
-
-    return [
-        ModelConfigItem(
-            id=row[0],
-            task=row[1],
-            model_id=row[2],
-            enabled=row[3],
-            priority=row[4],
-            override_config=row[5],
-            created_at=row[6],
-            updated_at=row[7],
-        )
-        for row in rows
-    ]
-
-
-@router.get("/models/tasks")
-async def get_model_tasks(admin: AdminUser, db: AsyncSession = Depends(get_db)) -> List[Dict[str, Any]]:
-    """
-    Get distinct model tasks.
-
-    Returns summary of all AI tasks with model configuration counts.
-    Useful for building navigation UI or understanding which tasks have
-    configured models.
-
-    Args:
-        admin: Authenticated admin user (from dependency injection)
-        db: Database session (from dependency injection)
-
-    Returns:
-        List of dicts with task, model_count, and enabled_count fields.
-        Example:
-        [
-            {
-                "task": "classification",
-                "model_count": 3,
-                "enabled_count": 2
-            }
-        ]
-
-    Security:
-        Only admin users can access this endpoint.
-    """
-    result = await db.execute(text("""
-        SELECT DISTINCT task,
-               COUNT(*) as model_count,
-               SUM(CASE WHEN enabled THEN 1 ELSE 0 END) as enabled_count
-        FROM model_configuration
-        GROUP BY task
-        ORDER BY task
-    """))
-    return [
-        {"task": row[0], "model_count": row[1], "enabled_count": row[2]}
-        for row in result.fetchall()
-    ]
-
-
-@router.put("/models/{config_id}")
-async def update_model_config(
-    config_id: int,
-    request: ModelConfigUpdateRequest,
-    admin: AdminUser,
-    db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
-    """
-    Update model configuration.
-
-    Updates an existing model configuration with partial updates.
-    Only provided fields are updated - null/missing fields are ignored.
-    Useful for enabling/disabling models or adjusting priority without
-    changing other settings.
-
-    Args:
-        config_id: Model configuration ID (from model_configuration table)
-        request: Update request with optional fields
-        admin: Authenticated admin user (from dependency injection)
-        db: Database session (from dependency injection)
-
-    Returns:
-        Dict with success status and message.
-        Example: {"success": true, "message": "Model configuration updated"}
-
-    Raises:
-        HTTPException 404: Model configuration not found
-        HTTPException 400: No fields provided to update
-
-    Side Effects:
-        Updates model_configuration table and sets updated_at to current time.
-
-    Security:
-        Only admin users can access this endpoint.
-    """
-    updates = []
-    params = {"config_id": config_id}
-
-    if request.model_id is not None:
-        updates.append("model_id = :model_id")
-        params["model_id"] = request.model_id
-
-    if request.enabled is not None:
-        updates.append("enabled = :enabled")
-        params["enabled"] = request.enabled
-
-    if request.priority is not None:
-        updates.append("priority = :priority")
-        params["priority"] = request.priority
-
-    if request.override_config is not None:
-        updates.append("override_config = :override_config")
-        params["override_config"] = request.override_config
-
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    updates.append("updated_at = NOW()")
-
-    query = f"UPDATE model_configuration SET {', '.join(updates)} WHERE id = :config_id"
-    result = await db.execute(text(query), params)
-    await db.commit()
-
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Model config not found")
-
-    return {"success": True, "message": "Model configuration updated"}
-
-
-@router.post("/models/")
-async def create_model_config(
-    admin: AdminUser,
-    task: str = Query(...),
-    model_id: str = Query(...),
-    enabled: bool = True,
-    priority: int = 1,
-    db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
-    """
-    Create new model configuration.
-
-    Adds a new LLM model configuration for an AI enrichment task.
-    Models with higher priority are tried first in fallback chains.
-    This enables multi-model fallback strategies for improved reliability.
-
-    Args:
-        admin: Authenticated admin user (from dependency injection)
-        task: Task name (e.g., "classification", "tagging", "embedding")
-        model_id: Ollama model ID (e.g., "qwen2.5:3b", "llama2:7b")
-        enabled: Whether model is active (default: True)
-        priority: Priority order for fallback (higher = tried first, default: 1)
-        db: Database session (from dependency injection)
-
-    Returns:
-        Dict with success status, new config ID, and message.
-        Example: {"success": true, "id": 5, "message": "Created model config for classification"}
-
-    Raises:
-        HTTPException 409: Configuration already exists for this task/model combination
-
-    Side Effects:
-        Inserts new row into model_configuration table.
-
-    Security:
-        Only admin users can access this endpoint.
-    """
-    # Check if already exists
-    check = await db.execute(text(
-        "SELECT id FROM model_configuration WHERE task = :task AND model_id = :model_id"
-    ), {"task": task, "model_id": model_id})
-    if check.fetchone():
-        raise HTTPException(status_code=409, detail="Configuration already exists for this task/model")
-
-    result = await db.execute(text("""
-        INSERT INTO model_configuration (task, model_id, enabled, priority)
-        VALUES (:task, :model_id, :enabled, :priority)
-        RETURNING id
-    """), {"task": task, "model_id": model_id, "enabled": enabled, "priority": priority})
-    await db.commit()
-
-    new_id = result.scalar()
-    return {"success": True, "id": new_id, "message": f"Created model config for {task}"}
-
-
-@router.delete("/models/{config_id}")
-async def delete_model_config(
-    admin: AdminUser,
-    config_id: int,
-    db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
-    """
-    Delete model configuration.
-
-    Removes a model configuration from the system.
-    Use this to clean up unused model configs or remove deprecated models.
-
-    Args:
-        admin: Authenticated admin user (from dependency injection)
-        config_id: Model configuration ID to delete
-        db: Database session (from dependency injection)
-
-    Returns:
-        Dict with success status and message.
-        Example: {"success": true, "message": "Model configuration deleted"}
-
-    Raises:
-        HTTPException 404: Model configuration not found
-
-    Side Effects:
-        Permanently deletes row from model_configuration table.
-
-    Security:
-        Only admin users can access this endpoint.
-    """
-    result = await db.execute(text(
-        "DELETE FROM model_configuration WHERE id = :config_id"
-    ), {"config_id": config_id})
-    await db.commit()
-
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Model config not found")
-
-    return {"success": True, "message": "Model configuration deleted"}
-
-
 # Environment Variables Endpoint
 
 ENV_VAR_ALLOWLIST: Dict[str, str] = {
@@ -692,8 +394,6 @@ ENV_VAR_ALLOWLIST: Dict[str, str] = {
     "REDIS_HOST": "Redis cache host",
     "REDIS_PORT": "Redis cache port",
     "MINIO_ENDPOINT": "MinIO S3-compatible storage endpoint",
-    "OLLAMA_HOST": "Ollama LLM server host",
-    "LLM_MODEL": "Default LLM model for classification",
     "TELEGRAM_SESSION_NAME": "Telegram session identifier",
     "LOG_LEVEL": "Application logging level",
     "ENVIRONMENT": "Deployment environment (development/production)",
@@ -781,7 +481,7 @@ async def get_env_vars(admin: AdminUser) -> EnvVarsResponse:
 
     Environment variables are divided into two categories:
     1. Allowlisted variables (defined in ENV_VAR_ALLOWLIST)
-    2. OSINT_* prefixed variables (platform-specific overrides)
+    2. TG_* prefixed variables (platform-specific overrides)
 
     Args:
         admin: Authenticated admin user (from dependency injection)
@@ -799,7 +499,7 @@ async def get_env_vars(admin: AdminUser) -> EnvVarsResponse:
     Security:
         Only admin users can access this endpoint.
         Secret values are masked using mask_value() function.
-        Only allowlisted and OSINT_* variables are exposed.
+        Only allowlisted and TG_* variables are exposed.
 
     Important:
         This endpoint is read-only. Environment variables cannot be modified
@@ -820,9 +520,9 @@ async def get_env_vars(admin: AdminUser) -> EnvVarsResponse:
                 is_secret=is_secret_key(key),
             ))
 
-    # Also include any OSINT_* prefixed vars
+    # Also include any TG_* prefixed vars
     for key, value in os.environ.items():
-        if key.startswith("OSINT_") and key not in ENV_VAR_ALLOWLIST:
+        if key.startswith("TG_") and key not in ENV_VAR_ALLOWLIST:
             result.append(EnvVarItem(
                 key=key,
                 value=mask_value(key, value),

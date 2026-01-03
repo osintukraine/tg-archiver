@@ -62,7 +62,7 @@ python3 scripts/telegram_auth.py
 1. `listener/src/telegram_listener.py` receives Telegram events
 2. Serializes to JSON, publishes to Redis Stream `telegram:messages`
 3. `processor/src/redis_consumer.py` consumes in consumer group
-4. `processor/src/message_processor.py` orchestrates: spam check → media download → DB persist
+4. `processor/src/message_processor.py` orchestrates: entity extraction → media download → DB persist
 5. `processor/src/media_archiver.py` downloads to MinIO with SHA-256 deduplication
 
 ### Channel Discovery

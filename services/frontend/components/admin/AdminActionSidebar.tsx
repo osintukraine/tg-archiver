@@ -16,7 +16,6 @@ import { AdminNoteModal } from './modals/AdminNoteModal';
  *
  * tg-archiver provides these moderation capabilities:
  * - Hide/Unhide messages from public view
- * - Mark as spam/unspam
  * - Delete messages (soft delete)
  * - Add admin notes
  * - Categorize messages with topics
@@ -26,7 +25,6 @@ interface MessageActionInfo {
   message_id: number;
   is_hidden: boolean;
   is_deleted: boolean;
-  is_spam: boolean;
   topic: string | null;
   admin_notes: string | null;
   history: Array<{
@@ -174,20 +172,6 @@ export function AdminActionSidebar() {
     }, 'delete');
   };
 
-  const handleSpam = () => {
-    if (info?.is_spam) {
-      executeAction('unspam');
-    } else {
-      showConfirmModal({
-        title: 'Mark as Spam',
-        message: 'This will override the AI spam classification and mark the message as spam.',
-        action: 'spam',
-        requireReason: true,
-        variant: 'warning',
-      }, 'spam');
-    }
-  };
-
   const handleConfirmAction = (reason?: string) => {
     if (!pendingAction) return;
     executeAction(pendingAction, reason ? { reason } : undefined);
@@ -284,9 +268,6 @@ export function AdminActionSidebar() {
                     {info.is_deleted && (
                       <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">Deleted</span>
                     )}
-                    {info.is_spam && (
-                      <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded">Spam</span>
-                    )}
                     {info.topic && (
                       <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
                         Topic: {info.topic}
@@ -317,13 +298,6 @@ export function AdminActionSidebar() {
                       onClick={handleDelete}
                       variant="danger"
                       disabled={loading || info?.is_deleted}
-                    />
-                    <ActionButton
-                      icon="🚫"
-                      label={info?.is_spam ? 'Unspam' : 'Spam'}
-                      onClick={handleSpam}
-                      active={info?.is_spam}
-                      disabled={loading}
                     />
                     <ActionButton
                       icon="📝"

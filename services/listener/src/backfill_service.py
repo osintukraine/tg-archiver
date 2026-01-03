@@ -59,7 +59,6 @@ class BackfillService:
         db: AsyncSession,
         redis_queue=None,  # Optional: For queueing backfilled messages
         media_archiver=None,  # Optional: For downloading media
-        notifier=None,  # Optional: For emitting events
     ):
         """
         Initialize backfill service.
@@ -69,13 +68,11 @@ class BackfillService:
             db: Database session for tracking progress
             redis_queue: Optional Redis queue for backfilled messages
             media_archiver: Optional MediaArchiver for downloading media
-            notifier: Optional NotificationClient for emitting events
         """
         self.client = client
         self.db = db
         self.redis_queue = redis_queue
         self.media_archiver = media_archiver
-        self.notifier = notifier
 
         # Configuration from .env
         self.batch_size = settings.BACKFILL_BATCH_SIZE  # Messages per batch
@@ -130,20 +127,6 @@ class BackfillService:
             f"Starting backfill for channel {channel.telegram_id} "
             f"from {from_date} to {to_date}"
         )
-
-        # Emit backfill.started event
-        if self.notifier:
-            await self.notifier.emit(
-                "backfill.started",
-                data={
-                    "channel": channel.name or f"Channel {channel.telegram_id}",
-                    "channel_id": channel.telegram_id,
-                    "from_date": from_date.isoformat(),
-                    "to_date": to_date.isoformat(),
-                },
-                priority="default",
-                tags=["backfill", "telegram"]
-            )
 
         # Update channel status
         channel.backfill_status = "in_progress"
@@ -209,19 +192,6 @@ class BackfillService:
                             f"for channel {channel.telegram_id}"
                         )
 
-                        # Emit backfill.progress event
-                        if self.notifier:
-                            await self.notifier.emit(
-                                "backfill.progress",
-                                data={
-                                    "channel": channel.name or f"Channel {channel.telegram_id}",
-                                    "channel_id": channel.telegram_id,
-                                    "messages_fetched": stats["messages_fetched"],
-                                },
-                                priority="low",  # Low priority for progress updates
-                                tags=["backfill", "telegram"]
-                            )
-
                     # Rate limiting: delay between batches
                     if stats["messages_fetched"] % self.batch_size == 0:
                         await asyncio.sleep(self.delay_ms / 1000.0)
@@ -264,20 +234,6 @@ class BackfillService:
                 f"Backfill completed for channel {channel.telegram_id}: "
                 f"{stats['messages_fetched']} messages in {duration:.1f}s"
             )
-
-            # Emit backfill.completed event
-            if self.notifier:
-                await self.notifier.emit(
-                    "backfill.completed",
-                    data={
-                        "channel": channel.name or f"Channel {channel.telegram_id}",
-                        "channel_id": channel.telegram_id,
-                        "messages_fetched": stats["messages_fetched"],
-                        "duration_seconds": duration,
-                    },
-                    priority="default",
-                    tags=["backfill", "telegram"]
-                )
 
             return {
                 **stats,
@@ -339,20 +295,6 @@ class BackfillService:
                 duration,
                 "failed",
             )
-
-            # Emit backfill.failed event
-            if self.notifier:
-                await self.notifier.emit(
-                    "backfill.failed",
-                    data={
-                        "channel": channel.name or f"Channel {channel.telegram_id}",
-                        "channel_id": channel.telegram_id,
-                        "error": str(e),
-                        "messages_fetched": stats["messages_fetched"],
-                    },
-                    priority="high",  # Important to know about failures
-                    tags=["backfill", "telegram", "error"]
-                )
 
             return {
                 **stats,
@@ -588,7 +530,7 @@ class BackfillService:
 
     async def _queue_for_processing(self, message: Message, channel: Channel) -> None:
         """
-        Queue backfilled message for processing (spam filter, OSINT scoring, etc.).
+        Queue backfilled message for processing.
 
         Args:
             message: Message model instance

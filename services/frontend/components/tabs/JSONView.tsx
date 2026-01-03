@@ -69,16 +69,6 @@ function getCleanMessageData(message: Message): Record<string, unknown> {
   }
   if (Object.keys(social).length) clean.social = social;
 
-  // Spam detection (only if flagged)
-  if (message.is_spam) {
-    clean.spam = {
-      is_spam: true,
-      ...(message.spam_confidence && { confidence: message.spam_confidence }),
-      ...(message.spam_reason && { reason: message.spam_reason }),
-      ...(message.spam_type && { type: message.spam_type }),
-    };
-  }
-
   // Extracted entities (hashtags, mentions, URLs)
   if (message.entities && Object.keys(message.entities).length) {
     clean.entities = message.entities;

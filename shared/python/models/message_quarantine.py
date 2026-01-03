@@ -1,7 +1,7 @@
 """
-MessageQuarantine Model - Off-topic/suspected spam holding table.
+MessageQuarantine Model - Off-topic content holding table.
 
-Messages failing Ukraine relevance check are held here for human review.
+Messages failing relevance check are held here for human review.
 7-day auto-expiry. Human decisions feed back to LLM as few-shot examples.
 """
 
@@ -30,8 +30,8 @@ class MessageQuarantine(Base):
     """
     Quarantined message awaiting human review.
 
-    Off-topic or suspected spam messages are held here instead of
-    going to the main messages table. Human review in NocoDB can:
+    Off-topic messages are held here instead of going to the main messages
+    table. Human review in NocoDB can:
     - Approve: Copy to messages table
     - Reject: Mark rejected, expires naturally
     - Expire: Auto-deleted after 7 days if no action
@@ -39,7 +39,7 @@ class MessageQuarantine(Base):
     Attributes:
         channel_id: Reference to channels table
         telegram_message_id: Original Telegram message ID
-        quarantine_reason: Why quarantined (off_topic, spam_suspected, low_confidence)
+        quarantine_reason: Why quarantined (off_topic, low_confidence)
         review_status: pending, approved, rejected, expired
     """
 

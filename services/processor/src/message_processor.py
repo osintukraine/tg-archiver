@@ -7,7 +7,7 @@ Orchestrates message processing pipeline WITHOUT any AI dependencies:
 3. Translation (if enabled)
 4. PostgreSQL persistence
 
-NO LLM classification, NO spam filtering, NO quarantine system.
+NO LLM classification, NO quarantine system.
 All messages from monitored channels are archived.
 
 Processing Flow:
@@ -60,7 +60,7 @@ from models.base import AsyncSessionLocal
 from models.message import Message
 
 from .entity_extractor import EntityExtractor
-from .media_archiver import MediaArchiver
+from media_archiver import MediaArchiver  # From shared/python
 from .message_router import MessageRouter, ProcessingRule
 from .redis_consumer import ProcessedMessage
 
@@ -91,7 +91,6 @@ class MessageProcessor:
     3. Media archival to MinIO with SHA-256 deduplication
     4. PostgreSQL persistence with full-text search indexing
 
-    No spam filtering, no topic classification, no importance ranking.
     Every message from monitored channels gets archived.
     """
 
@@ -102,7 +101,6 @@ class MessageProcessor:
         media_archiver: Optional[MediaArchiver] = None,
         telegram_client: Optional[TelegramClient] = None,
         translation_service=None,
-        notifier=None,
     ):
         """
         Initialize the message processor with required pipeline components.
@@ -113,14 +111,12 @@ class MessageProcessor:
             media_archiver: Handles media download and S3 storage with SHA-256 dedup.
             telegram_client: TelegramClient for downloading media files.
             translation_service: DeepL translation service for non-English content.
-            notifier: NotificationClient for emitting real-time events.
         """
         self.message_router = message_router
         self.entity_extractor = entity_extractor
         self.media_archiver = media_archiver
         self.telegram_client = telegram_client
         self.translation_service = translation_service
-        self.notifier = notifier
 
         # Statistics
         self.messages_processed = 0
@@ -132,7 +128,7 @@ class MessageProcessor:
         """
         Process a single message through the archival pipeline.
 
-        All messages are archived (no spam filtering). Pipeline stages:
+        All messages are archived. Pipeline stages:
         1. Phantom message check (skip if no content AND no media)
         2. Entity extraction (regex-based)
         3. Translation (if enabled)
@@ -223,19 +219,6 @@ class MessageProcessor:
 
                 logger.debug(f"Extracted {entity_count} entities")
 
-                if self.notifier and entity_count > 0:
-                    await self.notifier.emit(
-                        "entity.extracted",
-                        data={
-                            "message_id": message.message_id,
-                            "channel_id": message.channel_id,
-                            "entity_count": entity_count,
-                            "entity_types": list(entities.keys()),
-                        },
-                        priority="min",
-                        tags=["entities", "extraction"]
-                    )
-
                 # Step 4: Translation (if enabled)
                 translated_content = None
                 translation_metadata = {}
@@ -243,23 +226,20 @@ class MessageProcessor:
                 if message.content and routing_decision.should_translate:
                     if self.translation_service:
                         try:
-                            result = await self.translation_service.translate(
+                            text, method, confidence = await self.translation_service.translate(
                                 text=message.content,
-                                target_language="en",
                             )
 
-                            translated_content = result.translated_text
-                            translation_metadata = {
-                                "provider": result.provider.value,
-                                "source_lang": result.source_language,
-                                "target_lang": result.target_language,
-                                "cost_usd": result.cost_usd,
-                            }
+                            if text:
+                                translated_content = text
+                                translation_metadata = {
+                                    "provider": method,
+                                    "target_lang": "en",
+                                }
 
-                            logger.debug(
-                                f"Translated message {message.message_id}: "
-                                f"{result.source_language} → {result.target_language}"
-                            )
+                                logger.debug(
+                                    f"Translated message {message.message_id} via {method}"
+                                )
 
                         except Exception as e:
                             logger.error(f"Translation failed for message {message.message_id}: {e}")
@@ -285,20 +265,6 @@ class MessageProcessor:
 
                                 if media_file_ids:
                                     logger.info(f"Archived album: {len(media_file_ids)} files")
-
-                                    if self.notifier:
-                                        await self.notifier.emit(
-                                            "media.downloaded",
-                                            data={
-                                                "message_id": message.message_id,
-                                                "channel_id": message.channel_id,
-                                                "media_type": message.media_type,
-                                                "grouped_id": message.grouped_id,
-                                                "media_count": len(media_file_ids),
-                                            },
-                                            priority="low",
-                                            tags=["media", "download", "album"]
-                                        )
                             else:
                                 # SINGLE MESSAGE: Download one media file
                                 telegram_messages = await self.telegram_client.get_messages(
@@ -317,19 +283,6 @@ class MessageProcessor:
                                     if media_file_id:
                                         media_file_ids = [media_file_id]
                                         logger.info(f"Archived media (file_id={media_file_id})")
-
-                                        if self.notifier:
-                                            await self.notifier.emit(
-                                                "media.downloaded",
-                                                data={
-                                                    "message_id": message.message_id,
-                                                    "channel_id": message.channel_id,
-                                                    "media_type": message.media_type,
-                                                    "media_file_id": media_file_id,
-                                                },
-                                                priority="low",
-                                                tags=["media", "download"]
-                                            )
 
                         except Exception as e:
                             logger.error(f"Failed to archive media: {e}")
@@ -380,19 +333,6 @@ class MessageProcessor:
                     f"Message archived: message_id={message.message_id}, "
                     f"has_media={bool(media_file_ids)}"
                 )
-
-                if self.notifier:
-                    await self.notifier.emit(
-                        "message.archived",
-                        data={
-                            "message_id": message.message_id,
-                            "channel_id": message.channel_id,
-                            "has_media": bool(media_file_ids),
-                            "entity_count": len(entities),
-                        },
-                        priority="default",
-                        tags=["archive", "message"]
-                    )
 
                 return True
 
@@ -473,7 +413,7 @@ class MessageProcessor:
             forward_date=forward_date_parsed,
         )
 
-        # Create Message record (simplified - no spam/topic/importance fields)
+        # Create Message record
         db_message = Message(
             message_id=message.message_id,
             channel_id=db_channel_id,
@@ -482,11 +422,8 @@ class MessageProcessor:
             views=message.views,
             forwards=message.forwards,
             grouped_id=message.grouped_id,
-            # No spam detection fields
-            is_spam=False,
-            # No LLM Classification fields
-            osint_topic=None,
-            importance_level=None,
+            # Topic classification (set via admin)
+            topic=None,
             # Entities
             entities=entities,
             # Media
@@ -531,9 +468,7 @@ class MessageProcessor:
                 grouped_id=db_message.grouped_id,
                 views=db_message.views,
                 forwards=db_message.forwards,
-                is_spam=db_message.is_spam,
-                osint_topic=db_message.osint_topic,
-                importance_level=db_message.importance_level,
+                topic=db_message.topic,
                 entities=db_message.entities,
                 media_type=db_message.media_type,
                 media_url_telegram=db_message.media_url_telegram,
@@ -585,19 +520,20 @@ class MessageProcessor:
                 db_message.id = inserted_id
                 logger.debug(f"Message inserted: id={inserted_id}")
 
-            # Create message_media links
+            # Create message_media links (with position for album ordering)
             if media_file_ids:
                 from models.media import MessageMedia
 
                 if not db_message.id:
                     raise ValueError(f"message_id is None for message {message.message_id}")
 
-                for media_file_id in media_file_ids:
+                for position, media_file_id in enumerate(media_file_ids):
                     media_insert_stmt = insert(MessageMedia).values(
                         message_id=db_message.id,
-                        media_id=media_file_id,
+                        media_file_id=media_file_id,
+                        position=position,  # Track album position for proper ordering
                     ).on_conflict_do_nothing(
-                        index_elements=['message_id', 'media_id']
+                        index_elements=['message_id', 'media_file_id']
                     )
                     await session.execute(media_insert_stmt)
 

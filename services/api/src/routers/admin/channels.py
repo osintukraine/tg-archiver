@@ -1,7 +1,7 @@
 """
 Admin Channels API
 
-Provides channel management with quality metrics and discovery status.
+Provides channel management with categories and quality metrics.
 """
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -18,17 +18,17 @@ from ...dependencies import AdminUser
 router = APIRouter(prefix="/api/admin/channels", tags=["admin-channels"])
 
 
-class ChannelAffiliation(str, Enum):
-    ukrainian = "ukrainian"
-    russian = "russian"
-    western = "western"
-    neutral = "neutral"
-
-
 class ChannelRule(str, Enum):
     archive_all = "archive_all"
     selective_archive = "selective_archive"
     monitor_only = "monitor_only"
+
+
+class CategoryInfo(BaseModel):
+    """Category information for a channel."""
+    id: int
+    name: str
+    color: str
 
 
 class ChannelItem(BaseModel):
@@ -42,8 +42,7 @@ class ChannelItem(BaseModel):
     verified: bool
     scam: bool
     fake: bool
-    source_type: Optional[str]
-    affiliation: Optional[str]
+    category: Optional[CategoryInfo]
     folder: Optional[str]
     rule: Optional[str]
     active: bool
@@ -71,15 +70,14 @@ class ChannelStatsResponse(BaseModel):
     total_channels: int
     active_channels: int
     verified_channels: int
-    by_affiliation: Dict[str, int]
+    by_category: Dict[str, int]
     by_folder: Dict[str, int]
     by_rule: Dict[str, int]
-    by_source_type: Dict[str, int]
 
 
 class ChannelUpdateRequest(BaseModel):
     """Request to update channel settings."""
-    affiliation: Optional[str] = None
+    category_id: Optional[int] = None
     active: Optional[bool] = None
     rule: Optional[str] = None
     folder: Optional[str] = None
@@ -91,12 +89,11 @@ async def get_channels(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=10, le=100),
     search: Optional[str] = None,
-    affiliation: Optional[str] = None,
+    category_id: Optional[int] = None,
     folder: Optional[str] = None,
     rule: Optional[str] = None,
     active: Optional[bool] = None,
     verified: Optional[bool] = None,
-    source_type: Optional[str] = None,
     sort_by: str = Query("name", pattern="^(name|created_at|last_message_at|message_count)$"),
     sort_order: str = Query("asc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db)
@@ -115,8 +112,9 @@ async def get_channels(
             c.verified,
             c.scam,
             c.fake,
-            c.source_type,
-            c.affiliation,
+            c.category_id,
+            cc.name as category_name,
+            cc.color as category_color,
             c.folder,
             c.rule,
             c.active,
@@ -126,10 +124,10 @@ async def get_channels(
             c.discovery_status,
             c.created_at
         FROM channels c
+        LEFT JOIN channel_categories cc ON cc.id = c.category_id
         LEFT JOIN (
             SELECT channel_id, COUNT(*) as message_count
             FROM messages
-            WHERE is_spam = false
             GROUP BY channel_id
         ) mc ON mc.channel_id = c.id
         WHERE 1=1
@@ -149,10 +147,10 @@ async def get_channels(
         count_query += " AND (c.name ILIKE :search OR c.username ILIKE :search OR c.description ILIKE :search)"
         params["search"] = f"%{search}%"
 
-    if affiliation:
-        base_query += " AND c.affiliation = :affiliation"
-        count_query += " AND c.affiliation = :affiliation"
-        params["affiliation"] = affiliation
+    if category_id is not None:
+        base_query += " AND c.category_id = :category_id"
+        count_query += " AND c.category_id = :category_id"
+        params["category_id"] = category_id
 
     if folder:
         base_query += " AND c.folder ILIKE :folder"
@@ -174,12 +172,7 @@ async def get_channels(
         count_query += " AND c.verified = :verified"
         params["verified"] = verified
 
-    if source_type:
-        base_query += " AND c.source_type = :source_type"
-        count_query += " AND c.source_type = :source_type"
-        params["source_type"] = source_type
-
-    # Add sorting
+    # Add sorting (defense-in-depth validation even though Query pattern validates)
     sort_column = {
         "name": "c.name",
         "created_at": "c.created_at",
@@ -187,7 +180,9 @@ async def get_channels(
         "message_count": "message_count",
     }.get(sort_by, "c.name")
 
-    base_query += f" ORDER BY {sort_column} {sort_order.upper()} NULLS LAST"
+    # Explicit whitelist validation for SQL safety
+    validated_sort_order = "ASC" if sort_order.lower() == "asc" else "DESC"
+    base_query += f" ORDER BY {sort_column} {validated_sort_order} NULLS LAST"
 
     # Add pagination
     base_query += " LIMIT :limit OFFSET :offset"
@@ -204,8 +199,17 @@ async def get_channels(
     )
     total = count_result.scalar() or 0
 
-    items = [
-        ChannelItem(
+    items = []
+    for row in rows:
+        category = None
+        if row[9]:  # category_id
+            category = CategoryInfo(
+                id=row[9],
+                name=row[10] or "unknown",
+                color=row[11] or "gray"
+            )
+
+        items.append(ChannelItem(
             id=row[0],
             telegram_id=row[1],
             username=row[2],
@@ -215,19 +219,16 @@ async def get_channels(
             verified=row[6],
             scam=row[7],
             fake=row[8],
-            source_type=row[9],
-            affiliation=row[10],
-            folder=row[11],
-            rule=row[12],
-            active=row[13],
-            message_count=row[14] or 0,
-            last_message_at=row[15],
-            quality_metrics=row[16],
-            discovery_status=row[17],
-            created_at=row[18],
-        )
-        for row in rows
-    ]
+            category=category,
+            folder=row[12],
+            rule=row[13],
+            active=row[14],
+            message_count=row[15] or 0,
+            last_message_at=row[16],
+            quality_metrics=row[17],
+            discovery_status=row[18],
+            created_at=row[19],
+        ))
 
     return ChannelListResponse(
         items=items,
@@ -252,13 +253,14 @@ async def get_channel_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)
     verified_result = await db.execute(text("SELECT COUNT(*) FROM channels WHERE verified = true"))
     verified_channels = verified_result.scalar() or 0
 
-    # By affiliation
-    affiliation_result = await db.execute(text("""
-        SELECT COALESCE(affiliation, 'unknown'), COUNT(*)
-        FROM channels
-        GROUP BY affiliation
+    # By category
+    category_result = await db.execute(text("""
+        SELECT COALESCE(cc.name, 'uncategorized'), COUNT(*)
+        FROM channels c
+        LEFT JOIN channel_categories cc ON cc.id = c.category_id
+        GROUP BY cc.name
     """))
-    by_affiliation = {row[0]: row[1] for row in affiliation_result.fetchall()}
+    by_category = {row[0]: row[1] for row in category_result.fetchall()}
 
     # By folder
     folder_result = await db.execute(text("""
@@ -278,22 +280,13 @@ async def get_channel_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)
     """))
     by_rule = {row[0]: row[1] for row in rule_result.fetchall()}
 
-    # By source type
-    source_result = await db.execute(text("""
-        SELECT COALESCE(source_type, 'unknown'), COUNT(*)
-        FROM channels
-        GROUP BY source_type
-    """))
-    by_source_type = {row[0]: row[1] for row in source_result.fetchall()}
-
     return ChannelStatsResponse(
         total_channels=total_channels,
         active_channels=active_channels,
         verified_channels=verified_channels,
-        by_affiliation=by_affiliation,
+        by_category=by_category,
         by_folder=by_folder,
         by_rule=by_rule,
-        by_source_type=by_source_type,
     )
 
 
@@ -320,16 +313,17 @@ async def get_channel_detail(
     result = await db.execute(text("""
         SELECT
             c.*,
+            cc.name as category_name,
+            cc.color as category_color,
             COALESCE(mc.message_count, 0) as message_count,
-            COALESCE(mc.first_message_at, NULL) as first_message_at,
-            COALESCE(mc.spam_count, 0) as spam_count
+            COALESCE(mc.first_message_at, NULL) as first_message_at
         FROM channels c
+        LEFT JOIN channel_categories cc ON cc.id = c.category_id
         LEFT JOIN (
             SELECT
                 channel_id,
                 COUNT(*) as message_count,
-                MIN(telegram_date) as first_message_at,
-                COUNT(*) FILTER (WHERE is_spam = true) as spam_count
+                MIN(telegram_date) as first_message_at
             FROM messages
             GROUP BY channel_id
         ) mc ON mc.channel_id = c.id
@@ -340,7 +334,18 @@ async def get_channel_detail(
     if not row:
         raise HTTPException(status_code=404, detail="Channel not found")
 
-    return dict(row._mapping)
+    data = dict(row._mapping)
+    # Build category object
+    if data.get("category_id"):
+        data["category"] = {
+            "id": data["category_id"],
+            "name": data.get("category_name", "unknown"),
+            "color": data.get("category_color", "gray"),
+        }
+    else:
+        data["category"] = None
+
+    return data
 
 
 @router.put("/{channel_id}")
@@ -355,9 +360,18 @@ async def update_channel(
     updates = []
     params = {"channel_id": channel_id}
 
-    if update.affiliation is not None:
-        updates.append("affiliation = :affiliation")
-        params["affiliation"] = update.affiliation
+    if update.category_id is not None:
+        # Validate category exists (0 means unset)
+        if update.category_id > 0:
+            cat_check = await db.execute(text(
+                "SELECT id FROM channel_categories WHERE id = :id"
+            ), {"id": update.category_id})
+            if not cat_check.fetchone():
+                raise HTTPException(status_code=400, detail="Category not found")
+            updates.append("category_id = :category_id")
+            params["category_id"] = update.category_id
+        else:
+            updates.append("category_id = NULL")
 
     if update.active is not None:
         updates.append("active = :active")

@@ -17,7 +17,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
 from ..database import get_db
-from shared.python.models import Message
+from models import Message
 
 logger = logging.getLogger(__name__)
 
@@ -581,9 +581,10 @@ async def get_influence_network(
         )
         network_data = list(network_result)
     except Exception as e:
+        logger.error(f"Could not fetch influence network: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Could not fetch influence network. Tables may not be initialized: {e}"
+            detail="Could not fetch influence network. Please try again later."
         )
 
     # Format relationships
@@ -892,7 +893,6 @@ async def get_top_forwarded_messages(
     - Fastest propagation time: How quickly the first forward occurred
     - Average propagation time: Mean time for all forwards
     - View count: Total reach of the original message
-    - Importance level: LLM-assigned intelligence value
 
     High forward counts with fast propagation often indicate:
     - Breaking news or significant events
@@ -930,8 +930,7 @@ async def get_top_forwarded_messages(
                 fastest_propagation_seconds,
                 avg_propagation_seconds,
                 last_forward_date,
-                views,
-                importance_level
+                views
             FROM top_forwarded_messages
             WHERE last_forward_date >= NOW() - make_interval(days => :days)
             ORDER BY forward_count DESC
@@ -943,9 +942,10 @@ async def get_top_forwarded_messages(
         )
         top_messages = list(virality_result)
     except Exception as e:
+        logger.error(f"Could not fetch virality data: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Could not fetch virality data. Tables may not be initialized: {e}"
+            detail="Could not fetch virality data. Please try again later."
         )
 
     # Format messages
@@ -966,7 +966,6 @@ async def get_top_forwarded_messages(
             "avg_propagation_seconds": float(row.avg_propagation_seconds) if row.avg_propagation_seconds else None,
             "last_forward_date": row.last_forward_date.isoformat() if row.last_forward_date else None,
             "views": row.views,
-            "importance_level": row.importance_level,
         })
 
     return {

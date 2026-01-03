@@ -8,7 +8,6 @@ export type SortMode = 'newest' | 'smart';
 
 export interface ImmersiveLayers {
   rss: boolean;
-  geo: boolean;
 }
 
 export interface ImmersiveState {
@@ -61,7 +60,7 @@ const VIEWED_IDS_KEY = 'immersive_viewed_ids';
 export function ImmersiveProvider({ children }: ImmersiveProviderProps) {
   const [isImmersive, setIsImmersive] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('stream');
-  const [layers, setLayers] = useState<ImmersiveLayers>({ rss: false, geo: false });
+  const [layers, setLayers] = useState<ImmersiveLayers>({ rss: false });
   const [queue, setQueue] = useState<Message[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);

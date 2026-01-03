@@ -13,7 +13,7 @@ Architecture (with local buffer for low-latency serving):
 6. Background sync worker uploads to MinIO/Hetzner and updates synced_at
 
 Storage Paths:
-- Local buffer: /var/cache/osint-media-buffer/osint-media/media/{hash[:2]}/{hash[2:4]}/{hash}.ext
+- Local buffer: /var/cache/tg-media-buffer/tg-media/media/{hash[:2]}/{hash[2:4]}/{hash}.ext
 - MinIO/Hetzner: media/{hash[:2]}/{hash[2:4]}/{hash}.ext
 
 Benefits:
@@ -31,12 +31,12 @@ import logging
 import mimetypes
 import os
 import shutil
-import subprocess
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, List
+
+from config import Timeouts
 
 import redis.asyncio as aioredis
 from minio import Minio
@@ -51,9 +51,13 @@ from config.settings import settings
 from models.media import MediaFile, MessageMedia
 from models.message import Message
 
-# Local buffer paths
-MEDIA_BUFFER_PATH = os.environ.get("MEDIA_BUFFER_PATH", "/var/cache/osint-media-buffer")
-LOCAL_BUFFER_ROOT = Path(MEDIA_BUFFER_PATH) / "osint-media"
+# Storage box selection simplified for tg-archiver
+# (BoxSelector was removed - it was OSINT-specific multi-box routing)
+
+# Local buffer paths (neutral naming, configurable bucket subfolder)
+MEDIA_BUFFER_PATH = os.environ.get("MEDIA_BUFFER_PATH", "/var/cache/media-buffer")
+BUFFER_BUCKET_NAME = os.environ.get("MINIO_BUCKET_NAME", "tg-archive-media")
+LOCAL_BUFFER_ROOT = Path(MEDIA_BUFFER_PATH) / BUFFER_BUCKET_NAME
 LOCAL_BUFFER_TMP = Path(MEDIA_BUFFER_PATH) / ".tmp"
 
 # Redis sync queue
@@ -82,19 +86,19 @@ class MediaArchiver:
         self,
         minio_client: Optional[Minio] = None,
         redis_client: Optional[aioredis.Redis] = None,
-        storage_box_id: str = "default",
+        storage_box_id: Optional[str] = None,
     ):
         """
         Initialize media archiver.
 
         Args:
-            minio_client: MinIO client for object storage (optional, for legacy direct upload)
+            minio_client: MinIO client for object storage
             redis_client: Redis client for queuing sync jobs
-            storage_box_id: Storage box ID for this account (e.g., "russia-1", "ukraine-1")
+            storage_box_id: Storage box identifier (default: "default")
         """
         self.minio = minio_client
         self.redis = redis_client
-        self.storage_box_id = storage_box_id
+        self.storage_box_id = storage_box_id or "default"
         self.bucket_name = settings.MINIO_BUCKET_NAME
 
         # Ensure local buffer directories exist
@@ -122,27 +126,15 @@ class MediaArchiver:
             logger.error(f"Failed to create local buffer directories: {e}")
             raise
 
-    def _ensure_bucket(self) -> bool:
-        """
-        Ensure MinIO bucket exists.
-
-        Returns:
-            True if bucket is accessible, False if MinIO is unavailable.
-            Non-fatal - media archival will be disabled but text backfill continues.
-        """
+    def _ensure_bucket(self):
+        """Ensure MinIO bucket exists."""
         try:
             if not self.minio.bucket_exists(self.bucket_name):
                 self.minio.make_bucket(self.bucket_name)
                 logger.info(f"Created MinIO bucket: {self.bucket_name}")
-            return True
         except S3Error as e:
-            logger.warning(f"MinIO unavailable - media archival disabled: {e}")
-            self.minio = None  # Disable MinIO operations
-            return False
-        except Exception as e:
-            logger.warning(f"MinIO connection failed - media archival disabled: {e}")
-            self.minio = None
-            return False
+            logger.error(f"Failed to create bucket: {e}")
+            raise
 
     def _get_local_buffer_path(self, sha256: str, extension: str) -> Path:
         """
@@ -157,7 +149,9 @@ class MediaArchiver:
         """
         return LOCAL_BUFFER_ROOT / "media" / sha256[:2] / sha256[2:4] / f"{sha256}{extension}"
 
-    async def _queue_sync_job(self, sha256: str, s3_key: str, local_path: str, file_size: int):
+    async def _queue_sync_job(
+        self, sha256: str, s3_key: str, local_path: str, file_size: int, storage_box_id: str
+    ):
         """
         Queue a sync job to Redis for background upload to Hetzner.
 
@@ -166,6 +160,7 @@ class MediaArchiver:
             s3_key: S3 object key
             local_path: Path in local buffer
             file_size: File size in bytes
+            storage_box_id: Target storage box ID for sync
         """
         if not self.redis:
             logger.warning("Redis not configured, skipping sync job queue")
@@ -175,7 +170,7 @@ class MediaArchiver:
             "sha256": sha256,
             "s3_key": s3_key,
             "local_path": local_path,
-            "storage_box_id": self.storage_box_id,
+            "storage_box_id": storage_box_id,
             "file_size": file_size,
             "queued_at": datetime.utcnow().isoformat(),
         }
@@ -183,10 +178,19 @@ class MediaArchiver:
         try:
             await self.redis.lpush(MEDIA_SYNC_QUEUE, json.dumps(job))
             self.files_queued_for_sync += 1
-            logger.debug(f"Queued sync job for {sha256[:16]}... to {self.storage_box_id}")
+            logger.debug(f"Queued sync job for {sha256[:16]}... to {storage_box_id}")
         except Exception as e:
             logger.error(f"Failed to queue sync job: {e}")
             # Don't raise - file is still in local buffer and accessible
+
+    def _select_storage_box(self) -> str:
+        """
+        Get storage box ID for media files.
+
+        Returns:
+            Storage box ID string (always returns self.storage_box_id)
+        """
+        return self.storage_box_id
 
     async def archive_media(
         self,
@@ -258,6 +262,9 @@ class MediaArchiver:
                 mime_type = self._get_mime_type(temp_path)
                 extension = temp_path.suffix or ".bin"
 
+                # Select storage box (dynamic or fixed)
+                selected_box_id = self._select_storage_box()
+
                 # Move to local buffer (atomic operation)
                 local_buffer_path = self._get_local_buffer_path(sha256, extension)
                 local_buffer_path.parent.mkdir(parents=True, exist_ok=True)
@@ -274,7 +281,7 @@ class MediaArchiver:
                     s3_key=s3_key,
                     file_size=file_size,
                     mime_type=mime_type,
-                    storage_box_id=self.storage_box_id,
+                    storage_box_id=selected_box_id,
                     local_path=str(local_buffer_path),
                     synced_at=None,  # Will be set when sync worker uploads to Hetzner
                     telegram_file_id=getattr(telegram_message.media, 'file_id', None),
@@ -287,8 +294,24 @@ class MediaArchiver:
 
                 media_file_id = media_file.id
 
-                # Queue sync job to Redis for background upload
-                await self._queue_sync_job(sha256, s3_key, str(local_buffer_path), file_size)
+                # Upload directly to MinIO
+                # Note: For remote storage with Hetzner SSHFS, use media-sync worker instead
+                if self.minio:
+                    try:
+                        await self._upload_to_minio(local_buffer_path, s3_key, mime_type)
+                        logger.info(f"Uploaded to MinIO: {s3_key}")
+                    except Exception as e:
+                        logger.error(f"MinIO upload failed: {e}", exc_info=True)
+                        # Queue sync job as fallback
+                        await self._queue_sync_job(
+                            sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
+                        )
+                else:
+                    logger.warning("MinIO client not available, queuing for sync")
+                    # Queue sync job as fallback
+                    await self._queue_sync_job(
+                        sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
+                    )
 
                 self.files_uploaded += 1
 
@@ -300,7 +323,7 @@ class MediaArchiver:
 
                 logger.info(
                     f"Media archived to local buffer: {sha256[:16]}... "
-                    f"({file_size} bytes, {mime_type}, box={self.storage_box_id})"
+                    f"({file_size} bytes, {mime_type}, box={selected_box_id})"
                 )
 
             # Return media_file_id so caller can create MessageMedia relationship
@@ -458,6 +481,9 @@ class MediaArchiver:
                 mime_type = self._get_mime_type(temp_path)
                 extension = temp_path.suffix or ".bin"
 
+                # Select storage box (dynamic or fixed)
+                selected_box_id = self._select_storage_box()
+
                 # Move to local buffer (atomic operation)
                 local_buffer_path = self._get_local_buffer_path(sha256, extension)
                 local_buffer_path.parent.mkdir(parents=True, exist_ok=True)
@@ -472,7 +498,7 @@ class MediaArchiver:
                     s3_key=s3_key,
                     file_size=file_size,
                     mime_type=mime_type,
-                    storage_box_id=self.storage_box_id,
+                    storage_box_id=selected_box_id,
                     local_path=str(local_buffer_path),
                     synced_at=None,
                     telegram_file_id=getattr(telegram_message.media, 'file_id', None),
@@ -485,8 +511,21 @@ class MediaArchiver:
 
                 media_file_id = media_file.id
 
-                # Queue sync job
-                await self._queue_sync_job(sha256, s3_key, str(local_buffer_path), file_size)
+                # Upload directly to MinIO (tg-archiver simplified mode)
+                if self.minio:
+                    try:
+                        await self._upload_to_minio(local_buffer_path, s3_key, mime_type)
+                        logger.info(f"Uploaded to MinIO: {s3_key}")
+                    except Exception as e:
+                        logger.error(f"MinIO upload failed: {e}", exc_info=True)
+                        await self._queue_sync_job(
+                            sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
+                        )
+                else:
+                    logger.warning("MinIO client not available, queuing for sync")
+                    await self._queue_sync_job(
+                        sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
+                    )
 
                 self.files_uploaded += 1
 
@@ -498,7 +537,7 @@ class MediaArchiver:
 
                 logger.info(
                     f"Media archived to local buffer: {sha256[:16]}... "
-                    f"({file_size} bytes, {mime_type}, box={self.storage_box_id})"
+                    f"({file_size} bytes, {mime_type}, box={selected_box_id})"
                 )
 
             # Clean up temp file (if not moved to buffer)
@@ -649,7 +688,7 @@ class MediaArchiver:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            _, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+            _, stderr = await asyncio.wait_for(process.communicate(), timeout=Timeouts.FFMPEG_PROCESS)
 
             if process.returncode != 0:
                 logger.warning(

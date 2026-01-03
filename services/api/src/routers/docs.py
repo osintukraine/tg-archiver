@@ -65,7 +65,6 @@ ROLE_ENDPOINTS = {
         "/api/bookmarks",     # User bookmarks
         "/api/feed-tokens",   # Feed token management
         "/api/api-keys",      # API key management
-        "/api/spam/",         # Spam reporting (mark as spam/not spam)
     ],
     # Analysts can see investigation-focused endpoints
     "analyst": [

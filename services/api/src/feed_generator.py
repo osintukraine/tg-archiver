@@ -38,7 +38,7 @@ class FeedFormat(str, Enum):
 
 class FeedGenerator:
     """
-    Multi-format feed generator for OSINT Intelligence Platform.
+    Multi-format feed generator for Telegram Archive.
 
     Generates RSS 2.0, Atom 1.0, and JSON Feed 1.1 from message lists.
     Handles feed metadata, item creation, and media enclosures/attachments.
@@ -147,7 +147,7 @@ class FeedGenerator:
         )
 
         # Author/Contributor
-        fg.author(name=settings.PLATFORM_NAME, email="feed@osint.example.com")
+        fg.author(name=settings.PLATFORM_NAME, email="feed@telegram-archive.example.com")
 
         # Set last build date to most recent message
         if messages:
@@ -214,12 +214,9 @@ class FeedGenerator:
             channel_name = f"@{message.channel.username}"
         fe.author(name=channel_name)
 
-        # Categories (topic classification + importance)
-        if message.osint_topic:
-            fe.category(term=message.osint_topic, label=message.osint_topic.title())
-
-        if message.importance_level:
-            fe.category(term=f"importance-{message.importance_level}", label=f"Importance: {message.importance_level.upper()}")
+        # Categories (topic classification)
+        if message.topic:
+            fe.category(term=message.topic, label=message.topic.title())
 
         if message.language_detected:
             fe.category(term=f"lang-{message.language_detected}", label=f"Language: {message.language_detected.upper()}")
@@ -348,8 +345,8 @@ class FeedGenerator:
             "items": [],
         }
 
-        # Add custom extension for OSINT platform
-        feed["_osint_platform"] = {
+        # Add custom extension for platform
+        feed["_tg_archive"] = {
             "about": f"{self.base_url}/about",
             "version": "2.0",
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -402,14 +399,10 @@ class FeedGenerator:
 
         # Tags (categories)
         tags = []
-        if message.osint_topic:
-            tags.append(message.osint_topic)
-        if message.importance_level:
-            tags.append(f"importance-{message.importance_level}")
+        if message.topic:
+            tags.append(message.topic)
         if message.language_detected:
             tags.append(f"lang-{message.language_detected}")
-        if message.content_sentiment:
-            tags.append(f"sentiment-{message.content_sentiment}")
         if tags:
             item["tags"] = tags
 
@@ -423,13 +416,11 @@ class FeedGenerator:
         if attachments:
             item["attachments"] = attachments
 
-        # Custom OSINT extension
-        item["_osint"] = {
+        # Custom extension
+        item["_meta"] = {
             "channel_id": message.channel_id,
             "message_id": message.message_id,
-            "importance_level": message.importance_level,
-            "topic": message.osint_topic,
-            "sentiment": message.content_sentiment,
+            "topic": message.topic,
             "language": message.language_detected,
             "views": message.views,
             "forwards": message.forwards,
@@ -438,7 +429,7 @@ class FeedGenerator:
 
         # Include entities if present
         if message.entities:
-            item["_osint"]["entities"] = message.entities
+            item["_meta"]["entities"] = message.entities
 
         return item
 
@@ -490,7 +481,7 @@ class FeedGenerator:
         """
         Build item title from message.
 
-        Includes importance badge and content preview.
+        Includes content preview.
 
         Args:
             message: Message object
@@ -502,16 +493,6 @@ class FeedGenerator:
         preview = content[:100] if content else "No content"
         if len(content) > 100:
             preview += "..."
-
-        # Add importance badge
-        if message.importance_level:
-            badge = {
-                "high": "🔴",
-                "medium": "🟡",
-                "low": "⚪",
-            }.get(message.importance_level, "")
-            if badge:
-                preview = f"{badge} {preview}"
 
         return preview
 
@@ -539,15 +520,10 @@ class FeedGenerator:
             parts.append(f"<p><strong>Translation (EN):</strong></p>")
             parts.append(f"<p>{self._escape_html(message.content_translated)}</p>")
 
-        # OSINT metadata
+        # Classification metadata
         metadata_parts = []
-        if message.importance_level:
-            emoji = {"high": "🔴", "medium": "🟡", "low": "⚪"}.get(message.importance_level, "")
-            metadata_parts.append(f"<strong>Importance:</strong> {emoji} {message.importance_level.upper()}")
-        if message.osint_topic:
-            metadata_parts.append(f"<strong>Topic:</strong> {message.osint_topic}")
-        if message.content_sentiment:
-            metadata_parts.append(f"<strong>Sentiment:</strong> {message.content_sentiment}")
+        if message.topic:
+            metadata_parts.append(f"<strong>Topic:</strong> {message.topic}")
         if message.language_detected:
             metadata_parts.append(f"<strong>Language:</strong> {message.language_detected.upper()}")
 
@@ -659,11 +635,8 @@ class FeedGenerator:
         elif message.content:
             parts.append(message.content[:500])
 
-        if message.importance_level:
-            parts.append(f"[Importance: {message.importance_level.upper()}]")
-
-        if message.osint_topic:
-            parts.append(f"[Topic: {message.osint_topic}]")
+        if message.topic:
+            parts.append(f"[Topic: {message.topic}]")
 
         return " ".join(parts)
 

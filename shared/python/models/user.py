@@ -1,30 +1,28 @@
 """
-User Model - LEGACY local authentication (deprecated)
+User Model for local JWT authentication.
 
-NOTE: This model is deprecated. New features should use kratos_identity_id
-directly (UUID) to reference users, as seen in:
-- user_roles
-- user_bookmarks
-- user_comments
-- api_keys
-- feed_tokens
-
-This table remains for backwards compatibility with any legacy data.
+Simple user management with bcrypt password hashing.
+Admin user is created from environment variables on startup.
 """
 
 from datetime import datetime
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy import Boolean, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .api_key import ApiKey
+    from .feed_token import FeedToken
 
 
 class User(Base):
     """
-    LEGACY: System users for local authentication.
+    System users for JWT authentication.
 
-    Deprecated - use kratos_identity_id (UUID) for new features.
+    Used for admin access and API authentication.
     """
 
     __tablename__ = "users"
@@ -44,6 +42,10 @@ class User(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     last_login: Mapped[datetime] = mapped_column(nullable=True)
+
+    # Relationships
+    api_keys: Mapped[List["ApiKey"]] = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
+    feed_tokens: Mapped[List["FeedToken"]] = relationship("FeedToken", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username={self.username}, is_admin={self.is_admin})>"

@@ -32,13 +32,23 @@ RUN pip install -r requirements.txt
 
 # Copy shared Python modules
 COPY shared/python /shared/python
-ENV PYTHONPATH="/shared/python:${PYTHONPATH}"
 
 # Copy service code
 COPY services/processor/src ./src
 
-# Create directories for logs
-RUN mkdir -p /var/log/processor
+# PYTHONPATH: src first (for service-specific modules), then shared
+ENV PYTHONPATH="/app/src:/shared/python:${PYTHONPATH}"
+
+# Create non-root user for security
+RUN groupadd --system --gid 1001 processor && \
+    useradd --system --uid 1001 --gid processor processor
+
+# Create directories for logs and media buffer, set ownership
+RUN mkdir -p /var/log/processor /var/cache/media-buffer && \
+    chown -R processor:processor /app /var/log/processor /var/cache/media-buffer /shared
+
+# Switch to non-root user
+USER processor
 
 # Health check - verify processor is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

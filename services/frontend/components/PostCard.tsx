@@ -648,88 +648,48 @@ export function PostCard({
           getMediaType={getMediaTypeFromUrl}
         />
 
-        {/* Social Graph Section */}
-        {(message.views !== null || message.forwards !== null ||
-          message.forward_from_channel_id !== null || message.replied_to_message_id !== null ||
-          message.has_comments) && (
-          <div className="space-y-3 border-t border-border-subtle pt-3">
-            <div
-              className="text-xs text-text-tertiary font-medium cursor-help"
-              title="Message propagation, engagement metrics, and conversation threads"
-            >
-              Social Graph & Engagement
-            </div>
-
-            {/* Engagement Bar (detailed mode) */}
-            {(message.views !== null || message.forwards !== null) && (
-              <div>
-                <EngagementBar
-                  views={message.views || 0}
-                  forwards={message.forwards || 0}
-                  commentsCount={message.comments_count || 0}
-                  mode="detailed"
-                />
+        {/* Compact Inline Engagement Summary - only show when meaningful */}
+        {(((message.views || 0) > 10) || ((message.forwards || 0) > 0) || ((message.comments_count || 0) > 0) ||
+          message.forward_from_channel_id !== null || message.replied_to_message_id !== null) && (
+          <div className="flex items-center gap-3 text-xs text-text-secondary border-t border-border-subtle pt-2">
+            {/* Engagement metrics inline */}
+            {((message.views || 0) > 10 || (message.forwards || 0) > 0 || (message.comments_count || 0) > 0) && (
+              <div className="flex items-center gap-2">
+                {(message.views || 0) > 0 && (
+                  <span className="flex items-center gap-1" title={`${message.views?.toLocaleString()} views`}>
+                    <span className="text-text-tertiary">👁</span>
+                    <span>{message.views?.toLocaleString()}</span>
+                  </span>
+                )}
+                {(message.forwards || 0) > 0 && (
+                  <span className="flex items-center gap-1" title={`${message.forwards?.toLocaleString()} forwards`}>
+                    <span className="text-text-tertiary">↗</span>
+                    <span>{message.forwards?.toLocaleString()}</span>
+                  </span>
+                )}
+                {(message.comments_count || 0) > 0 && (
+                  <span className="flex items-center gap-1" title={`${message.comments_count} comments`}>
+                    <span className="text-text-tertiary">💬</span>
+                    <span>{message.comments_count}</span>
+                  </span>
+                )}
               </div>
             )}
-
-            {/* Forward Chain Info */}
+            {/* Social graph indicators as compact badges */}
             {message.forward_from_channel_id !== null && (
-              <div className="text-xs bg-blue-500/10 border border-blue-500/20 rounded-lg p-2">
-                <div className="flex items-center gap-1 text-blue-400 mb-1">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span
-                    className="cursor-help"
-                    title="This message was forwarded from another channel - helps track information propagation"
-                  >
-                    Forwarded from another channel
-                  </span>
-                </div>
-                <div className="text-text-secondary">
-                  Channel ID: {message.forward_from_channel_id}
-                  {message.forward_from_message_id && ` • Message ID: ${message.forward_from_message_id}`}
-                  {message.forward_date && ` • ${format(new Date(message.forward_date), 'MMM d, yyyy')}`}
-                </div>
-              </div>
+              <span className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded text-[10px]" title="Forwarded message">
+                ↪ Fwd
+              </span>
             )}
-
-            {/* Reply Info */}
             {message.replied_to_message_id !== null && (
-              <div className="text-xs bg-green-500/10 border border-green-500/20 rounded-lg p-2">
-                <div className="flex items-center gap-1 text-green-400 mb-1">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                  <span
-                    className="cursor-help"
-                    title="This message is a reply to another message - part of a conversation thread"
-                  >
-                    Reply to message
-                  </span>
-                </div>
-                <div className="text-text-secondary">
-                  Message ID: {message.replied_to_message_id}
-                </div>
-              </div>
+              <span className="text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded text-[10px]" title="Reply to another message">
+                ↩ Reply
+              </span>
             )}
-
-            {/* Comments Link */}
-            {message.has_comments && (
-              <div className="text-xs bg-purple-500/10 border border-purple-500/20 rounded-lg p-2">
-                <div className="flex items-center gap-1 text-purple-400">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                  </svg>
-                  <span
-                    className="cursor-help"
-                    title="This message has a discussion thread - reactions and comments from channel subscribers"
-                  >
-                    Has discussion thread ({message.comments_count} comments)
-                  </span>
-                  {message.linked_chat_id && ` • Chat ID: ${message.linked_chat_id}`}
-                </div>
-              </div>
+            {message.has_comments && (message.comments_count || 0) === 0 && (
+              <span className="text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded text-[10px]" title="Has discussion thread">
+                💬 Thread
+              </span>
             )}
           </div>
         )}
@@ -792,6 +752,88 @@ export function PostCard({
 
           {/* Expanded metadata section */}
           <div className="mt-3 space-y-4 text-xs">
+            {/* Engagement Details (full breakdown) */}
+            {(message.views !== null || message.forwards !== null || message.comments_count > 0) && (
+              <div className="space-y-2">
+                <div className="text-text-tertiary font-medium">Engagement Details</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {message.views !== null && (
+                    <div className="bg-bg-secondary/50 rounded p-2">
+                      <div className="text-text-tertiary">Views</div>
+                      <div className="text-text-primary font-mono">{message.views.toLocaleString()}</div>
+                    </div>
+                  )}
+                  {message.forwards !== null && (
+                    <div className="bg-bg-secondary/50 rounded p-2">
+                      <div className="text-text-tertiary">Forwards</div>
+                      <div className="text-text-primary font-mono">{message.forwards.toLocaleString()}</div>
+                      <div className="text-text-tertiary text-[10px]">
+                        {((message.forwards / Math.max(message.views || 1, 1)) * 100).toFixed(2)}% virality
+                      </div>
+                    </div>
+                  )}
+                  {(message.comments_count || 0) > 0 && (
+                    <div className="bg-bg-secondary/50 rounded p-2">
+                      <div className="text-text-tertiary">Comments</div>
+                      <div className="text-text-primary font-mono">{message.comments_count}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Social Graph Details */}
+            {(message.forward_from_channel_id !== null || message.replied_to_message_id !== null || message.has_comments) && (
+              <div className="space-y-2">
+                <div className="text-text-tertiary font-medium">Social Graph</div>
+
+                {/* Forward Chain Info */}
+                {message.forward_from_channel_id !== null && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded p-2">
+                    <div className="flex items-center gap-1 text-blue-400 mb-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Forwarded from another channel</span>
+                    </div>
+                    <div className="text-text-secondary">
+                      Channel ID: {message.forward_from_channel_id}
+                      {message.forward_from_message_id && ` • Msg: ${message.forward_from_message_id}`}
+                      {message.forward_date && ` • ${format(new Date(message.forward_date), 'MMM d, yyyy')}`}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reply Info */}
+                {message.replied_to_message_id !== null && (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded p-2">
+                    <div className="flex items-center gap-1 text-green-400 mb-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                      <span>Reply to message</span>
+                    </div>
+                    <div className="text-text-secondary">Message ID: {message.replied_to_message_id}</div>
+                  </div>
+                )}
+
+                {/* Comments/Discussion Info */}
+                {message.has_comments && (
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded p-2">
+                    <div className="flex items-center gap-1 text-purple-400">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                      </svg>
+                      <span>Discussion thread ({message.comments_count} comments)</span>
+                    </div>
+                    {message.linked_chat_id && (
+                      <div className="text-text-secondary mt-1">Chat ID: {message.linked_chat_id}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Timestamps Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               <div className="bg-bg-secondary/50 rounded p-2">
@@ -858,24 +900,6 @@ export function PostCard({
                 </span>
               )}
             </div>
-
-            {/* Spam Status (if spam) */}
-            {message.is_spam && (
-              <div
-                className="bg-red-500/10 border border-red-500/20 rounded p-2 cursor-help"
-                title="This message was flagged as spam by the automated spam detection system and excluded from analysis"
-              >
-                <div className="text-red-400 font-medium mb-1">🚫 Marked as Spam</div>
-                {message.spam_reason && (
-                  <div className="text-text-secondary">{message.spam_reason}</div>
-                )}
-                {message.spam_confidence && (
-                  <div className="text-text-tertiary mt-1">
-                    Confidence: {(message.spam_confidence * 100).toFixed(0)}%
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Authenticity Hashes (collapsed) */}
             {(message.content_hash || message.metadata_hash) && (
@@ -1264,27 +1288,6 @@ export function PostCard({
                 </div>
                 <div className="text-sm text-text-primary">
                   {format(new Date(message.updated_at), 'MMM d, yyyy • HH:mm:ss')}
-                </div>
-              </div>
-
-              <div>
-                <div
-                  className="text-xs text-text-tertiary mb-1 cursor-help"
-                  title="Spam detection status - spam messages are excluded from analysis"
-                >
-                  Spam Status
-                </div>
-                <div className="text-sm">
-                  {message.is_spam ? (
-                    <span className="text-accent-danger">Spam</span>
-                  ) : (
-                    <span className="text-accent-success">Not Spam</span>
-                  )}
-                  {message.spam_confidence && (
-                    <span className="text-text-tertiary ml-2">
-                      ({(message.spam_confidence * 100).toFixed(1)}%)
-                    </span>
-                  )}
                 </div>
               </div>
 

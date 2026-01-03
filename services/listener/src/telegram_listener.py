@@ -77,20 +77,19 @@ class TelegramListener:
     def __init__(
         self,
         redis_queue: RedisQueue,
-        notifier=None,
+        telegram_client: Optional[TelegramClient] = None,
     ):
         """
         Initialize Telegram listener.
 
         Args:
             redis_queue: Redis queue client for message publishing
-            notifier: Optional NotificationClient for emitting events
+            telegram_client: Optional pre-connected TelegramClient to reuse
         """
         self.redis_queue = redis_queue
-        self.notifier = notifier
 
-        # Telethon client
-        self.client: Optional[TelegramClient] = None
+        # Telethon client (can be passed in to share session)
+        self.client: Optional[TelegramClient] = telegram_client
 
         # Active channels being monitored
         self.active_channels: dict[int, Channel] = {}
@@ -114,20 +113,23 @@ class TelegramListener:
         """
         logger.info("Starting Telegram Listener...")
 
-        # Initialize Telethon client
-        # Use configured session name from settings (shared across all services)
-        self.client = TelegramClient(
-            session=str(settings.TELEGRAM_SESSION_PATH / settings.TELEGRAM_SESSION_NAME),
-            api_id=settings.TELEGRAM_API_ID,
-            api_hash=settings.TELEGRAM_API_HASH,
-            connection_retries=5,
-            retry_delay=5,
-            auto_reconnect=True,
-        )
+        # Use existing client if provided, otherwise create new one
+        if self.client is None:
+            # Initialize Telethon client
+            # Use configured session name from settings (shared across all services)
+            self.client = TelegramClient(
+                session=str(settings.TELEGRAM_SESSION_PATH / settings.TELEGRAM_SESSION_NAME),
+                api_id=settings.TELEGRAM_API_ID,
+                api_hash=settings.TELEGRAM_API_HASH,
+                connection_retries=5,
+                retry_delay=5,
+                auto_reconnect=True,
+            )
 
         try:
-            # Connect to Telegram
-            await self.client.connect()
+            # Connect to Telegram (if not already connected)
+            if not self.client.is_connected():
+                await self.client.connect()
 
             # Authenticate if needed
             if not await self.client.is_user_authorized():
@@ -136,15 +138,6 @@ class TelegramListener:
 
             telegram_connections.set(1)
             logger.info("Connected to Telegram successfully")
-
-            # Emit session.connected event
-            if self.notifier:
-                await self.notifier.emit(
-                    "session.connected",
-                    data={"service": "listener", "session_type": "telegram"},
-                    priority="default",
-                    tags=["telegram", "connection"]
-                )
 
             # Load active channels from database
             await self.load_active_channels()
@@ -174,15 +167,6 @@ class TelegramListener:
         if self.client:
             await self.client.disconnect()
             telegram_connections.set(0)
-
-            # Emit session.disconnected event
-            if self.notifier:
-                await self.notifier.emit(
-                    "session.disconnected",
-                    data={"service": "listener", "session_type": "telegram"},
-                    priority="default",
-                    tags=["telegram", "connection"]
-                )
 
         logger.info("Telegram Listener stopped")
 
@@ -361,26 +345,6 @@ class TelegramListener:
                 has_media=bool(media_type),
             )
 
-            # Emit message.received event
-            if self.notifier:
-                await self.notifier.emit(
-                    "message.received",
-                    data={
-                        "channel": channel.name,
-                        "message_id": primary_msg.id,
-                        "has_media": bool(media_type),
-                        "media_type": media_type,
-                        "grouped_id": grouped_id,
-                        "media_count": len(messages),
-                        "has_author": bool(social_metadata.get('author_user_id')),
-                        "is_forwarded": bool(social_metadata.get('forward_from_channel_id')),
-                        "is_reply": event.is_reply,
-                        "source": "events.Album",  # Track which handler processed it
-                    },
-                    priority="min",
-                    tags=["telegram", "message", "album"]
-                )
-
             # Collect all message IDs for media download
             all_message_ids = [msg.id for msg in messages]
 
@@ -418,13 +382,6 @@ class TelegramListener:
         except FloodWaitError as e:
             logger.warning(f"Flood wait error in album handler: {e.seconds}s")
             record_flood_wait(e.seconds)
-            if self.notifier:
-                await self.notifier.emit(
-                    "flood_wait.triggered",
-                    data={"channel": channel.name, "wait_seconds": e.seconds},
-                    priority="high",
-                    tags=["telegram", "rate-limit"]
-                )
             await asyncio.sleep(e.seconds)
 
         except Exception as e:
@@ -460,17 +417,6 @@ class TelegramListener:
                 f"(channel={channel.name})"
             )
             record_flood_wait(e.seconds)
-
-            if self.notifier:
-                await self.notifier.emit(
-                    "flood_wait.triggered",
-                    data={
-                        "channel": channel.name,
-                        "wait_seconds": e.seconds,
-                    },
-                    priority="high",
-                    tags=["telegram", "rate-limit"]
-                )
 
             await asyncio.sleep(e.seconds)
 
@@ -698,29 +644,6 @@ class TelegramListener:
                 f"forwarded={bool(social_metadata.get('forward_from_channel_id'))}"
             )
 
-            # Emit message.received event (from fallback mechanism)
-            if self.notifier:
-                await self.notifier.emit(
-                    "message.received",
-                    data={
-                        "channel": channel.name,
-                        "message_id": primary_msg.id,
-                        "has_media": bool(media_type),
-                        "media_type": media_type,
-                        "grouped_id": grouped_id,
-                        "media_count": len(messages),
-                        "has_author": bool(social_metadata.get('author_user_id')),
-                        "is_forwarded": bool(social_metadata.get('forward_from_channel_id')),
-                        "is_reply": bool(social_metadata.get('replied_to_message_id')),
-                        "source": "fallback_flush",  # Track that Album event didn't fire
-                    },
-                    priority="min",
-                    tags=["telegram", "message", "album", "fallback"]
-                )
-
-            # Translation now handled by processor (after spam filter)
-            # This saves 80-90% API costs by not translating spam
-
             # Collect all message IDs in the group for media download
             all_message_ids = [msg.id for msg in messages]
 
@@ -809,26 +732,6 @@ class TelegramListener:
             f"author={social_metadata.get('author_user_id')}, "
             f"forwarded={bool(social_metadata.get('forward_from_channel_id'))}"
         )
-
-        # Emit message.received event
-        if self.notifier:
-            await self.notifier.emit(
-                "message.received",
-                data={
-                    "channel": channel.name,
-                    "message_id": message.id,
-                    "has_media": bool(media_type),
-                    "media_type": media_type,
-                    "has_author": bool(social_metadata.get('author_user_id')),
-                    "is_forwarded": bool(social_metadata.get('forward_from_channel_id')),
-                    "is_reply": bool(social_metadata.get('replied_to_message_id')),
-                },
-                priority="min",
-                tags=["telegram", "message"]
-            )
-
-        # Translation now handled by processor (after spam filter)
-        # This saves 80-90% API costs by not translating spam
 
         # Push to Redis queue with social graph metadata
         await self.redis_queue.push_message(

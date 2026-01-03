@@ -37,12 +37,9 @@ class MediaItem(BaseModel):
     mime_type: Optional[str]
     file_size: Optional[int]
     media_url: Optional[str]
-    importance_level: Optional[str]
     topic: Optional[str]
-    sentiment: Optional[str]
     channel_name: str
     channel_username: Optional[str]
-    source_type: Optional[str]
 
 
 class MediaListResponse(BaseModel):
@@ -62,7 +59,6 @@ class MediaStatsResponse(BaseModel):
     videos_count: int
     documents_count: int
     by_channel: dict
-    by_importance: dict
 
 
 @router.get("/", response_model=MediaListResponse)
@@ -71,7 +67,6 @@ async def get_media_gallery(
     page: int = Query(1, ge=1),
     page_size: int = Query(48, ge=1, le=100),  # 48 for 6x8 grid
     media_type: Optional[MediaType] = None,
-    importance: Optional[str] = None,
     channel: Optional[str] = None,
     topic: Optional[str] = None,
     days: Optional[int] = Query(None, ge=1, le=365),
@@ -95,27 +90,22 @@ async def get_media_gallery(
             mf.mime_type,
             mf.file_size,
             mf.s3_key as media_url,
-            m.importance_level,
-            m.osint_topic as topic,
-            m.content_sentiment as sentiment,
+            m.topic,
             c.name as channel_name,
-            c.username as channel_username,
-            c.source_type
+            c.username as channel_username
         FROM messages m
         LEFT JOIN message_media mm ON mm.message_id = m.id
-        LEFT JOIN media_files mf ON mf.id = mm.media_id
+        LEFT JOIN media_files mf ON mf.id = mm.media_file_id
         LEFT JOIN channels c ON c.id = m.channel_id
         WHERE m.media_type IS NOT NULL
-        AND m.is_spam = false
     """
 
     count_query = """
         SELECT COUNT(DISTINCT COALESCE(m.grouped_id, m.id))
         FROM messages m
         LEFT JOIN message_media mm ON mm.message_id = m.id
-        LEFT JOIN media_files mf ON mf.id = mm.media_id
+        LEFT JOIN media_files mf ON mf.id = mm.media_file_id
         WHERE m.media_type IS NOT NULL
-        AND m.is_spam = false
     """
 
     params = {}
@@ -126,19 +116,14 @@ async def get_media_gallery(
         count_query += " AND m.media_type = :media_type"
         params["media_type"] = media_type.value
 
-    if importance:
-        base_query += " AND m.importance_level = :importance"
-        count_query += " AND m.importance_level = :importance"
-        params["importance"] = importance
-
     if channel:
         base_query += " AND (c.name ILIKE :channel OR c.username ILIKE :channel)"
         count_query += " AND (c.name ILIKE :channel OR c.username ILIKE :channel)"
         params["channel"] = f"%{channel}%"
 
     if topic:
-        base_query += " AND m.osint_topic = :topic"
-        count_query += " AND m.osint_topic = :topic"
+        base_query += " AND m.topic = :topic"
+        count_query += " AND m.topic = :topic"
         params["topic"] = topic
 
     if days:
@@ -175,12 +160,9 @@ async def get_media_gallery(
             mime_type=row[6],
             file_size=row[7],
             media_url=row[8],
-            importance_level=row[9],
-            topic=row[10],
-            sentiment=row[11],
-            channel_name=row[12] or "Unknown",
-            channel_username=row[13],
-            source_type=row[14],
+            topic=row[9],
+            channel_name=row[10] or "Unknown",
+            channel_username=row[11],
         )
         for row in rows
     ]
@@ -214,7 +196,7 @@ async def get_media_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
             COALESCE(m.media_type, 'unknown'),
             COUNT(DISTINCT mf.id)
         FROM media_files mf
-        JOIN message_media mm ON mm.media_id = mf.id
+        JOIN message_media mm ON mm.media_file_id = mf.id
         JOIN messages m ON m.id = mm.message_id
         GROUP BY m.media_type
     """))
@@ -224,7 +206,7 @@ async def get_media_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
     channel_result = await db.execute(text("""
         SELECT c.name, COUNT(mf.id), SUM(mf.file_size)
         FROM media_files mf
-        JOIN message_media mm ON mm.media_id = mf.id
+        JOIN message_media mm ON mm.media_file_id = mf.id
         JOIN messages m ON m.id = mm.message_id
         JOIN channels c ON c.id = m.channel_id
         GROUP BY c.name
@@ -236,18 +218,6 @@ async def get_media_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
         for row in channel_result.fetchall()
     }
 
-    # By importance
-    importance_result = await db.execute(text("""
-        SELECT
-            COALESCE(m.importance_level, 'unknown'),
-            COUNT(DISTINCT mf.id)
-        FROM media_files mf
-        JOIN message_media mm ON mm.media_id = mf.id
-        JOIN messages m ON m.id = mm.message_id
-        GROUP BY m.importance_level
-    """))
-    by_importance = {row[0]: row[1] for row in importance_result.fetchall()}
-
     return MediaStatsResponse(
         total_files=total_files,
         total_size_gb=round(total_size_gb, 2),
@@ -255,7 +225,6 @@ async def get_media_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
         videos_count=type_counts.get("video", 0),
         documents_count=type_counts.get("document", 0),
         by_channel=by_channel,
-        by_importance=by_importance,
     )
 
 
@@ -263,11 +232,11 @@ async def get_media_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
 async def get_media_topics(admin: AdminUser, db: AsyncSession = Depends(get_db)):
     """Get available topics for filtering."""
     result = await db.execute(text("""
-        SELECT DISTINCT osint_topic, COUNT(*)
+        SELECT DISTINCT topic, COUNT(*)
         FROM messages
         WHERE media_type IS NOT NULL
-        AND osint_topic IS NOT NULL
-        GROUP BY osint_topic
+        AND topic IS NOT NULL
+        GROUP BY topic
         ORDER BY COUNT(*) DESC
         LIMIT 20
     """))

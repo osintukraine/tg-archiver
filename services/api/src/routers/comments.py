@@ -77,7 +77,7 @@ async def translate_comment(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Translate a comment on-demand with intelligent caching.
+    Translate a comment on-demand with caching.
 
     This endpoint provides on-demand translation for message comments (Telegram replies),
     automatically detecting the source language and translating to English. Translation

@@ -72,13 +72,6 @@ class MessageBase(BaseModel):
     translation_provider: Optional[str] = None
     translation_target: Optional[str] = None
 
-    # Spam detection
-    is_spam: bool = False
-    spam_confidence: Optional[float] = None
-    spam_reason: Optional[str] = Field(None, description="Why message was marked as spam")
-    spam_type: Optional[str] = Field(None, description="Type of spam: financial, promotional, off_topic")
-    spam_review_status: Optional[str] = Field(None, description="Review status: pending, reviewed, false_positive, true_positive, reprocessed")
-
     # Topic classification (references message_topics)
     topic: Optional[str] = Field(None, description="Topic from message_topics table")
 
@@ -267,7 +260,6 @@ class SearchParams(BaseModel):
     media_type: Optional[str] = Field(
         None, description="Filter by media type (photo/video/document/audio/voice/sticker/animation)"
     )
-    is_spam: Optional[bool] = Field(None, description="Include spam messages")
 
     # Date range
     date_from: Optional[datetime] = Field(None, description="Start date (inclusive)")
@@ -304,7 +296,6 @@ class ChannelStats(BaseModel):
     """Channel statistics."""
 
     total_messages: int
-    spam_messages: int
     archived_messages: int
     messages_by_topic: dict[str, int]
     first_message_at: Optional[datetime] = None
@@ -407,8 +398,6 @@ class ChannelDailyStats(BaseModel):
 
     date: str  # YYYY-MM-DD format
     message_count: int
-    spam_count: int
-    non_spam_count: int
     media_count: int
 
 
@@ -421,8 +410,6 @@ class ChannelAnalytics(BaseModel):
 
     # Aggregate stats for the period
     total_messages: int
-    total_spam: int
-    spam_rate: float  # percentage
     media_count: int
 
     # Time series (daily buckets)
@@ -490,7 +477,6 @@ class MessageExpanded(MessageCompact):
 
     topic: Optional[str] = None
     entities: Optional[dict] = None
-    is_spam: bool = False
     telegram_date: Optional[datetime] = None
     content_translated: Optional[str] = Field(None, max_length=200)  # Truncated
 
@@ -513,8 +499,6 @@ class MessageFull(BaseModel):
     translation_provider: Optional[str] = None
 
     # Enrichment
-    is_spam: bool = False
-    spam_confidence: Optional[float] = None
     topic: Optional[str] = None
     entities: Optional[dict] = None
 
@@ -731,7 +715,6 @@ class MessageSocialGraphResponse(BaseModel):
 
     # Metadata
     telegram_date: Optional[datetime] = None
-    is_spam: bool = False
     created_at: datetime
 
 

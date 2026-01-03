@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from config.settings import settings
 from ..utils.sql_safety import escape_ilike_pattern
@@ -62,6 +63,9 @@ async def list_channels(
     # Order by last message (most recent first)
     query = query.order_by(desc(Channel.last_message_at)).limit(limit)
 
+    # Eager-load category relationship
+    query = query.options(selectinload(Channel.category))
+
     result = await db.execute(query)
     channels = result.scalars().all()
 
@@ -85,9 +89,9 @@ async def get_channel(channel_id: int, db: AsyncSession = Depends(get_db)):
     """
     # Try to find by database ID first, then by Telegram ID
     result = await db.execute(
-        select(Channel).where(
-            or_(Channel.id == channel_id, Channel.telegram_id == channel_id)
-        )
+        select(Channel)
+        .where(or_(Channel.id == channel_id, Channel.telegram_id == channel_id))
+        .options(selectinload(Channel.category))
     )
     channel = result.scalar_one_or_none()
 
@@ -103,8 +107,7 @@ async def get_channel_stats(channel_id: int, db: AsyncSession = Depends(get_db))
     Get statistics for a specific channel.
 
     Provides:
-    - Total messages, spam count, archived count
-    - Average OSINT score
+    - Total messages, archived count
     - Message distribution by topic
     - First and last message timestamps
 
@@ -138,61 +141,40 @@ async def get_channel_stats(channel_id: int, db: AsyncSession = Depends(get_db))
     )
     total_messages = total_result.scalar_one()
 
-    # Count spam messages
-    spam_result = await db.execute(
-        select(func.count(Message.id)).where(
-            Message.channel_id == db_channel_id, Message.is_spam == True
-        )
-    )
-    spam_messages = spam_result.scalar_one()
+    # All messages are archived in tg-archiver
+    archived_messages = total_messages
 
-    # Count archived (non-spam) messages
-    archived_messages = total_messages - spam_messages
-
-    # High importance message count (non-spam only)
-    high_importance_result = await db.execute(
-        select(func.count(Message.id)).where(
-            Message.channel_id == db_channel_id,
-            Message.is_spam == False,
-            Message.importance_level == 'high',
-        )
-    )
-    high_importance_count = high_importance_result.scalar_one()
-
-    # Messages by topic (non-spam only)
+    # Messages by topic
     topic_result = await db.execute(
-        select(Message.osint_topic, func.count(Message.id))
+        select(Message.topic, func.count(Message.id))
         .where(
             Message.channel_id == db_channel_id,
-            Message.is_spam == False,
-            Message.osint_topic.isnot(None),
+            Message.topic.isnot(None),
         )
-        .group_by(Message.osint_topic)
+        .group_by(Message.topic)
     )
     messages_by_topic = {topic: count for topic, count in topic_result.all()}
 
-    # First and last message timestamps
+    # First and last message timestamps (by telegram_date for actual message time)
     first_msg_result = await db.execute(
-        select(Message.created_at)
+        select(Message.telegram_date)
         .where(Message.channel_id == db_channel_id)
-        .order_by(Message.created_at)
+        .order_by(Message.telegram_date.nulls_last())
         .limit(1)
     )
     first_message_at = first_msg_result.scalar_one_or_none()
 
     last_msg_result = await db.execute(
-        select(Message.created_at)
+        select(Message.telegram_date)
         .where(Message.channel_id == db_channel_id)
-        .order_by(desc(Message.created_at))
+        .order_by(desc(Message.telegram_date).nulls_last())
         .limit(1)
     )
     last_message_at = last_msg_result.scalar_one_or_none()
 
     return ChannelStats(
         total_messages=total_messages,
-        spam_messages=spam_messages,
         archived_messages=archived_messages,
-        high_importance_count=high_importance_count or 0,
         messages_by_topic=messages_by_topic,
         first_message_at=first_message_at,
         last_message_at=last_message_at,
@@ -249,11 +231,18 @@ async def trigger_backfill(
         )
 
     # Find channel by database ID or Telegram ID
-    result = await db.execute(
-        select(Channel).where(
-            or_(Channel.id == channel_id, Channel.telegram_id == channel_id)
+    # Only compare against Channel.id if the value fits in int32
+    if -2147483648 <= channel_id <= 2147483647:
+        result = await db.execute(
+            select(Channel).where(
+                or_(Channel.id == channel_id, Channel.telegram_id == channel_id)
+            )
         )
-    )
+    else:
+        # Large value - must be a Telegram ID
+        result = await db.execute(
+            select(Channel).where(Channel.telegram_id == channel_id)
+        )
     channel = result.scalar_one_or_none()
 
     if not channel:

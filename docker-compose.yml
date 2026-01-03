@@ -1,6 +1,4 @@
-version: "3.8"
-
-# tg-archiver - Telegram Archiving Platform (No AI)
+# tg-archiver - Telegram Archiving Platform 
 # Simple, self-hosted Telegram channel archiver with frontend
 
 services:
@@ -18,10 +16,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5432:5432"  # Uncomment for local development only
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-archiver}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-archiver} -d ${POSTGRES_DB:-tg_archiver}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,13 +28,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: tg-archiver-redis
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"  # Uncomment for local development only
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a ${REDIS_PASSWORD}} ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -51,15 +49,33 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
       - minio_data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"  # MinIO Console
+    # ports:
+    #   - "9000:9000"      # Uncomment for local development only
+    #   - "9001:9001"      # MinIO Console - Uncomment for local development only
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
     restart: unless-stopped
+
+  # Initialize MinIO bucket
+  # NOTE: For production, remove anonymous access and use presigned URLs instead.
+  # The API provides GET /api/media/{media_id}/url for generating presigned URLs.
+  minio-init:
+    image: minio/mc:latest
+    container_name: tg-archiver-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set minio http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin};
+      mc mb minio/${MINIO_BUCKET:-tg-archive-media} --ignore-existing;
+      mc anonymous set download minio/${MINIO_BUCKET:-tg-archive-media};
+      echo 'MinIO bucket initialized with anonymous download access';
+      exit 0;
+      "
 
   # ==========================================================================
   # APPLICATION SERVICES
@@ -74,14 +90,32 @@ services:
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_SESSION_NAME=${TELEGRAM_SESSION_NAME:-listener}
+      - TELEGRAM_SESSION_PATH=/data/sessions
       - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECURE=false
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
+      - FOLDER_ARCHIVE_ALL_PATTERN=${FOLDER_ARCHIVE_ALL_PATTERN:-Archive}
+      # Backfill configuration
+      - BACKFILL_ENABLED=${BACKFILL_ENABLED:-false}
+      - BACKFILL_START_DATE=${BACKFILL_START_DATE:-2024-01-01}
+      - BACKFILL_MODE=${BACKFILL_MODE:-manual}
+      - BACKFILL_BATCH_SIZE=${BACKFILL_BATCH_SIZE:-100}
+      - BACKFILL_DELAY_MS=${BACKFILL_DELAY_MS:-1000}
+      - BACKFILL_MEDIA_STRATEGY=${BACKFILL_MEDIA_STRATEGY:-download_available}
+      # Gap detection
+      - GAP_DETECTION_ENABLED=${GAP_DETECTION_ENABLED:-false}
+      - GAP_LOOKBACK_HOURS=${GAP_LOOKBACK_HOURS:-24}
     volumes:
-      - ./sessions:/app/sessions
+      - ./sessions:/data/sessions
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,7 +131,9 @@ services:
     environment:
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_SESSION_PATH=/data/sessions
       - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
@@ -106,11 +142,15 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
       - MINIO_SECURE=false
+      - MEDIA_BUFFER_PATH=/var/cache/media-buffer
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
       - TRANSLATION_ENABLED=${TRANSLATION_ENABLED:-false}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
     volumes:
-      - ./sessions:/app/sessions
+      - ./sessions:/data/sessions
+      - ${MEDIA_BUFFER_PATH:-./data/media-buffer}:/var/cache/media-buffer
     depends_on:
       postgres:
         condition: service_healthy
@@ -118,6 +158,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       listener:
         condition: service_started
     restart: unless-stopped
@@ -129,6 +171,7 @@ services:
     container_name: tg-archiver-api
     environment:
       - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
@@ -137,10 +180,21 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
       - MINIO_SECURE=false
       - SECRET_KEY=${SECRET_KEY:-change_me_in_production}
-    ports:
-      - "8000:8000"
+      # Authentication
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-jwt}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
+      - JWT_ADMIN_EMAIL=${JWT_ADMIN_EMAIL:-admin@tg-archiver.local}
+      - JWT_ADMIN_PASSWORD=${JWT_ADMIN_PASSWORD:-change_me_in_production}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      # Backfill (for API to know if it's enabled)
+      - BACKFILL_ENABLED=${BACKFILL_ENABLED:-false}
+      - BACKFILL_START_DATE=${BACKFILL_START_DATE:-2024-01-01}
+    # ports:
+    #   - "8000:8000"  # Uncomment for local development only
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,14 +211,43 @@ services:
     build:
       context: .
       dockerfile: services/frontend/Dockerfile
+      args:
+        # When using Caddy, all routes go through localhost:80
+        # API: /api/* -> api:8000, Media: /media/* -> minio, Frontend: /* -> frontend
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-}
+        NEXT_PUBLIC_TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
+        NEXT_PUBLIC_RSS_ENABLED: ${NEXT_PUBLIC_RSS_ENABLED:-false}
     container_name: tg-archiver-frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    ports:
-      - "3000:3000"
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
+      - NEXT_PUBLIC_MINIO_URL=${NEXT_PUBLIC_MINIO_URL:-}
+      - NEXT_PUBLIC_TRANSLATION_ENABLED=${TRANSLATION_ENABLED:-true}
+      - NEXT_PUBLIC_RSS_ENABLED=${NEXT_PUBLIC_RSS_ENABLED:-false}
+    # ports:
+    #   - "3000:3000"  # Uncomment for local development only
     depends_on:
       api:
         condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================================================
+  # REVERSE PROXY - Caddy
+  # ==========================================================================
+  # Single entry point: http://localhost
+  # Routes: /api/* -> api, /media/* -> minio, /* -> frontend
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: tg-archiver-caddy
+    ports:
+      - "80:80"
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - frontend
+      - minio
     restart: unless-stopped
 
 volumes:
@@ -175,6 +258,7 @@ volumes:
 # To run:
 # 1. Copy .env.example to .env and fill in Telegram credentials
 # 2. docker-compose up -d
-# 3. Access frontend at http://localhost:3000
-# 4. Access API at http://localhost:8000
-# 5. Access MinIO console at http://localhost:9001
+# 3. Access frontend at http://localhost wit Caddy
+# 4. Access frontend at http://localhost:3000
+# 5. Access API at http://localhost:8000
+# 6. Access MinIO console at http://localhost:9001

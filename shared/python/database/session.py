@@ -39,11 +39,11 @@ def get_database_url() -> str:
     Build database URL from environment variables.
 
     Expected environment variables:
-    - POSTGRES_USER: Database username (default: osint_user)
+    - POSTGRES_USER: Database username (default: tg_user)
     - POSTGRES_PASSWORD: Database password (required)
     - POSTGRES_HOST: Database host (default: postgres)
     - POSTGRES_PORT: Database port (default: 5432)
-    - POSTGRES_DB: Database name (default: osint_platform)
+    - POSTGRES_DB: Database name (default: tg_archiver)
 
     Returns:
         str: PostgreSQL async connection URL
@@ -51,11 +51,11 @@ def get_database_url() -> str:
     Raises:
         ValueError: If POSTGRES_PASSWORD is not set
     """
-    user = os.getenv("POSTGRES_USER", "osint_user")
+    user = os.getenv("POSTGRES_USER", "tg_user")
     password = os.getenv("POSTGRES_PASSWORD")
     host = os.getenv("POSTGRES_HOST", "postgres")
     port = os.getenv("POSTGRES_PORT", "5432")
-    database = os.getenv("POSTGRES_DB", "osint_platform")
+    database = os.getenv("POSTGRES_DB", "tg_archiver")
 
     if not password:
         raise ValueError("POSTGRES_PASSWORD environment variable is required")

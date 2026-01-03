@@ -131,6 +131,7 @@ from .channel_discovery import ChannelDiscovery
 from .import_worker import create_import_worker
 from .metrics import metrics_server, mark_listener_started
 from .redis_queue import redis_queue
+from .social_fetcher import start_social_fetcher, stop_social_fetcher
 from .telegram_listener import TelegramListener
 
 # Translation service removed - now in processor
@@ -294,6 +295,7 @@ async def main() -> NoReturn:
     discovery_task = None
     import_worker = None
     import_worker_task = None
+    social_fetcher = None
 
     try:
         # 1. Start Prometheus metrics server
@@ -415,7 +417,23 @@ async def main() -> NoReturn:
             telegram_client=telegram_client,
         )
 
-        # 11. Start listening for messages
+        # 10b. Connect channel discovery to listener for dynamic re-subscription
+        # When channels are added/removed, listener will re-register event handlers
+        channel_discovery.set_channels_changed_callback(listener.reload_channels)
+
+        # 11. Start social data fetcher BEFORE listener.start() (which blocks forever)
+        # The listener.start() calls run_until_disconnected() which never returns
+        if settings.SOCIAL_FETCH_ENABLED:
+            logger.info("Starting social data fetcher...")
+            social_fetcher = await start_social_fetcher(telegram_client)
+            logger.info(
+                f"Social fetcher started (period={settings.SOCIAL_FETCH_PERIOD_DAYS}d, "
+                f"interval={settings.SOCIAL_FETCH_INTERVAL_SECONDS}s)"
+            )
+        else:
+            logger.info("Social data fetching disabled (SOCIAL_FETCH_ENABLED=false)")
+
+        # 12. Start listening for messages (BLOCKS FOREVER - must be last!)
         logger.info("Starting message monitoring...")
 
         # Mark listener as started for health check grace period
@@ -448,6 +466,10 @@ async def main() -> NoReturn:
     finally:
         # Graceful shutdown
         logger.info("Shutting down gracefully...")
+
+        # Stop social fetcher first (it uses telegram_client)
+        if social_fetcher:
+            await stop_social_fetcher()
 
         if import_worker_task and not import_worker_task.done():
             import_worker_task.cancel()

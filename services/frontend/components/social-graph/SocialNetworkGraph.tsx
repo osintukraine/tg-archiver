@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   GitBranch, Loader2, AlertCircle, User, MessageCircle, Share2, Eye, TrendingUp,
-  ZoomIn, ZoomOut, Layout, RefreshCw, Download, X, ExternalLink
+  ZoomIn, ZoomOut, RefreshCw, Download, X
 } from 'lucide-react';
 import { useSocialGraph } from '@/hooks/useSocialGraph';
 import { useTheme } from 'next-themes';
@@ -14,17 +14,6 @@ import { useTheme } from 'next-themes';
 interface SocialNetworkGraphProps {
   messageId: number;
 }
-
-// Available Cytoscape layouts for social graph (matching Entity graph options)
-const LAYOUTS = [
-  { value: 'fcose', label: 'Force-Directed (fCoSE)', description: 'Physics-based, organic clustering' },
-  { value: 'cose', label: 'Force-Directed (CoSE)', description: 'Simpler physics simulation' },
-  { value: 'grid', label: 'Grid', description: 'Organized grid pattern' },
-  { value: 'circle', label: 'Circle', description: 'Circular layout' },
-  { value: 'concentric', label: 'Concentric', description: 'Concentric circles by importance' },
-  { value: 'breadthfirst', label: 'Breadth-First', description: 'Hierarchical tree layout' },
-  { value: 'cose-bilkent', label: 'CoSE-Bilkent', description: 'Advanced force-directed' },
-];
 
 // Helper to get node type category and styling
 function getNodeCategory(type: string): { category: string; color: string; icon: string; bgColor: string } {
@@ -57,17 +46,14 @@ function SelectedNodePanel({ node, onClose }: SelectedNodePanelProps) {
 
   return (
     <div className={`${bgColor} border border-border rounded-lg p-4 mb-3`}>
-      {/* Header - different for each node type to avoid redundancy */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          {/* For reactions: show emoji as icon, for others: show category icon */}
           {node.type === 'reaction' ? (
             <span className="text-2xl">{node.emoji || '👍'}</span>
           ) : (
             <span className="text-xl">{icon}</span>
           )}
           <div>
-            {/* For reactions: don't repeat the emoji in title */}
             {node.type === 'reaction' ? (
               <h4 className="text-sm font-semibold">Reaction</h4>
             ) : (
@@ -84,7 +70,7 @@ function SelectedNodePanel({ node, onClose }: SelectedNodePanelProps) {
       </div>
 
       <div className="space-y-3">
-        {/* Message Node - show engagement and content */}
+        {/* Message Node */}
         {node.type === 'message' && (
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-3">
@@ -139,11 +125,6 @@ function SelectedNodePanel({ node, onClose }: SelectedNodePanelProps) {
                 Channel ID: <span className="font-mono">{node.channel_id}</span>
               </p>
             )}
-            {node.message_id && (
-              <p className="text-xs text-muted-foreground">
-                Original Message ID: <span className="font-mono">{node.message_id}</span>
-              </p>
-            )}
           </div>
         )}
 
@@ -180,7 +161,7 @@ function SelectedNodePanel({ node, onClose }: SelectedNodePanelProps) {
           </div>
         )}
 
-        {/* Reaction Node - count and type info, emoji already shown in header */}
+        {/* Reaction Node */}
         {node.type === 'reaction' && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -199,6 +180,56 @@ function SelectedNodePanel({ node, onClose }: SelectedNodePanelProps) {
   );
 }
 
+// Color palette for nodes and edges
+function getColorPalette(isDark: boolean) {
+  return {
+    message: { bg: isDark ? '#3b82f6' : '#2563eb', border: isDark ? '#60a5fa' : '#1d4ed8' },
+    author: { bg: isDark ? '#6b9a8a' : '#4d7a6a', border: isDark ? '#8ab6a6' : '#3a6050' },
+    forward: { bg: isDark ? '#9b8ac2' : '#7b6aa2', border: isDark ? '#b5a6d4' : '#5f5082' },
+    parent: { bg: isDark ? '#c99b6d' : '#a67c52', border: isDark ? '#ddb896' : '#8a6642' },
+    comment: { bg: isDark ? '#b88a9a' : '#986a7a', border: isDark ? '#cfa8b6' : '#7a5262' },
+    reaction: { bg: isDark ? '#c9a86d' : '#a68a52', border: isDark ? '#ddc496' : '#8a7042' },
+    edge: { line: isDark ? '#4a5568' : '#a0aec0' },
+  };
+}
+
+function getNodeColor(type: string, isDark: boolean): string {
+  const colors = getColorPalette(isDark);
+  switch (type) {
+    case 'message': return colors.message.bg;
+    case 'author': return colors.author.bg;
+    case 'forward_source': return colors.forward.bg;
+    case 'parent_message': return colors.parent.bg;
+    case 'comment': return colors.comment.bg;
+    case 'reaction': return colors.reaction.bg;
+    default: return isDark ? '#475569' : '#64748b';
+  }
+}
+
+function getNodeSize(type: string, count?: number): number {
+  switch (type) {
+    case 'message': return 20;
+    case 'author': return 15;
+    case 'forward_source': return 14;
+    case 'parent_message': return 14;
+    case 'comment': return 10;
+    case 'reaction': return Math.min(8 + (count || 1) * 0.5, 20);
+    default: return 12;
+  }
+}
+
+function getEdgeColor(type: string, isDark: boolean): string {
+  const colors = getColorPalette(isDark);
+  switch (type) {
+    case 'authored': return colors.author.bg;
+    case 'forwarded_from': return colors.forward.bg;
+    case 'reply_to': return colors.parent.bg;
+    case 'commented_on': return colors.comment.bg;
+    case 'reacted': return isDark ? '#64748b' : '#94a3b8';
+    default: return colors.edge.line;
+  }
+}
+
 export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
   const { data, isLoading, error } = useSocialGraph(messageId, {
     include_forwards: true,
@@ -208,20 +239,19 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const cyRef = useRef<any>(null);
+  const sigmaRef = useRef<any>(null);
+  const graphRef = useRef<any>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isBrowser, setIsBrowser] = useState(false);
-  const [selectedLayout, setSelectedLayout] = useState('fcose');
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
 
-  // Wait for theme to be resolved (prevents hydration mismatch)
   useEffect(() => {
     setMounted(true);
+    setIsBrowser(true);
   }, []);
 
-  // Use resolvedTheme which handles 'system' automatically
   const isDark = mounted ? resolvedTheme === 'dark' : false;
 
   const nodes = data?.nodes || [];
@@ -236,309 +266,261 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
   const hasReactions = reactions.length > 0;
   const hasRelationships = hasAuthor || isForward || isReply || hasComments || hasReactions;
 
-  // Ensure we're in browser environment
-  useEffect(() => {
-    setIsBrowser(true);
-  }, []);
-
-  // Update styles when theme changes (including canvas background)
-  useEffect(() => {
-    if (cyRef.current && isInitialized && mounted) {
-      cyRef.current.style(getSocialGraphStyles(isDark));
-      // Update the container background color when theme changes
-      if (containerRef.current) {
-        containerRef.current.style.backgroundColor = isDark ? '#0f172a' : '#f8fafc';
-        // Also ensure canvas stays transparent
-        const canvasElements = containerRef.current.querySelectorAll('canvas');
-        canvasElements.forEach((canvas: HTMLCanvasElement) => {
-          canvas.style.backgroundColor = 'transparent';
-        });
-      }
-    }
-  }, [isDark, isInitialized, mounted]);
-
-  // Initialize Cytoscape graph
+  // Initialize Sigma graph
   useEffect(() => {
     if (!isBrowser || !containerRef.current || !hasRelationships || nodes.length === 0 || isLoading || error) {
       return;
     }
 
-    // Prevent double initialization
     if (isInitialized) {
       return;
     }
 
     let mounted = true;
 
-    const initCytoscape = async () => {
+    const initSigma = async () => {
       try {
-        const cytoscape = (await import('cytoscape')).default;
-        const fcose = (await import('cytoscape-fcose')).default;
-        const coseBilkent = (await import('cytoscape-cose-bilkent')).default;
+        const Graph = (await import('graphology')).default;
+        const Sigma = (await import('sigma')).default;
+        const forceAtlas2 = (await import('graphology-layout-forceatlas2')).default;
 
         if (!mounted || !containerRef.current) return;
 
-        // Register layout plugins
-        cytoscape.use(fcose);
-        cytoscape.use(coseBilkent);
+        // Create graph
+        const graph = new Graph();
 
-        // Transform data to Cytoscape format
-        const elements = [
-          ...nodes.map((node: any) => ({
-            data: {
-              id: node.id,
-              label: node.label,
-              type: node.type,
-              ...node.data,
-            },
-          })),
-          ...edges.map((edge: any) => ({
-            data: {
-              id: edge.id,
-              source: edge.source,
-              target: edge.target,
-              label: edge.label || edge.type,
-              type: edge.type,
-            },
-          })),
-        ];
+        // Add nodes
+        nodes.forEach((node: any, index: number) => {
+          const angle = (2 * Math.PI * index) / nodes.length;
+          const radius = 100;
 
-        // Initialize Cytoscape with improved configuration
-        const cy = cytoscape({
-          container: containerRef.current,
-          elements,
-          style: getSocialGraphStyles(isDark),
-          minZoom: 0.3,
-          maxZoom: 3,
-          wheelSensitivity: 0.2,
-        });
-
-        // Make Cytoscape canvas transparent so container background shows through
-        if (containerRef.current) {
-          const canvasElements = containerRef.current.querySelectorAll('canvas');
-          canvasElements.forEach((canvas: HTMLCanvasElement) => {
-            canvas.style.backgroundColor = 'transparent';
-          });
-        }
-
-        // Add interaction handlers
-        cy.on('tap', 'node', (evt: any) => {
-          const node = evt.target;
-          setSelectedNode({
-            id: node.id(),
-            type: node.data('type'),
-            label: node.data('label'),
-            ...node.data(),
+          graph.addNode(node.id, {
+            label: node.label,
+            x: Math.cos(angle) * radius + (Math.random() - 0.5) * 20,
+            y: Math.sin(angle) * radius + (Math.random() - 0.5) * 20,
+            size: getNodeSize(node.type, node.data?.count),
+            color: getNodeColor(node.type, isDark),
+            nodeType: node.type,  // Store our category in nodeType, not type (reserved by Sigma)
+            ...node.data,
           });
         });
 
-        cy.on('tap', (evt: any) => {
-          if (evt.target === cy) {
-            setSelectedNode(null);
+        // Add edges
+        edges.forEach((edge: any) => {
+          if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {
+            try {
+              graph.addEdge(edge.source, edge.target, {
+                label: edge.label || edge.type,
+                color: getEdgeColor(edge.type, isDark),
+                size: edge.type === 'reacted' ? 1 : 2,
+                edgeType: edge.type,  // Store our category in edgeType, not type (reserved by Sigma)
+              });
+            } catch (e) {
+              // Edge might already exist
+            }
           }
         });
 
-        cy.on('mouseover', 'node', (evt: any) => {
-          evt.target.style('border-width', '4px');
+        // Add reaction nodes (reactions come as separate array from API)
+        // Find the message node to connect reactions to
+        const messageNode = nodes.find((n: any) => n.type === 'message');
+        if (messageNode && reactions.length > 0) {
+          reactions.forEach((reaction: any, idx: number) => {
+            const reactionId = `reaction-${reaction.emoji}-${idx}`;
+            const angle = (2 * Math.PI * idx) / reactions.length + Math.PI; // Offset from other nodes
+            const radius = 80;
+
+            graph.addNode(reactionId, {
+              label: `${reaction.emoji} ${reaction.count}`,
+              x: Math.cos(angle) * radius + (Math.random() - 0.5) * 10,
+              y: Math.sin(angle) * radius + (Math.random() - 0.5) * 10,
+              size: getNodeSize('reaction', reaction.count),
+              color: getNodeColor('reaction', isDark),
+              nodeType: 'reaction',
+              emoji: reaction.emoji,
+              count: reaction.count,
+            });
+
+            // Connect reaction to message
+            try {
+              graph.addEdge(reactionId, messageNode.id, {
+                label: 'reacted',
+                color: getEdgeColor('reacted', isDark),
+                size: 1,
+                edgeType: 'reacted',
+              });
+            } catch (e) {
+              // Edge might already exist
+            }
+          });
+        }
+
+        // Run ForceAtlas2 layout
+        forceAtlas2.assign(graph, {
+          iterations: 100,
+          settings: {
+            gravity: 1,
+            scalingRatio: 10,
+            barnesHutOptimize: nodes.length > 50,
+            strongGravityMode: false,
+            slowDown: 1,
+          },
         });
 
-        cy.on('mouseout', 'node', (evt: any) => {
-          evt.target.style('border-width', '2px');
+        // Create Sigma instance
+        const sigma = new Sigma(graph, containerRef.current, {
+          renderEdgeLabels: false,
+          defaultEdgeType: 'arrow',
+          labelSize: 12,
+          labelWeight: 'bold',
+          labelColor: { color: isDark ? '#e2e8f0' : '#334155' },
+          defaultNodeColor: isDark ? '#475569' : '#64748b',
+          defaultEdgeColor: isDark ? '#4a5568' : '#a0aec0',
+          minCameraRatio: 0.1,
+          maxCameraRatio: 10,
         });
 
-        cyRef.current = cy;
+        // Set Sigma canvas background to transparent so container bg shows through
+        const canvas = containerRef.current.querySelector('canvas');
+        if (canvas) {
+          canvas.style.background = 'transparent';
+        }
 
-        // Run initial layout
-        runLayout(cy, 'fcose');
+        // Click handler for node selection
+        sigma.on('clickNode', ({ node }) => {
+          const nodeAttrs = graph.getNodeAttributes(node);
+          setSelectedNode({
+            id: node,
+            type: nodeAttrs.nodeType,  // Use nodeType (our custom attribute)
+            label: nodeAttrs.label,
+            ...nodeAttrs,
+          });
+        });
+
+        // Click on background to deselect
+        sigma.on('clickStage', () => {
+          setSelectedNode(null);
+        });
+
+        // Hover effects
+        let hoveredNode: string | null = null;
+
+        sigma.on('enterNode', ({ node }) => {
+          hoveredNode = node;
+          sigma.setSetting('nodeReducer', (n, data) => {
+            if (n === hoveredNode) {
+              return { ...data, size: data.size * 1.3 };
+            }
+            return data;
+          });
+          sigma.refresh();
+        });
+
+        sigma.on('leaveNode', () => {
+          hoveredNode = null;
+          sigma.setSetting('nodeReducer', null);
+          sigma.refresh();
+        });
+
+        graphRef.current = graph;
+        sigmaRef.current = sigma;
 
         if (mounted) {
           setIsInitialized(true);
         }
       } catch (err) {
-        console.error('Failed to initialize Cytoscape:', err);
+        console.error('Failed to initialize Sigma:', err);
       }
     };
 
-    initCytoscape();
+    initSigma();
 
     return () => {
       mounted = false;
-      if (cyRef.current) {
-        cyRef.current.destroy();
-        cyRef.current = null;
+      if (sigmaRef.current) {
+        sigmaRef.current.kill();
+        sigmaRef.current = null;
       }
+      graphRef.current = null;
       setIsInitialized(false);
     };
-  }, [nodes, edges, hasRelationships, isLoading, error, isBrowser]);
+  }, [nodes, edges, reactions, hasRelationships, isLoading, error, isBrowser, isDark]);
 
-  // Run layout with specified algorithm
-  const runLayout = (cy: any, layoutName: string) => {
-    const layoutConfigs: Record<string, any> = {
-      fcose: {
-        name: 'fcose',
-        quality: 'default',
-        randomize: true,
-        animate: true,
-        animationDuration: 800,
-        fit: true,
-        padding: 50,
-        nodeDimensionsIncludeLabels: true,
-        uniformNodeDimensions: false,
-        packComponents: true,
-        nodeRepulsion: 8000,
-        idealEdgeLength: 120,
-        edgeElasticity: 0.45,
-        nestingFactor: 0.1,
-        gravity: 0.25,
-        numIter: 2500,
-        nodeSeparation: 100,
-      },
-      concentric: {
-        name: 'concentric',
-        fit: true,
-        padding: 50,
-        animate: true,
-        animationDuration: 500,
-        startAngle: Math.PI * 3 / 2,
-        sweep: undefined,
-        clockwise: true,
-        equidistant: false,
-        minNodeSpacing: 50,
-        concentric: (node: any) => {
-          // Center message gets highest priority
-          if (node.data('type') === 'message') return 100;
-          if (node.data('type') === 'author') return 80;
-          if (node.data('type') === 'forward_source' || node.data('type') === 'parent_message') return 60;
-          return 40; // comments
-        },
-        levelWidth: () => 2,
-      },
-      breadthfirst: {
-        name: 'breadthfirst',
-        fit: true,
-        padding: 50,
-        animate: true,
-        animationDuration: 500,
-        directed: true,
-        spacingFactor: 1.5,
-        avoidOverlap: true,
-        roots: nodes.filter((n: any) => n.type === 'message').map((n: any) => n.id),
-      },
-      circle: {
-        name: 'circle',
-        fit: true,
-        padding: 50,
-        animate: true,
-        animationDuration: 500,
-        avoidOverlap: true,
-        startAngle: Math.PI * 3 / 2,
-      },
-      grid: {
-        name: 'grid',
-        fit: true,
-        padding: 50,
-        avoidOverlapPadding: 20,
-        condense: true,
-        animate: true,
-        animationDuration: 500,
-      },
-      cose: {
-        name: 'cose',
-        animate: true,
-        animationDuration: 1000,
-        fit: true,
-        padding: 50,
-        nodeRepulsion: 400000,
-        idealEdgeLength: 100,
-        nodeOverlap: 20,
-        refresh: 20,
-        randomize: false,
-        componentSpacing: 100,
-        edgeElasticity: 100,
-        nestingFactor: 5,
-        gravity: 80,
-        numIter: 1000,
-        initialTemp: 200,
-        coolingFactor: 0.95,
-        minTemp: 1.0,
-      },
-      'cose-bilkent': {
-        name: 'cose-bilkent',
-        animate: true,
-        animationDuration: 1000,
-        fit: true,
-        padding: 50,
-        nodeDimensionsIncludeLabels: true,
-        idealEdgeLength: 100,
-        edgeElasticity: 0.45,
-        nodeRepulsion: 4500,
-        nestingFactor: 0.1,
-        gravity: 0.25,
-        numIter: 2500,
-        tile: true,
-        randomize: true,
-      },
-    };
+  // Update colors when theme changes
+  useEffect(() => {
+    if (sigmaRef.current && graphRef.current && isInitialized && mounted) {
+      const graph = graphRef.current;
 
-    const config = layoutConfigs[layoutName] || layoutConfigs.fcose;
-    const layout = cy.layout(config);
+      // Update node colors
+      graph.forEachNode((node: string) => {
+        const type = graph.getNodeAttribute(node, 'type');
+        graph.setNodeAttribute(node, 'color', getNodeColor(type, isDark));
+      });
 
-    layout.on('layoutstop', () => {
-      setTimeout(() => {
-        cy.fit(undefined, 50);
-      }, 100);
-    });
+      // Update edge colors
+      graph.forEachEdge((edge: string) => {
+        const type = graph.getEdgeAttribute(edge, 'type');
+        graph.setEdgeAttribute(edge, 'color', getEdgeColor(type, isDark));
+      });
 
-    layout.run();
-  };
+      sigmaRef.current.setSetting('labelColor', { color: isDark ? '#e2e8f0' : '#334155' });
+      sigmaRef.current.refresh();
+    }
+  }, [isDark, isInitialized, mounted]);
 
   // Control functions
-  const handleZoomIn = () => {
-    if (cyRef.current) {
-      cyRef.current.zoom({
-        level: cyRef.current.zoom() * 1.3,
-        renderedPosition: { x: cyRef.current.width() / 2, y: cyRef.current.height() / 2 }
+  const handleZoomIn = useCallback(() => {
+    if (sigmaRef.current) {
+      const camera = sigmaRef.current.getCamera();
+      camera.animatedZoom({ duration: 300 });
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (sigmaRef.current) {
+      const camera = sigmaRef.current.getCamera();
+      camera.animatedUnzoom({ duration: 300 });
+    }
+  }, []);
+
+  const handleReset = useCallback(() => {
+    if (sigmaRef.current) {
+      const camera = sigmaRef.current.getCamera();
+      camera.animatedReset({ duration: 300 });
+    }
+  }, []);
+
+  const handleReLayout = useCallback(async () => {
+    if (!graphRef.current) return;
+
+    try {
+      const forceAtlas2 = (await import('graphology-layout-forceatlas2')).default;
+      forceAtlas2.assign(graphRef.current, {
+        iterations: 100,
+        settings: {
+          gravity: 1,
+          scalingRatio: 10,
+          barnesHutOptimize: nodes.length > 50,
+        },
       });
+      sigmaRef.current?.refresh();
+    } catch (err) {
+      console.error('Failed to re-layout:', err);
     }
-  };
+  }, [nodes.length]);
 
-  const handleZoomOut = () => {
-    if (cyRef.current) {
-      cyRef.current.zoom({
-        level: cyRef.current.zoom() * 0.7,
-        renderedPosition: { x: cyRef.current.width() / 2, y: cyRef.current.height() / 2 }
-      });
-    }
-  };
+  const handleExport = useCallback(() => {
+    if (!containerRef.current) return;
 
-  const handleReset = () => {
-    if (cyRef.current) {
-      cyRef.current.fit(undefined, 50);
-      cyRef.current.center();
-    }
-  };
+    // Find the canvas element
+    const canvas = containerRef.current.querySelector('canvas');
+    if (!canvas) return;
 
-  const handleLayoutChange = (layoutName: string) => {
-    setSelectedLayout(layoutName);
-    if (cyRef.current) {
-      runLayout(cyRef.current, layoutName);
-    }
-  };
-
-  const handleReLayout = () => {
-    if (cyRef.current) {
-      runLayout(cyRef.current, selectedLayout);
-    }
-  };
-
-  const handleExport = () => {
-    if (!cyRef.current) return;
-    const png = cyRef.current.png({ scale: 2, bg: isDark ? '#0f172a' : '#f8fafc' });
     const link = document.createElement('a');
-    link.href = png;
+    link.href = canvas.toDataURL('image/png');
     link.download = `social-graph-message-${messageId}.png`;
     link.click();
-  };
+  }, [messageId]);
 
   if (isLoading) {
     return (
@@ -600,15 +582,6 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 This message does not have author information, is not a forward or reply, and has no comments.
               </p>
-            </div>
-            <div className="bg-muted/50 dark:bg-muted/20 rounded-lg p-4 max-w-md mx-auto text-left">
-              <p className="text-xs font-medium mb-2">Social Data Captured:</p>
-              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                <li>Message author (if available from Telegram)</li>
-                <li>Forward source (channel and original message)</li>
-                <li>Reply parent (conversation threading)</li>
-                <li>Comments from linked discussion groups</li>
-              </ul>
             </div>
           </div>
         ) : (
@@ -695,7 +668,6 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                         </span>
                       </div>
                     ))}
-                  {/* Show paid reactions separately if any */}
                   {reactions.some((r: any) => r.emoji.includes('ReactionPaid')) && (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 rounded-full border border-yellow-200 dark:border-yellow-800">
                       <span className="text-lg">⭐</span>
@@ -744,26 +716,6 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
             {/* Graph Controls */}
             <div className="flex flex-wrap gap-2 items-center">
-              {/* Layout Switcher */}
-              <div className="flex items-center gap-2">
-                <Layout className="h-4 w-4 text-muted-foreground" />
-                <select
-                  value={selectedLayout}
-                  onChange={(e) => handleLayoutChange(e.target.value)}
-                  className="h-8 w-[160px] rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  title="Select graph layout"
-                >
-                  {LAYOUTS.map((layout) => (
-                    <option key={layout.value} value={layout.value}>
-                      {layout.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="h-6 w-px bg-border" />
-
-              {/* View Controls */}
               <Button size="sm" variant="outline" onClick={handleZoomIn} title="Zoom In">
                 <ZoomIn className="h-4 w-4" />
               </Button>
@@ -779,14 +731,13 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
               <div className="h-6 w-px bg-border" />
 
-              {/* Export */}
               <Button size="sm" variant="outline" onClick={handleExport} title="Export as PNG">
                 <Download className="h-4 w-4 mr-1" />
                 PNG
               </Button>
             </div>
 
-            {/* Selected Node Details Panel - appears between toolbar and canvas */}
+            {/* Selected Node Details Panel */}
             {selectedNode && (
               <SelectedNodePanel node={selectedNode} onClose={() => setSelectedNode(null)} />
             )}
@@ -794,7 +745,9 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
             {/* Interactive Graph Container */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-muted-foreground">Social Network Graph</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  Social Network Graph (ForceAtlas2)
+                </span>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} />
@@ -824,14 +777,14 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
               </div>
               <div
                 ref={containerRef}
-                className="w-full border border-muted rounded-lg social-graph-container"
+                className="w-full border border-muted rounded-lg"
                 style={{
                   height: '500px',
                   backgroundColor: isDark ? '#0f172a' : '#f8fafc',
                 }}
               />
               <p className="text-xs text-muted-foreground text-center mt-2">
-                Drag to pan • Scroll to zoom • Click nodes for details • Use layout selector for different views
+                Drag to pan • Scroll to zoom • Click nodes for details
               </p>
             </div>
           </div>
@@ -839,356 +792,4 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
       </CardContent>
     </Card>
   );
-}
-
-// Professional Social Graph Theme - Theme-adaptive Cytoscape stylesheet
-// Uses muted, professional colors that complement the Entity graph palette
-function getSocialGraphStyles(isDark: boolean): any[] {
-  const bgColor = isDark ? '#0f172a' : '#f8fafc';
-  const textColor = isDark ? '#e2e8f0' : '#334155';
-
-  // Theme-adaptive color palette for social relationships
-  // Designed to be softer and more muted than typical bright UI colors
-  const colors = {
-    // Central message node - matches Entity graph
-    message: {
-      bg: isDark ? '#3b82f6' : '#2563eb',
-      border: isDark ? '#60a5fa' : '#1d4ed8',
-    },
-    // Author - soft sage green
-    author: {
-      bg: isDark ? '#6b9a8a' : '#4d7a6a',      // Sage green
-      border: isDark ? '#8ab6a6' : '#3a6050',
-    },
-    // Forward source - muted lavender
-    forward: {
-      bg: isDark ? '#9b8ac2' : '#7b6aa2',      // Muted lavender
-      border: isDark ? '#b5a6d4' : '#5f5082',
-    },
-    // Parent message (reply) - warm coral
-    parent: {
-      bg: isDark ? '#c99b6d' : '#a67c52',      // Warm copper
-      border: isDark ? '#ddb896' : '#8a6642',
-    },
-    // Comment nodes - dusty rose
-    comment: {
-      bg: isDark ? '#b88a9a' : '#986a7a',      // Dusty rose
-      border: isDark ? '#cfa8b6' : '#7a5262',
-    },
-    // Reactions - base warm amber
-    reaction: {
-      bg: isDark ? '#c9a86d' : '#a68a52',      // Warm amber
-      border: isDark ? '#ddc496' : '#8a7042',
-    },
-    // Specific reaction colors - all muted versions
-    reactionFire: { bg: isDark ? '#c99b6d' : '#a67c52', border: isDark ? '#ddb896' : '#8a6642' },
-    reactionHeart: { bg: isDark ? '#c28a8a' : '#a26a6a', border: isDark ? '#d4a6a6' : '#825050' },
-    reactionThumbUp: { bg: isDark ? '#6b9a8a' : '#4d7a6a', border: isDark ? '#8ab6a6' : '#3a6050' },
-    reactionThumbDown: { bg: isDark ? '#6b7a8a' : '#4d5a6a', border: isDark ? '#8a96a6' : '#3a4650' },
-    reaction100: { bg: isDark ? '#c9a86d' : '#a68a52', border: isDark ? '#ddc496' : '#8a7042' },
-    reactionAngry: { bg: isDark ? '#c2847a' : '#9f5d53', border: isDark ? '#d4a29a' : '#7c443c' },
-    reactionSad: { bg: isDark ? '#6b8cae' : '#4a6a8a', border: isDark ? '#8ba8c6' : '#3d5570' },
-    reactionThink: { bg: isDark ? '#9b8ac2' : '#7b6aa2', border: isDark ? '#b5a6d4' : '#5f5082' },
-    reactionHappy: { bg: isDark ? '#c9a86d' : '#a68a52', border: isDark ? '#ddc496' : '#8a7042' },
-    reactionPaid: { bg: isDark ? '#d4a574' : '#b8864c', border: isDark ? '#e8c49c' : '#9a6c38' },
-    // Edge colors
-    edge: {
-      line: isDark ? '#4a5568' : '#a0aec0',
-      arrow: isDark ? '#5a6578' : '#8a9ab0',
-    },
-    edgeAuthor: isDark ? '#6b9a8a' : '#4d7a6a',
-    edgeForward: isDark ? '#9b8ac2' : '#7b6aa2',
-    edgeReply: isDark ? '#c99b6d' : '#a67c52',
-    edgeComment: isDark ? '#b88a9a' : '#986a7a',
-    edgeReaction: isDark ? '#64748b' : '#94a3b8',
-  };
-
-  return [
-    // Core container style - sets the canvas background
-    {
-      selector: 'core',
-      style: {
-        'active-bg-color': isDark ? '#1e293b' : '#e2e8f0',
-        'active-bg-opacity': 0.5,
-      }
-    },
-
-    // Default node style
-    {
-      selector: 'node',
-      style: {
-        'label': 'data(label)',
-        'text-valign': 'bottom',
-        'text-halign': 'center',
-        'font-size': '10px',
-        'font-family': 'Inter, system-ui, sans-serif',
-        'font-weight': '500',
-        'color': textColor,
-        'text-margin-y': 5,
-        'background-color': isDark ? '#475569' : '#64748b',
-        'background-opacity': 0.92,
-        'border-color': isDark ? '#64748b' : '#475569',
-        'border-width': 2,
-        'width': 40,
-        'height': 40,
-        'text-wrap': 'ellipsis',
-        'text-max-width': '80px',
-        'transition-property': 'background-color, border-color, width, height',
-        'transition-duration': '0.15s',
-      },
-    },
-
-    // Message node (center) - Prominent but not harsh
-    {
-      selector: 'node[type="message"]',
-      style: {
-        'background-color': colors.message.bg,
-        'border-color': colors.message.border,
-        'border-width': 3,
-        'width': 60,
-        'height': 60,
-        'font-size': '11px',
-        'font-weight': '600',
-        'color': isDark ? '#f1f5f9' : '#ffffff',
-        'text-outline-width': isDark ? 0 : 1,
-        'text-outline-color': isDark ? 'transparent' : 'rgba(0,0,0,0.2)',
-      },
-    },
-
-    // Author node - Sage green
-    {
-      selector: 'node[type="author"]',
-      style: {
-        'background-color': colors.author.bg,
-        'border-color': colors.author.border,
-        'shape': 'ellipse',
-        'width': 45,
-        'height': 45,
-        'color': isDark ? '#f1f5f9' : '#ffffff',
-      },
-    },
-
-    // Forward source - Lavender
-    {
-      selector: 'node[type="forward_source"]',
-      style: {
-        'background-color': colors.forward.bg,
-        'border-color': colors.forward.border,
-        'shape': 'round-rectangle',
-        'width': 50,
-        'height': 35,
-        'color': isDark ? '#f1f5f9' : '#ffffff',
-      },
-    },
-
-    // Parent message (reply to) - Copper
-    {
-      selector: 'node[type="parent_message"]',
-      style: {
-        'background-color': colors.parent.bg,
-        'border-color': colors.parent.border,
-        'shape': 'round-rectangle',
-        'width': 50,
-        'height': 35,
-        'color': isDark ? '#f1f5f9' : '#ffffff',
-      },
-    },
-
-    // Comment nodes - Dusty rose, smaller
-    {
-      selector: 'node[type="comment"]',
-      style: {
-        'background-color': colors.comment.bg,
-        'border-color': colors.comment.border,
-        'width': 30,
-        'height': 30,
-        'font-size': '8px',
-        'color': isDark ? '#f1f5f9' : '#ffffff',
-      },
-    },
-
-    // Edge styles - Clean, subtle connections
-    {
-      selector: 'edge',
-      style: {
-        'width': 2,
-        'line-color': colors.edge.line,
-        'target-arrow-color': colors.edge.arrow,
-        'target-arrow-shape': 'triangle',
-        'arrow-scale': 0.8,
-        'curve-style': 'bezier',
-        'label': 'data(label)',
-        'font-size': '8px',
-        'font-family': 'Inter, system-ui, sans-serif',
-        'color': isDark ? '#8892a6' : '#5a6678',
-        'text-rotation': 'autorotate',
-        'text-margin-y': -8,
-        'text-background-color': bgColor,
-        'text-background-opacity': 0.85,
-        'text-background-padding': '2px',
-        'opacity': 0.75,
-      },
-    },
-
-    // Author edge
-    {
-      selector: 'edge[type="authored"]',
-      style: {
-        'line-color': colors.edgeAuthor,
-        'target-arrow-color': colors.edgeAuthor,
-        'width': 2.5,
-      },
-    },
-
-    // Forward edge
-    {
-      selector: 'edge[type="forwarded_from"]',
-      style: {
-        'line-color': colors.edgeForward,
-        'target-arrow-color': colors.edgeForward,
-        'line-style': 'dashed',
-        'width': 2.5,
-      },
-    },
-
-    // Reply edge
-    {
-      selector: 'edge[type="reply_to"]',
-      style: {
-        'line-color': colors.edgeReply,
-        'target-arrow-color': colors.edgeReply,
-        'width': 2.5,
-      },
-    },
-
-    // Comment edge
-    {
-      selector: 'edge[type="commented_on"]',
-      style: {
-        'line-color': colors.edgeComment,
-        'target-arrow-color': colors.edgeComment,
-        'width': 1.5,
-        'opacity': 0.6,
-      },
-    },
-
-    // Reaction nodes - Base style with muted amber
-    {
-      selector: 'node[type="reaction"]',
-      style: {
-        'background-color': colors.reaction.bg,
-        'border-color': colors.reaction.border,
-        'shape': 'ellipse',
-        'width': 'mapData(count, 1, 10000, 25, 60)',
-        'height': 'mapData(count, 1, 10000, 25, 60)',
-        'font-size': '9px',
-        'text-valign': 'center',
-        'text-halign': 'center',
-        'color': isDark ? '#f1f5f9' : '#ffffff',
-      },
-    },
-
-    // Fire 🔥 reaction - Warm copper
-    {
-      selector: 'node[type="reaction"][emoji="🔥"]',
-      style: {
-        'background-color': colors.reactionFire.bg,
-        'border-color': colors.reactionFire.border,
-      },
-    },
-
-    // Heart ❤️ reaction - Muted rose
-    {
-      selector: 'node[type="reaction"][emoji="❤"]',
-      style: {
-        'background-color': colors.reactionHeart.bg,
-        'border-color': colors.reactionHeart.border,
-      },
-    },
-
-    // Thumbs up 👍 reaction - Sage green
-    {
-      selector: 'node[type="reaction"][emoji="👍"]',
-      style: {
-        'background-color': colors.reactionThumbUp.bg,
-        'border-color': colors.reactionThumbUp.border,
-      },
-    },
-
-    // Thumbs down 👎 reaction - Cool gray
-    {
-      selector: 'node[type="reaction"][emoji="👎"]',
-      style: {
-        'background-color': colors.reactionThumbDown.bg,
-        'border-color': colors.reactionThumbDown.border,
-      },
-    },
-
-    // 100 💯 reaction - Warm amber
-    {
-      selector: 'node[type="reaction"][emoji="💯"]',
-      style: {
-        'background-color': colors.reaction100.bg,
-        'border-color': colors.reaction100.border,
-      },
-    },
-
-    // Angry 😡 reaction - Soft terracotta
-    {
-      selector: 'node[type="reaction"][emoji="😡"]',
-      style: {
-        'background-color': colors.reactionAngry.bg,
-        'border-color': colors.reactionAngry.border,
-      },
-    },
-
-    // Sad 😢 reaction - Slate blue
-    {
-      selector: 'node[type="reaction"][emoji="😢"]',
-      style: {
-        'background-color': colors.reactionSad.bg,
-        'border-color': colors.reactionSad.border,
-      },
-    },
-
-    // Thinking 🤔 reaction - Lavender
-    {
-      selector: 'node[type="reaction"][emoji="🤔"]',
-      style: {
-        'background-color': colors.reactionThink.bg,
-        'border-color': colors.reactionThink.border,
-      },
-    },
-
-    // Happy 😁 reaction - Warm amber
-    {
-      selector: 'node[type="reaction"][emoji="😁"]',
-      style: {
-        'background-color': colors.reactionHappy.bg,
-        'border-color': colors.reactionHappy.border,
-      },
-    },
-
-    // Paid reaction ⭐ - Warm gold
-    {
-      selector: 'node[type="reaction"][emoji*="ReactionPaid"]',
-      style: {
-        'background-color': colors.reactionPaid.bg,
-        'border-color': colors.reactionPaid.border,
-        'border-width': 3,
-      },
-    },
-
-    // Reaction edge - subtle, no arrow
-    {
-      selector: 'edge[type="reacted"]',
-      style: {
-        'line-color': colors.edgeReaction,
-        'target-arrow-shape': 'none',
-        'width': 1.5,
-        'opacity': 0.45,
-        'line-style': 'dotted',
-      },
-    },
-  ];
 }

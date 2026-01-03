@@ -15,10 +15,10 @@
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
     "@types/dagre": "^0.7.53",
-    "cytoscape": "^3.33.1",
-    "cytoscape-cose-bilkent": "^4.1.0",
-    "cytoscape-fcose": "^2.2.0",
     "dagre": "^0.8.5",
+    "graphology": "^0.25.4",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "sigma": "^3.0.0",
     "date-fns": "^4.1.0",
     "html-to-image": "^1.11.13",
     "isomorphic-dompurify": "^2.33.0",

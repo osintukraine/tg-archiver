@@ -8,7 +8,44 @@ import { adminApi } from '@/lib/admin-api';
  * Admin - Channels Management
  *
  * List and manage Telegram channels with filters and quality metrics.
+ * Includes discovered channels from message forwards.
  */
+
+interface DiscoveredChannel {
+  id: number;
+  telegram_id: number;
+  username: string | null;
+  name: string | null;
+  description: string | null;
+  participant_count: number | null;
+  verified: boolean;
+  scam: boolean;
+  fake: boolean;
+  is_private: boolean;
+  join_status: string;
+  join_error: string | null;
+  discovery_count: number;
+  last_seen_at: string;
+  discovered_at: string;
+  joined_at: string | null;
+  admin_action: string | null;
+  promoted_to_channel_id: number | null;
+  forward_count: number;
+  social_messages_fetched: number;
+}
+
+interface DiscoveredStats {
+  total: number;
+  by_status: Record<string, number>;
+  pending: number;
+  joined: number;
+  private: number;
+  failed: number;
+  promoted: number;
+  ignored: number;
+  total_forwards_tracked: number;
+  avg_discovery_count: number;
+}
 
 interface Category {
   id: number;
@@ -77,7 +114,21 @@ export default function ChannelsPage() {
   const [total, setTotal] = useState(0);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'channels' | 'categories'>('channels');
+  const [activeTab, setActiveTab] = useState<'channels' | 'categories' | 'discovered'>('channels');
+
+  // Discovered channels state
+  const [discoveredChannels, setDiscoveredChannels] = useState<DiscoveredChannel[]>([]);
+  const [discoveredStats, setDiscoveredStats] = useState<DiscoveredStats | null>(null);
+  const [discoveredPage, setDiscoveredPage] = useState(1);
+  const [discoveredTotalPages, setDiscoveredTotalPages] = useState(1);
+  const [discoveredTotal, setDiscoveredTotal] = useState(0);
+  const [discoveredLoading, setDiscoveredLoading] = useState(false);
+  const [discoveredStatusFilter, setDiscoveredStatusFilter] = useState<string>('');
+  const [discoveredSearch, setDiscoveredSearch] = useState('');
+
+  // Promote modal
+  const [promoteChannel, setPromoteChannel] = useState<DiscoveredChannel | null>(null);
+  const [promoteForm, setPromoteForm] = useState({ category_id: 0, folder: '', rule: 'archive_all' });
 
   // Filters
   const [search, setSearch] = useState('');
@@ -147,9 +198,48 @@ export default function ChannelsPage() {
     }
   }, []);
 
+  const fetchDiscoveredChannels = useCallback(async () => {
+    setDiscoveredLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: discoveredPage.toString(),
+        page_size: '25',
+        sort_by: 'discovery_count',
+        sort_order: 'desc',
+      });
+      if (discoveredSearch) params.append('search', discoveredSearch);
+      if (discoveredStatusFilter) params.append('status', discoveredStatusFilter);
+
+      const data = await adminApi.get(`/api/admin/discovered?${params}`);
+      setDiscoveredChannels(data.items);
+      setDiscoveredTotalPages(data.total_pages);
+      setDiscoveredTotal(data.total);
+    } catch (err) {
+      console.error('Failed to fetch discovered channels:', err);
+    } finally {
+      setDiscoveredLoading(false);
+    }
+  }, [discoveredPage, discoveredSearch, discoveredStatusFilter]);
+
+  const fetchDiscoveredStats = useCallback(async () => {
+    try {
+      const data = await adminApi.get('/api/admin/discovered/stats');
+      setDiscoveredStats(data);
+    } catch (err) {
+      console.error('Failed to fetch discovered stats:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchChannels();
   }, [fetchChannels]);
+
+  useEffect(() => {
+    if (activeTab === 'discovered') {
+      fetchDiscoveredChannels();
+      fetchDiscoveredStats();
+    }
+  }, [activeTab, fetchDiscoveredChannels, fetchDiscoveredStats]);
 
   useEffect(() => {
     fetchStats();
@@ -209,6 +299,53 @@ export default function ChannelsPage() {
       setCategoryForm({ name: '', color: 'gray', description: '' });
     }
     setShowCategoryModal(true);
+  };
+
+  // Discovered channel actions
+  const handlePromoteChannel = async () => {
+    if (!promoteChannel) return;
+    try {
+      await adminApi.post(`/api/admin/discovered/${promoteChannel.id}/promote`, promoteForm);
+      setPromoteChannel(null);
+      setPromoteForm({ category_id: 0, folder: '', rule: 'archive_all' });
+      fetchDiscoveredChannels();
+      fetchDiscoveredStats();
+      fetchChannels(); // Refresh main channels list
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to promote channel');
+    }
+  };
+
+  const handleIgnoreChannel = async (channelId: number) => {
+    if (!confirm('Mark this channel as ignored? It will not appear in suggestions.')) return;
+    try {
+      await adminApi.post(`/api/admin/discovered/${channelId}/ignore`, {});
+      fetchDiscoveredChannels();
+      fetchDiscoveredStats();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to ignore channel');
+    }
+  };
+
+  const handleRetryJoin = async (channelId: number) => {
+    try {
+      await adminApi.post(`/api/admin/discovered/${channelId}/retry`, {});
+      fetchDiscoveredChannels();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to retry join');
+    }
+  };
+
+  const getStatusBadgeVariant = (status: string): 'info' | 'success' | 'warning' | 'error' | 'default' => {
+    switch (status) {
+      case 'joined': return 'success';
+      case 'pending':
+      case 'joining': return 'info';
+      case 'private':
+      case 'failed': return 'warning';
+      case 'ignored': return 'default';
+      default: return 'default';
+    }
   };
 
   const getCategoryBadgeVariant = (color: string | undefined): 'info' | 'success' | 'warning' | 'error' | 'default' => {
@@ -328,6 +465,16 @@ export default function ChannelsPage() {
           }`}
         >
           Categories ({categories.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('discovered')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'discovered'
+              ? 'border-blue-500 text-blue-500'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          Discovered ({discoveredStats?.total || 0})
         </button>
       </div>
 
@@ -515,6 +662,267 @@ export default function ChannelsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Discovered Tab Content */}
+      {activeTab === 'discovered' && (
+        <>
+          {/* Stats */}
+          {discoveredStats && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <StatCard
+                title="Total Discovered"
+                value={discoveredStats.total}
+                icon={<span className="text-2xl">🔍</span>}
+              />
+              <StatCard
+                title="Joined"
+                value={discoveredStats.joined}
+                icon={<span className="text-2xl text-green-500">✓</span>}
+              />
+              <StatCard
+                title="Pending"
+                value={discoveredStats.pending}
+                icon={<span className="text-2xl text-blue-500">⏳</span>}
+              />
+              <StatCard
+                title="Private/Failed"
+                value={discoveredStats.private + discoveredStats.failed}
+                icon={<span className="text-2xl text-orange-500">⚠</span>}
+              />
+              <StatCard
+                title="Forwards Tracked"
+                value={discoveredStats.total_forwards_tracked}
+                icon={<span className="text-2xl">↗️</span>}
+              />
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="glass p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="col-span-2">
+                <input
+                  type="text"
+                  placeholder="Search discovered channels..."
+                  value={discoveredSearch}
+                  onChange={(e) => { setDiscoveredSearch(e.target.value); setDiscoveredPage(1); }}
+                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <select
+                value={discoveredStatusFilter}
+                onChange={(e) => { setDiscoveredStatusFilter(e.target.value); setDiscoveredPage(1); }}
+                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="joining">Joining</option>
+                <option value="joined">Joined</option>
+                <option value="private">Private</option>
+                <option value="failed">Failed</option>
+                <option value="ignored">Ignored</option>
+              </select>
+              <div className="flex items-center text-sm text-text-secondary">
+                {discoveredTotal} channel{discoveredTotal !== 1 ? 's' : ''} found
+              </div>
+            </div>
+          </div>
+
+          {/* Discovered Channels Table */}
+          <DataTable
+            columns={[
+              {
+                key: 'name',
+                label: 'Channel',
+                render: (_: unknown, ch: DiscoveredChannel) => (
+                  <div>
+                    <div className="font-medium text-text-primary flex items-center gap-1">
+                      {ch.name || ch.username || `ID: ${ch.telegram_id}`}
+                      {ch.verified && <span className="text-blue-500">✓</span>}
+                      {ch.scam && <Badge variant="error" size="sm">SCAM</Badge>}
+                      {ch.fake && <Badge variant="warning" size="sm">FAKE</Badge>}
+                    </div>
+                    {ch.username && <div className="text-xs text-text-tertiary">@{ch.username}</div>}
+                    {ch.participant_count && (
+                      <div className="text-xs text-text-tertiary">
+                        {ch.participant_count.toLocaleString()} members
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (_: unknown, ch: DiscoveredChannel) => (
+                  <div className="space-y-1">
+                    <Badge variant={getStatusBadgeVariant(ch.join_status)} size="sm">
+                      {ch.join_status}
+                    </Badge>
+                    {ch.admin_action && (
+                      <Badge variant={ch.admin_action === 'promoted' ? 'success' : 'default'} size="sm">
+                        {ch.admin_action}
+                      </Badge>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'discovery_count',
+                label: 'Forwards',
+                render: (_: unknown, ch: DiscoveredChannel) => (
+                  <span className="font-medium text-text-primary">
+                    {ch.discovery_count}
+                  </span>
+                ),
+              },
+              {
+                key: 'last_seen',
+                label: 'Last Seen',
+                render: (_: unknown, ch: DiscoveredChannel) => (
+                  <span className="text-sm text-text-secondary">
+                    {new Date(ch.last_seen_at).toLocaleDateString()}
+                  </span>
+                ),
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                render: (_: unknown, ch: DiscoveredChannel) => (
+                  <div className="flex gap-2">
+                    {ch.join_status === 'joined' && !ch.admin_action && (
+                      <button
+                        onClick={() => {
+                          setPromoteChannel(ch);
+                          setPromoteForm({ category_id: 0, folder: '', rule: 'archive_all' });
+                        }}
+                        className="text-green-500 hover:text-green-400 text-sm"
+                      >
+                        Promote
+                      </button>
+                    )}
+                    {(ch.join_status === 'failed' || ch.join_status === 'ignored') && (
+                      <button
+                        onClick={() => handleRetryJoin(ch.id)}
+                        className="text-blue-500 hover:text-blue-400 text-sm"
+                      >
+                        Retry
+                      </button>
+                    )}
+                    {!ch.admin_action && ch.join_status !== 'ignored' && (
+                      <button
+                        onClick={() => handleIgnoreChannel(ch.id)}
+                        className="text-gray-500 hover:text-gray-400 text-sm"
+                      >
+                        Ignore
+                      </button>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+            data={discoveredChannels}
+            keyExtractor={(ch) => ch.id}
+            loading={discoveredLoading}
+            emptyMessage="No discovered channels yet. Channels will appear here when forwards are detected."
+          />
+
+          {/* Pagination */}
+          {discoveredTotalPages > 1 && (
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setDiscoveredPage((p) => Math.max(1, p - 1))}
+                disabled={discoveredPage === 1}
+                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="px-4 py-2 text-text-secondary">
+                Page {discoveredPage} of {discoveredTotalPages}
+              </span>
+              <button
+                onClick={() => setDiscoveredPage((p) => Math.min(discoveredTotalPages, p + 1))}
+                disabled={discoveredPage === discoveredTotalPages}
+                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Promote Channel Modal */}
+      {promoteChannel && (
+        <Modal
+          open={true}
+          title={`Promote: ${promoteChannel.name || promoteChannel.username}`}
+          onClose={() => setPromoteChannel(null)}
+        >
+          <div className="space-y-4">
+            <p className="text-text-secondary text-sm">
+              Promote this channel to full archiving. It will be added to the monitored channels list.
+            </p>
+            {promoteChannel.description && (
+              <div className="glass p-3 text-sm text-text-secondary">
+                {promoteChannel.description}
+              </div>
+            )}
+            <div>
+              <label className="block text-sm text-text-secondary mb-1">Category</label>
+              <select
+                value={promoteForm.category_id}
+                onChange={(e) => setPromoteForm({ ...promoteForm, category_id: parseInt(e.target.value) || 0 })}
+                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              >
+                <option value={0}>Uncategorized</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-text-secondary mb-1">Folder</label>
+              <select
+                value={promoteForm.folder}
+                onChange={(e) => setPromoteForm({ ...promoteForm, folder: e.target.value })}
+                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              >
+                <option value="">No Folder</option>
+                {folders.map((f) => (
+                  <option key={f.folder} value={f.folder}>{f.folder}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-text-secondary mb-1">Archival Rule</label>
+              <select
+                value={promoteForm.rule}
+                onChange={(e) => setPromoteForm({ ...promoteForm, rule: e.target.value })}
+                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              >
+                {RULES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-4 border-t border-border-subtle">
+              <button
+                onClick={() => setPromoteChannel(null)}
+                className="px-4 py-2 text-text-secondary hover:text-text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePromoteChannel}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded"
+              >
+                Promote to Full Archiving
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Edit Channel Modal */}

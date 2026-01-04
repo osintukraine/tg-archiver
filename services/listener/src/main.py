@@ -131,6 +131,9 @@ from .channel_discovery import ChannelDiscovery
 from .import_worker import create_import_worker
 from .metrics import metrics_server, mark_listener_started
 from .redis_queue import redis_queue
+from .channel_join_worker import start_channel_join_worker, stop_channel_join_worker
+from .promotion_worker import start_promotion_worker
+from .forward_social_fetcher import start_forward_social_fetcher, stop_forward_social_fetcher
 from .social_fetcher import start_social_fetcher, stop_social_fetcher
 from .telegram_listener import TelegramListener
 
@@ -295,6 +298,9 @@ async def main() -> NoReturn:
     discovery_task = None
     import_worker = None
     import_worker_task = None
+    promotion_worker = None
+    channel_join_worker = None
+    forward_social_fetcher = None
     social_fetcher = None
 
     try:
@@ -410,6 +416,21 @@ async def main() -> NoReturn:
         import_worker_task = asyncio.create_task(import_worker.start())
         logger.info("Import worker started (listening for import jobs)")
 
+        # 9c. Start promotion worker (adds channels to folders via Redis)
+        logger.info("Starting promotion worker...")
+        promotion_worker = await start_promotion_worker(channel_discovery)
+        logger.info("Promotion worker started (listening for promotion requests)")
+
+        # 9d. Start channel join worker (auto-joins discovered channels)
+        if settings.CHANNEL_JOIN_ENABLED:
+            logger.info("Starting channel join worker...")
+            channel_join_worker = await start_channel_join_worker(telegram_client)
+            logger.info(
+                f"Channel join worker started (interval={settings.CHANNEL_JOIN_INTERVAL_SECONDS}s)"
+            )
+        else:
+            logger.info("Channel join worker disabled (CHANNEL_JOIN_ENABLED=false)")
+
         # 10. Initialize TelegramListener (share the existing telegram_client to avoid session lock)
         logger.info("Initializing Telegram Listener...")
         listener = TelegramListener(
@@ -421,15 +442,21 @@ async def main() -> NoReturn:
         # When channels are added/removed, listener will re-register event handlers
         channel_discovery.set_channels_changed_callback(listener.reload_channels)
 
-        # 11. Start social data fetcher BEFORE listener.start() (which blocks forever)
+        # 11. Start social data fetchers BEFORE listener.start() (which blocks forever)
         # The listener.start() calls run_until_disconnected() which never returns
         if settings.SOCIAL_FETCH_ENABLED:
+            # Social fetcher for OUR archived messages
             logger.info("Starting social data fetcher...")
             social_fetcher = await start_social_fetcher(telegram_client)
             logger.info(
                 f"Social fetcher started (period={settings.SOCIAL_FETCH_PERIOD_DAYS}d, "
                 f"interval={settings.SOCIAL_FETCH_INTERVAL_SECONDS}s)"
             )
+
+            # Forward social fetcher for ORIGINAL messages from forward sources
+            logger.info("Starting forward social fetcher...")
+            forward_social_fetcher = await start_forward_social_fetcher(telegram_client)
+            logger.info("Forward social fetcher started (fetches reactions/comments from originals)")
         else:
             logger.info("Social data fetching disabled (SOCIAL_FETCH_ENABLED=false)")
 
@@ -467,15 +494,25 @@ async def main() -> NoReturn:
         # Graceful shutdown
         logger.info("Shutting down gracefully...")
 
-        # Stop social fetcher first (it uses telegram_client)
+        # Stop social fetchers first (they use telegram_client)
         if social_fetcher:
             await stop_social_fetcher()
+
+        if forward_social_fetcher:
+            await stop_forward_social_fetcher()
+
+        # Stop channel join worker
+        if channel_join_worker:
+            await stop_channel_join_worker()
 
         if import_worker_task and not import_worker_task.done():
             import_worker_task.cancel()
 
         if import_worker:
             await import_worker.stop()
+
+        if promotion_worker:
+            await promotion_worker.stop()
 
         if discovery_task and not discovery_task.done():
             discovery_task.cancel()

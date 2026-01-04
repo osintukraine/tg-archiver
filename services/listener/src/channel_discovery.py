@@ -29,11 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.errors.common import TypeNotFoundError
-from telethon.tl.functions.messages import GetDialogFiltersRequest
+from telethon.tl.functions.messages import GetDialogFiltersRequest, UpdateDialogFilterRequest
 from telethon.tl.types import Channel as TelegramChannel
 from telethon.tl.types import DialogFilter
 from telethon.utils import get_peer_id
-from telethon.tl.types import PeerChannel
+from telethon.tl.types import PeerChannel, InputPeerChannel
 
 from .backfill_service import BackfillService
 from config.settings import settings
@@ -70,6 +70,148 @@ class ChannelDiscovery:
         self.client = client
         self.backfill_service = backfill_service
         self._discovery_count = 0
+        # Callback to notify when channels change (set by main.py after TelegramListener init)
+        self._on_channels_changed: Optional[callable] = None
+
+    def set_channels_changed_callback(self, callback: callable) -> None:
+        """
+        Set callback to be called when channels are added or removed.
+
+        This allows the TelegramListener to re-subscribe to event handlers
+        when the channel list changes.
+
+        Args:
+            callback: Async callable to invoke when channels change
+        """
+        self._on_channels_changed = callback
+        logger.info("Channel change callback registered")
+
+    async def add_channel_to_folder(
+        self, channel_username: str, folder_name: str | None = None
+    ) -> dict:
+        """
+        Add a channel to a Telegram folder.
+
+        This is the PROPER way to add channels - by modifying the actual Telegram
+        folder. The next sync will discover the channel naturally, maintaining
+        folder as the single source of truth.
+
+        Args:
+            channel_username: Username of channel to add (without @)
+            folder_name: Target folder name (default: FOLDER_ARCHIVE_ALL_PATTERN from settings)
+
+        Returns:
+            Dict with result: {success, channel_name, folder_name, error?}
+        """
+        target_folder = folder_name or settings.FOLDER_ARCHIVE_ALL_PATTERN
+
+        try:
+            # 1. Get the channel entity
+            logger.info(f"Resolving channel @{channel_username}...")
+            try:
+                entity = await self.client.get_entity(channel_username)
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Could not find channel @{channel_username}: {e}",
+                }
+
+            if not isinstance(entity, TelegramChannel):
+                return {
+                    "success": False,
+                    "error": f"@{channel_username} is not a channel",
+                }
+
+            # 2. Get all folder filters
+            result = await self.client(GetDialogFiltersRequest())
+            filters = result.filters
+
+            # 3. Find the target folder
+            target_filter = None
+            for f in filters:
+                if hasattr(f, "title") and f.title.text == target_folder:
+                    target_filter = f
+                    break
+
+            if not target_filter:
+                return {
+                    "success": False,
+                    "error": f"Folder '{target_folder}' not found in Telegram",
+                }
+
+            # 4. Check if channel already in folder
+            channel_peer = InputPeerChannel(entity.id, entity.access_hash)
+            for peer in target_filter.include_peers:
+                if hasattr(peer, 'channel_id') and peer.channel_id == entity.id:
+                    return {
+                        "success": True,
+                        "channel_name": entity.title,
+                        "folder_name": target_folder,
+                        "already_existed": True,
+                    }
+
+            # 5. Add channel to folder's include_peers
+            new_include_peers = list(target_filter.include_peers) + [channel_peer]
+
+            # 6. Update the folder on Telegram
+            # Create updated filter with new include_peers
+            await self.client(UpdateDialogFilterRequest(
+                id=target_filter.id,
+                filter=DialogFilter(
+                    id=target_filter.id,
+                    title=target_filter.title,
+                    pinned_peers=target_filter.pinned_peers,
+                    include_peers=new_include_peers,
+                    exclude_peers=target_filter.exclude_peers,
+                    contacts=target_filter.contacts,
+                    non_contacts=target_filter.non_contacts,
+                    groups=target_filter.groups,
+                    broadcasts=target_filter.broadcasts,
+                    bots=target_filter.bots,
+                    exclude_muted=target_filter.exclude_muted,
+                    exclude_read=target_filter.exclude_read,
+                    exclude_archived=target_filter.exclude_archived,
+                    emoticon=getattr(target_filter, 'emoticon', None),
+                )
+            ))
+
+            logger.info(
+                f"Added channel '{entity.title}' (@{channel_username}) to folder '{target_folder}'"
+            )
+
+            # 7. Trigger immediate sync so channel appears right away
+            asyncio.create_task(self._trigger_immediate_sync())
+
+            return {
+                "success": True,
+                "channel_name": entity.title,
+                "folder_name": target_folder,
+                "telegram_id": get_peer_id(PeerChannel(entity.id)),
+            }
+
+        except FloodWaitError as e:
+            logger.warning(f"FloodWait adding channel to folder: {e.seconds}s")
+            return {
+                "success": False,
+                "error": f"Rate limited, try again in {e.seconds} seconds",
+            }
+        except Exception as e:
+            logger.exception(f"Error adding channel to folder: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
+    async def _trigger_immediate_sync(self) -> None:
+        """Trigger an immediate folder sync after adding a channel."""
+        try:
+            await asyncio.sleep(1)  # Small delay for Telegram to propagate
+            channels = await self.discover_channels()
+            async with AsyncSessionLocal() as session:
+                await self.sync_to_database(channels, session)
+            logger.info("Immediate sync completed after adding channel to folder")
+        except Exception as e:
+            logger.error(f"Error in immediate sync: {e}")
 
     async def discover_channels(self) -> list[Channel]:
         """
@@ -207,13 +349,16 @@ class ChannelDiscovery:
 
         try:
             # Step 1: Mark all channels as inactive (will be re-activated if still in folders)
-            result = await session.execute(select(Channel).where(Channel.active == True))
+            # Folder is the single source of truth - channels not in folder are deactivated
+            result = await session.execute(
+                select(Channel).where(Channel.active == True)
+            )
             existing_active = result.scalars().all()
 
             for channel in existing_active:
                 channel.active = False
 
-            logger.debug(f"Marked {len(existing_active)} channels as inactive")
+            logger.debug(f"Marked {len(existing_active)} folder-discovered channels as inactive")
 
             # Step 2: Process discovered channels
             for discovered in discovered_channels:
@@ -270,7 +415,10 @@ class ChannelDiscovery:
             # Step 3: Count removed channels (active=False, no removal timestamp yet)
             result = await session.execute(
                 select(Channel).where(
-                    Channel.active == False, Channel.removed_at == None
+                    and_(
+                        Channel.active == False,
+                        Channel.removed_at == None,
+                    )
                 )
             )
             newly_removed = result.scalars().all()
@@ -316,6 +464,17 @@ class ChannelDiscovery:
                     removed=stats["removed"],
                     total_active=stats["total_active"],
                 )
+
+                # Notify listener to re-subscribe to event handlers with new channel list
+                if self._on_channels_changed:
+                    try:
+                        logger.info(
+                            f"Notifying listener about channel changes: "
+                            f"+{stats['added']} added, -{stats['removed']} removed"
+                        )
+                        await self._on_channels_changed()
+                    except Exception as e:
+                        logger.error(f"Error in channel change callback: {e}")
 
             return stats
 

@@ -32,6 +32,11 @@ from telethon.tl.types import (
     MessageFwdHeader,
     MessageReplyHeader,
     MessageReplies,
+    MessageReactions,
+    ReactionCount,
+    ReactionEmoji,
+    ReactionCustomEmoji,
+    ReactionPaid,
     PeerChannel,
     PeerUser,
 )
@@ -303,3 +308,134 @@ async def fetch_and_upsert_user_from_telegram(
         await upsert_telegram_user(
             telegram_id=telegram_user_id,
         )
+
+
+def extract_reactions(message: TelegramMessage) -> list[Dict[str, Any]]:
+    """
+    Extract reaction data from Telethon Message object.
+
+    Args:
+        message: Telethon Message object
+
+    Returns:
+        List of reaction dictionaries:
+        [
+            {
+                'emoji': str,           # Emoji string or "custom:doc_id" or "⭐"
+                'count': int,           # Number of reactions
+                'custom_emoji_id': Optional[int],  # For custom emoji
+            },
+            ...
+        ]
+    """
+    reactions_list = []
+
+    if not message.reactions:
+        return reactions_list
+
+    try:
+        msg_reactions: MessageReactions = message.reactions
+
+        if not msg_reactions.results:
+            return reactions_list
+
+        for reaction_count in msg_reactions.results:
+            reaction_data = {
+                'emoji': None,
+                'count': reaction_count.count,
+                'custom_emoji_id': None,
+            }
+
+            # Determine reaction type
+            reaction = reaction_count.reaction
+
+            if isinstance(reaction, ReactionEmoji):
+                # Standard emoji reaction (e.g., "👍", "❤️")
+                reaction_data['emoji'] = reaction.emoticon
+            elif isinstance(reaction, ReactionCustomEmoji):
+                # Custom emoji reaction
+                reaction_data['emoji'] = f"custom:{reaction.document_id}"
+                reaction_data['custom_emoji_id'] = reaction.document_id
+            elif isinstance(reaction, ReactionPaid):
+                # Paid reaction (Telegram Stars)
+                reaction_data['emoji'] = "⭐"
+            else:
+                # Unknown reaction type - log and skip
+                logger.warning(
+                    f"Unknown reaction type on message {message.id}: {type(reaction)}"
+                )
+                continue
+
+            reactions_list.append(reaction_data)
+            logger.debug(
+                f"Message {message.id}: {reaction_data['emoji']} x{reaction_data['count']}"
+            )
+
+    except Exception as e:
+        logger.warning(
+            f"Failed to extract reactions from message {message.id}: {e}",
+            exc_info=False
+        )
+
+    return reactions_list
+
+
+async def upsert_reactions(
+    db_message_id: int,
+    reactions: list[Dict[str, Any]]
+) -> int:
+    """
+    Insert or update reaction counts for a message.
+
+    Uses PostgreSQL's ON CONFLICT DO UPDATE to upsert reaction counts.
+    Each emoji type gets one row per message (latest count wins).
+
+    Args:
+        db_message_id: Database message ID (messages.id, not telegram message_id)
+        reactions: List of reaction dictionaries from extract_reactions()
+
+    Returns:
+        Number of reactions upserted
+    """
+    if not reactions:
+        return 0
+
+    async with AsyncSessionLocal() as session:
+        try:
+            upserted = 0
+
+            for reaction in reactions:
+                query = text("""
+                    INSERT INTO message_reactions (
+                        message_id, emoji, count, custom_emoji_id, first_seen, last_updated
+                    )
+                    VALUES (
+                        :message_id, :emoji, :count, :custom_emoji_id, NOW(), NOW()
+                    )
+                    ON CONFLICT (message_id, emoji) DO UPDATE SET
+                        count = EXCLUDED.count,
+                        last_updated = NOW()
+                """)
+
+                await session.execute(query, {
+                    'message_id': db_message_id,
+                    'emoji': reaction['emoji'],
+                    'count': reaction['count'],
+                    'custom_emoji_id': reaction.get('custom_emoji_id'),
+                })
+                upserted += 1
+
+            await session.commit()
+
+            logger.debug(
+                f"Upserted {upserted} reactions for message {db_message_id}"
+            )
+            return upserted
+
+        except Exception as e:
+            await session.rollback()
+            logger.error(
+                f"Failed to upsert reactions for message {db_message_id}: {e}",
+                exc_info=True
+            )
+            return 0

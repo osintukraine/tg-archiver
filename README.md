@@ -12,6 +12,7 @@ Archive messages from Telegram channels with media storage, translation support,
 - **Full-Text Search**: PostgreSQL tsvector-powered search across content and translations
 - **RSS Feeds**: Generate RSS/Atom/JSON feeds for archived channels
 - **Social Graph**: Track forwards, replies, comments, and engagement metrics
+- **Forward Chain Tracking**: Auto-discover channels via forwards, fetch original message context
 - **Topic Classification**: Admin-defined topic taxonomy for message categorization
 - **Backfill**: Automatically fetch historical messages when adding new channels
 - **Self-Hosted**: Complete data sovereignty - your data stays on your infrastructure
@@ -241,6 +242,81 @@ channel_id,channel_username,target_folder,notes
 | `completed` | Successfully imported |
 | `failed` | Import failed (see error) |
 | `skipped` | Skipped (already monitored or deselected) |
+
+---
+
+## Forward Chain Tracking
+
+tg-archiver automatically discovers new channels through message forwards and enriches the social graph with original message context.
+
+### How It Works
+
+```
+Your Monitored Channel          Discovered Channel (auto-joined)
+┌──────────────────────┐        ┌──────────────────────────────┐
+│ Message A            │        │ Original Message             │
+│ "Forwarded from X"   │───────▶│ - Content cached             │
+│ - forward_from_id    │        │ - Reactions fetched          │
+│ - propagation time   │        │ - Comments fetched           │
+└──────────────────────┘        └──────────────────────────────┘
+```
+
+When a forwarded message arrives in your monitored channels:
+
+1. **Discovery**: The source channel is recorded in `discovered_channels`
+2. **Auto-Join**: Background worker joins the channel (for social data access only)
+3. **Social Fetch**: Original message content, reactions, and comments are retrieved
+4. **Admin Review**: Discovered channels appear in `/admin/channels` → **Discovered** tab
+
+### Key Benefits
+
+- **No archiving of discovered channels** - Only social context is fetched
+- **Propagation timing** - Track how fast content spreads (seconds from original to forward)
+- **Complete social graph** - Reactions and comments from the original post
+- **Admin control** - Promote interesting channels to full archiving, or ignore them
+
+### Admin Interface
+
+Navigate to **Admin** → **Channels** → **Discovered** tab to:
+
+| Action | Description |
+|--------|-------------|
+| **Promote** | Add channel to full archiving (select category, folder, rule) |
+| **Ignore** | Hide from suggestions, stop social fetching |
+| **Retry** | Retry joining a failed/private channel |
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CHANNEL_JOIN_ENABLED` | `true` | Enable auto-joining discovered channels |
+| `CHANNEL_JOIN_INTERVAL_SECONDS` | `60` | Seconds between join attempts |
+| `CHANNEL_JOIN_BATCH_SIZE` | `5` | Max channels to join per cycle |
+| `CHANNEL_JOIN_MAX_RETRIES` | `3` | Retries before marking as failed |
+| `CHANNEL_JOIN_RETRY_DELAY_HOURS` | `24` | Hours between retry attempts |
+
+Social data fetching uses the existing `SOCIAL_FETCH_*` settings.
+
+### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `discovered_channels` | Channels found via forwards (status, metadata, admin actions) |
+| `message_forwards` | Links archived messages to their original sources |
+| `original_messages` | Cached content of original messages (graph leaf nodes) |
+| `forward_reactions` | Reactions on original messages |
+| `forward_comments` | Comments on original messages |
+
+### API Endpoints
+
+```
+GET  /api/admin/discovered           # List discovered channels
+GET  /api/admin/discovered/stats     # Statistics
+GET  /api/admin/discovered/{id}      # Channel details + recent forwards
+POST /api/admin/discovered/{id}/promote  # Promote to full archiving
+POST /api/admin/discovered/{id}/ignore   # Mark as ignored
+POST /api/admin/discovered/{id}/retry    # Retry failed join
+```
 
 ---
 

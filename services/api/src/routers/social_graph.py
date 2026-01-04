@@ -77,6 +77,17 @@ async def get_message_social_graph(
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
 
+    # Check which optional tables exist (to avoid transaction abort on missing tables)
+    # This query is safe and won't abort the transaction
+    tables_check = await db.execute(text("""
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name IN ('message_forwards', 'message_replies')
+    """))
+    existing_tables = {row[0] for row in tables_check}
+    has_forwards_table = 'message_forwards' in existing_tables
+    has_replies_table = 'message_replies' in existing_tables
+
     nodes = []
     edges = []
 
@@ -147,53 +158,208 @@ async def get_message_social_graph(
             "label": "posted"
         })
 
-    # Forward chain (NEW: from message_forwards table)
-    if include_forwards:
-        try:
-            forwards_query = text("""
-                SELECT
-                    mf.id,
-                    mf.forwarded_message_id,
-                    mf.forward_date,
-                    mf.propagation_seconds,
-                    m.content,
-                    m.channel_id
-                FROM message_forwards mf
-                JOIN messages m ON m.id = mf.forwarded_message_id
-                WHERE mf.original_message_id = :message_id
-                ORDER BY mf.forward_date DESC
-                LIMIT 20
-            """)
-            forwards_result = await db.execute(forwards_query, {"message_id": message.id})
-            forwards = list(forwards_result)
+    # Forward source (inbound - where this message was forwarded FROM)
+    # Uses the new forward chain tracking tables
+    try:
+        forward_source_query = text("""
+            SELECT
+                mf.id as forward_id,
+                mf.original_message_id,
+                mf.propagation_seconds,
+                dc.id as discovered_channel_id,
+                dc.telegram_id as source_telegram_id,
+                dc.name as source_name,
+                dc.username as source_username,
+                dc.participant_count as source_subscribers,
+                dc.verified as source_verified,
+                om.content as original_content,
+                om.views as original_views,
+                om.forwards as original_forwards,
+                om.comments_count as original_comments,
+                om.original_date
+            FROM message_forwards mf
+            JOIN discovered_channels dc ON dc.id = mf.discovered_channel_id
+            LEFT JOIN original_messages om ON om.message_forward_id = mf.id
+            WHERE mf.local_message_id = :message_id
+        """)
+        forward_source_result = await db.execute(forward_source_query, {"message_id": message.id})
+        forward_source = forward_source_result.first()
 
-            for fwd in forwards:
+        if forward_source:
+            # Add discovered channel as forward_source node
+            source_label = forward_source.source_name or forward_source.source_username or "Unknown Channel"
+            nodes.append({
+                "id": f"source-{forward_source.discovered_channel_id}",
+                "type": "forward_source",
+                "label": source_label,
+                "data": {
+                    "channel_id": forward_source.discovered_channel_id,
+                    "telegram_id": forward_source.source_telegram_id,
+                    "name": forward_source.source_name,
+                    "username": forward_source.source_username,
+                    "subscribers": forward_source.source_subscribers,
+                    "verified": forward_source.source_verified,
+                    "original_message_id": forward_source.original_message_id,
+                    "original_views": forward_source.original_views,
+                    "original_forwards": forward_source.original_forwards,
+                    "original_comments": forward_source.original_comments,
+                    "original_content": (forward_source.original_content or "")[:200],
+                    "propagation_seconds": forward_source.propagation_seconds,
+                    "original_date": forward_source.original_date.isoformat() if forward_source.original_date else None,
+                }
+            })
+            edges.append({
+                "id": f"edge-forward-source-{forward_source.forward_id}",
+                "source": f"source-{forward_source.discovered_channel_id}",
+                "target": f"msg-{message.id}",
+                "type": "forwarded_from",
+                "label": f"{forward_source.propagation_seconds}s" if forward_source.propagation_seconds else "forwarded",
+                "data": {
+                    "propagation_seconds": forward_source.propagation_seconds
+                }
+            })
+
+            # Add reactions from original as satellite nodes
+            forward_reactions_query = text("""
+                SELECT emoji, count FROM forward_reactions
+                WHERE message_forward_id = :forward_id
+                ORDER BY count DESC
+                LIMIT 6
+            """)
+            fr_result = await db.execute(forward_reactions_query, {"forward_id": forward_source.forward_id})
+            for fr in fr_result:
+                emoji_id = fr.emoji.replace("(", "").replace(")", "").replace(" ", "_")
                 nodes.append({
-                    "id": f"msg-{fwd.forwarded_message_id}",
-                    "type": "forwarded_message",
-                    "label": (fwd.content or "Forwarded")[:30],
+                    "id": f"src-reaction-{emoji_id}",
+                    "type": "reaction",
+                    "label": f"{fr.emoji} {fr.count:,}",
                     "data": {
-                        "message_id": fwd.forwarded_message_id,
-                        "channel_id": fwd.channel_id,
-                        "forward_date": fwd.forward_date.isoformat() if fwd.forward_date else None,
-                        "propagation_seconds": fwd.propagation_seconds,
+                        "emoji": fr.emoji,
+                        "count": fr.count,
+                        "from_original": True,
                     }
                 })
                 edges.append({
-                    "id": f"edge-forward-{fwd.id}",
-                    "source": f"msg-{message.id}",
-                    "target": f"msg-{fwd.forwarded_message_id}",
-                    "type": "forwarded_to",
-                    "label": f"{fwd.propagation_seconds}s" if fwd.propagation_seconds else "forwarded",
+                    "id": f"edge-src-reaction-{emoji_id}",
+                    "source": f"src-reaction-{emoji_id}",
+                    "target": f"source-{forward_source.discovered_channel_id}",
+                    "type": "reacted",
+                    "label": ""
+                })
+            # Find sibling forwards - other channels that forwarded the same original message
+            sibling_forwards_query = text("""
+                SELECT
+                    mf2.id as forward_id,
+                    mf2.local_message_id,
+                    mf2.propagation_seconds,
+                    m.id as sibling_message_id,
+                    c.id as sibling_channel_id,
+                    c.name as sibling_channel_name,
+                    c.username as sibling_channel_username,
+                    m.telegram_date as forward_date
+                FROM message_forwards mf2
+                JOIN messages m ON m.id = mf2.local_message_id
+                JOIN channels c ON c.id = m.channel_id
+                WHERE mf2.original_channel_id = (SELECT original_channel_id FROM message_forwards WHERE local_message_id = :message_id)
+                AND mf2.original_message_id = (SELECT original_message_id FROM message_forwards WHERE local_message_id = :message_id)
+                AND mf2.local_message_id != :message_id
+                ORDER BY mf2.forward_date
+                LIMIT 10
+            """)
+            sibling_result = await db.execute(sibling_forwards_query, {"message_id": message.id})
+            siblings = list(sibling_result)
+
+            for sibling in siblings:
+                sibling_label = sibling.sibling_channel_name or sibling.sibling_channel_username or "Unknown"
+                nodes.append({
+                    "id": f"sibling-{sibling.sibling_message_id}",
+                    "type": "sibling_forward",
+                    "label": sibling_label,
                     "data": {
-                        "propagation_seconds": fwd.propagation_seconds
+                        "message_id": sibling.sibling_message_id,
+                        "channel_id": sibling.sibling_channel_id,
+                        "channel_name": sibling.sibling_channel_name,
+                        "channel_username": sibling.sibling_channel_username,
+                        "propagation_seconds": sibling.propagation_seconds,
+                        "forward_date": sibling.forward_date.isoformat() if sibling.forward_date else None,
                     }
                 })
-        except Exception as e:
-            logger.warning("Could not fetch forwards for message %d: %s", message.id, e)
+                # Connect sibling to the same forward source
+                edges.append({
+                    "id": f"edge-sibling-{sibling.sibling_message_id}",
+                    "source": f"source-{forward_source.discovered_channel_id}",
+                    "target": f"sibling-{sibling.sibling_message_id}",
+                    "type": "forwarded_to",
+                    "label": f"{sibling.propagation_seconds}s" if sibling.propagation_seconds else "",
+                    "data": {
+                        "propagation_seconds": sibling.propagation_seconds
+                    }
+                })
 
-    # Reply thread (NEW: from message_replies table)
-    if include_replies:
+    except Exception as e:
+        logger.debug("Could not fetch forward source for message %d: %s", message.id, e)
+
+    # Check if this message has been forwarded BY other channels (outbound forwards)
+    # This shows the propagation of the current message to other channels
+    try:
+        outbound_forwards_query = text("""
+            SELECT
+                mf.id as forward_id,
+                mf.local_message_id as forwarder_message_id,
+                mf.propagation_seconds,
+                m.id as forwarder_db_id,
+                c.id as forwarder_channel_id,
+                c.name as forwarder_channel_name,
+                c.username as forwarder_channel_username,
+                m.telegram_date as forward_date,
+                m.views as forwarder_views
+            FROM message_forwards mf
+            JOIN messages m ON m.id = mf.local_message_id
+            JOIN channels c ON c.id = m.channel_id
+            JOIN channels source_ch ON source_ch.id = :channel_id
+            WHERE mf.original_channel_id = source_ch.telegram_id
+            AND mf.original_message_id = :telegram_message_id
+            ORDER BY mf.forward_date
+            LIMIT 10
+        """)
+        outbound_result = await db.execute(outbound_forwards_query, {
+            "channel_id": message.channel_id,
+            "telegram_message_id": message.message_id
+        })
+        outbound_forwards = list(outbound_result)
+
+        for outbound in outbound_forwards:
+            forwarder_label = outbound.forwarder_channel_name or outbound.forwarder_channel_username or "Unknown"
+            nodes.append({
+                "id": f"outbound-{outbound.forwarder_db_id}",
+                "type": "outbound_forward",
+                "label": forwarder_label,
+                "data": {
+                    "message_id": outbound.forwarder_db_id,
+                    "channel_id": outbound.forwarder_channel_id,
+                    "channel_name": outbound.forwarder_channel_name,
+                    "channel_username": outbound.forwarder_channel_username,
+                    "propagation_seconds": outbound.propagation_seconds,
+                    "forward_date": outbound.forward_date.isoformat() if outbound.forward_date else None,
+                    "views": outbound.forwarder_views,
+                }
+            })
+            # Connect current message to forwarder
+            edges.append({
+                "id": f"edge-outbound-{outbound.forwarder_db_id}",
+                "source": f"msg-{message.id}",
+                "target": f"outbound-{outbound.forwarder_db_id}",
+                "type": "forwarded_to",
+                "label": f"{outbound.propagation_seconds}s" if outbound.propagation_seconds else "forwarded",
+                "data": {
+                    "propagation_seconds": outbound.propagation_seconds
+                }
+            })
+    except Exception as e:
+        logger.debug("Could not fetch outbound forwards for message %d: %s", message.id, e)
+
+    # Reply thread (from message_replies table - only if table exists)
+    if include_replies and has_replies_table:
         try:
             replies_query = text("""
                 SELECT
@@ -285,11 +451,15 @@ async def get_message_social_graph(
                 SELECT
                     id,
                     content,
+                    content_translated,
+                    language_detected,
+                    translation_method,
                     author_user_id,
-                    telegram_date as created_at
+                    author_username,
+                    comment_date as created_at
                 FROM message_comments
                 WHERE parent_message_id = :message_id
-                ORDER BY telegram_date ASC
+                ORDER BY comment_date ASC
                 LIMIT :max_comments
             """)
 
@@ -300,14 +470,22 @@ async def get_message_social_graph(
             comments = list(comments_result)
 
             for idx, comment in enumerate(comments):
+                # Use translated content for label if available
+                display_content = comment.content_translated or comment.content
+                label = display_content[:30] if display_content else f"Comment {idx+1}"
+
                 nodes.append({
                     "id": f"comment-{comment.id}",
                     "type": "comment",
-                    "label": comment.content[:30] if comment.content else f"Comment {idx+1}",
+                    "label": label,
                     "data": {
                         "comment_id": comment.id,
                         "content": comment.content,
+                        "translated_content": comment.content_translated,
+                        "original_language": comment.language_detected,
+                        "translation_method": comment.translation_method,
                         "author_user_id": comment.author_user_id,
+                        "user_name": comment.author_username,
                         "created_at": comment.created_at.isoformat() if comment.created_at else None,
                     }
                 })
@@ -813,14 +991,14 @@ async def get_message_comments(
             SELECT
                 id,
                 content,
-                translated_content,
+                content_translated,
                 author_user_id,
-                telegram_date as created_at,
-                original_language,
-                translation_method
+                author_username,
+                comment_date as created_at,
+                language_detected
             FROM message_comments
             WHERE parent_message_id = :message_id
-            ORDER BY telegram_date {sort_order}
+            ORDER BY comment_date {sort_order}
             LIMIT :limit OFFSET :offset
         """)
 
@@ -848,11 +1026,11 @@ async def get_message_comments(
         comments_list.append({
             "id": comment.id,
             "content": comment.content,
-            "translated_content": comment.translated_content,
+            "translated_content": comment.content_translated,
             "author_user_id": comment.author_user_id,
+            "author_username": comment.author_username,
             "created_at": comment.created_at.isoformat() if comment.created_at else None,
-            "original_language": comment.original_language,
-            "translation_method": comment.translation_method,
+            "original_language": comment.language_detected,
         })
 
     return {

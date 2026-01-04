@@ -71,6 +71,11 @@ class Channel(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     removed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # How the channel was added
+    source: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, default="folder_discovery", index=True
+    )  # 'folder_discovery', 'admin_promotion', 'manual'
+
     # Historical backfill tracking
     backfill_status: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True, index=True

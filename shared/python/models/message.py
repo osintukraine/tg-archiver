@@ -187,6 +187,14 @@ class Message(Base):
     comments: Mapped[list["MessageComment"]] = relationship(
         "MessageComment", back_populates="parent_message", cascade="all, delete-orphan"
     )
+    # Reactions (emoji counts)
+    reactions: Mapped[list["MessageReaction"]] = relationship(
+        "MessageReaction", back_populates="message", cascade="all, delete-orphan"
+    )
+    # Forward chain tracking (if this message was forwarded from another channel)
+    forward_info: Mapped[Optional["MessageForward"]] = relationship(
+        "MessageForward", back_populates="local_message", uselist=False, cascade="all, delete-orphan"
+    )
 
     @property
     def media_files(self) -> list:

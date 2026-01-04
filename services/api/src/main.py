@@ -62,6 +62,7 @@ from .routers import (
     admin_folders_router,
     admin_topics_router,
     admin_import_router,
+    admin_discovered_router,
     metrics_router,
 )
 from .routers.docs import router as docs_router
@@ -267,6 +268,7 @@ app.include_router(admin_extraction_router)
 app.include_router(admin_folders_router)
 app.include_router(admin_topics_router)
 app.include_router(admin_import_router)
+app.include_router(admin_discovered_router)
 
 
 @app.on_event("startup")

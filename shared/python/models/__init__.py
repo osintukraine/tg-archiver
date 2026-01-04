@@ -16,11 +16,18 @@ from .storage import StorageBox  # Must come before MediaFile (FK dependency)
 from .media import MediaFile, MessageMedia
 from .message import Message
 from .message_comment import MessageComment
+from .message_reaction import MessageReaction
 from .message_topic import MessageTopic
 from .message_quarantine import MessageQuarantine
 from .rss_feed import RSSFeed
 from .tag import MessageTag, TagStats
 from .user import User
+# Forward chain tracking (discovered channels + social data from originals)
+from .discovered_channel import DiscoveredChannel
+from .message_forward import MessageForward
+from .original_message import OriginalMessage
+from .forward_reaction import ForwardReaction
+from .forward_comment import ForwardComment
 
 # Import order matters for foreign key relationships
 __all__ = [
@@ -39,6 +46,7 @@ __all__ = [
     "FeedSubscription",
     "Message",
     "MessageComment",
+    "MessageReaction",
     "MessageTopic",
     "MessageQuarantine",
     "StorageBox",
@@ -60,4 +68,10 @@ __all__ = [
     "ImportJobChannel",
     "ImportJobLog",
     "MonitoredFolder",
+    # Forward Chain Tracking
+    "DiscoveredChannel",
+    "MessageForward",
+    "OriginalMessage",
+    "ForwardReaction",
+    "ForwardComment",
 ]

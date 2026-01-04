@@ -40,6 +40,7 @@ from .admin.extraction import router as admin_extraction_router
 from .admin.folders import router as admin_folders_router
 from .admin.topics import router as admin_topics_router
 from .admin.import_channels import router as admin_import_router
+from .admin.discovered import router as admin_discovered_router
 from .metrics import router as metrics_router
 
 __all__ = [
@@ -76,5 +77,6 @@ __all__ = [
     "admin_folders_router",
     "admin_topics_router",
     "admin_import_router",
+    "admin_discovered_router",
     "metrics_router",
 ]

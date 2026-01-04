@@ -393,6 +393,30 @@ CREATE INDEX IF NOT EXISTS idx_comments_author ON message_comments(author_user_i
 CREATE INDEX IF NOT EXISTS idx_comments_date ON message_comments(comment_date);
 
 -- ===========================================================================
+-- MESSAGE REACTIONS
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS message_reactions (
+    id BIGSERIAL PRIMARY KEY,
+    message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+
+    -- Reaction data
+    emoji VARCHAR(100) NOT NULL,          -- Emoji string or "custom:doc_id"
+    count INTEGER NOT NULL DEFAULT 0,
+    custom_emoji_id BIGINT,               -- For custom emoji reactions
+
+    -- Tracking
+    first_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Unique constraint: one row per emoji per message (latest count)
+    CONSTRAINT uq_message_reaction UNIQUE (message_id, emoji)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reactions_message ON message_reactions(message_id);
+CREATE INDEX IF NOT EXISTS idx_reactions_emoji ON message_reactions(emoji);
+CREATE INDEX IF NOT EXISTS idx_reactions_updated ON message_reactions(last_updated);
+
+-- ===========================================================================
 -- MESSAGE QUARANTINE (for content review)
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS message_quarantine (

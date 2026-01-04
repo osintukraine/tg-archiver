@@ -158,6 +158,44 @@ class Settings(BaseSettings):
     )
 
     # =============================================================================
+    # SOCIAL DATA FETCHING (Comments & Reactions)
+    # =============================================================================
+    SOCIAL_FETCH_ENABLED: bool = Field(
+        default=True, description="Enable fetching comments and reactions from Telegram"
+    )
+    SOCIAL_FETCH_PERIOD_DAYS: int = Field(
+        default=7, description="Fetch social data for messages from the last N days"
+    )
+    SOCIAL_FETCH_INTERVAL_SECONDS: int = Field(
+        default=300, description="Interval between social data fetch cycles (5 minutes)"
+    )
+    SOCIAL_FETCH_BATCH_SIZE: int = Field(
+        default=50, description="Messages to process per fetch cycle"
+    )
+    SOCIAL_REACTION_POLL_INTERVAL: int = Field(
+        default=30, description="Seconds between reaction polls for visible messages (Telegram recommends 15-30s)"
+    )
+
+    # =============================================================================
+    # DISCOVERED CHANNEL JOIN WORKER
+    # =============================================================================
+    CHANNEL_JOIN_ENABLED: bool = Field(
+        default=True, description="Enable auto-joining discovered channels for social data"
+    )
+    CHANNEL_JOIN_INTERVAL_SECONDS: int = Field(
+        default=60, description="Interval between channel join cycles"
+    )
+    CHANNEL_JOIN_BATCH_SIZE: int = Field(
+        default=5, description="Max channels to attempt joining per cycle"
+    )
+    CHANNEL_JOIN_MAX_RETRIES: int = Field(
+        default=3, description="Max join retries before marking as failed"
+    )
+    CHANNEL_JOIN_RETRY_DELAY_HOURS: int = Field(
+        default=24, description="Hours to wait before retrying a failed join"
+    )
+
+    # =============================================================================
     # HISTORICAL BACKFILL CONFIGURATION
     # =============================================================================
     BACKFILL_ENABLED: bool = Field(
@@ -360,6 +398,17 @@ class Settings(BaseSettings):
     def REDIS_URL(self) -> str:
         """Construct Redis connection URL from components."""
         return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    # Lowercase aliases for backwards compatibility with middleware
+    @property
+    def redis_url(self) -> str:
+        """Alias for REDIS_URL (lowercase for middleware compatibility)."""
+        return self.REDIS_URL
+
+    @property
+    def redis_password(self) -> str:
+        """Alias for REDIS_PASSWORD (lowercase for middleware compatibility)."""
+        return self.REDIS_PASSWORD
 
     def get_translation_languages(self) -> list[str]:
         """Get translation languages as a list."""

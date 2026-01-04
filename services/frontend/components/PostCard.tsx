@@ -26,6 +26,7 @@ import EngagementBar from './EngagementBar';
 import SocialGraphIndicator from './SocialGraphIndicator';
 import { formatNumber, calculateViralityRatio, getViralityColor } from '@/lib/utils';
 import { MediaLightbox } from './MediaLightbox';
+import { ForwardContext } from './ForwardContext';
 
 // Helper to get country info from channel folder
 function getCountryInfo(folder: string | null | undefined): { flag: string; label: string; color: string } | null {

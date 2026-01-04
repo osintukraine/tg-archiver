@@ -102,6 +102,10 @@ class TelegramListener:
         # Shutdown flag
         self._shutdown = False
 
+        # Event handler references (for re-registration when channels change)
+        self._album_handler = None
+        self._message_handler = None
+
     async def start(self):
         """
         Start Telegram listener.
@@ -216,9 +220,21 @@ class TelegramListener:
         """
         Subscribe to new message events from active channels.
 
-        Uses Telethon's event handler system.
+        Uses Telethon's event handler system. Handlers can be re-registered
+        when channels change via _resubscribe_to_channels().
         """
-        # Get channel entities
+        await self._register_event_handlers()
+
+        # Keep client running
+        await self.client.run_until_disconnected()
+
+    async def _get_channel_entities(self) -> list:
+        """
+        Get Telethon channel entities for all active channels.
+
+        Returns:
+            List of TelegramChannel entities
+        """
         channel_entities = []
 
         for channel in self.active_channels.values():
@@ -241,15 +257,21 @@ class TelegramListener:
                 logger.error(f"Failed to get entity for channel {channel.name}: {e}")
                 continue
 
-        # PRIMARY: Register Album event handler for grouped media
-        # Telethon automatically buffers all messages in an album and delivers them together
-        @self.client.on(events.Album(chats=channel_entities))
+        return channel_entities
+
+    async def _register_event_handlers(self):
+        """
+        Register event handlers for current active channels.
+
+        Stores handler references so they can be removed later.
+        """
+        channel_entities = await self._get_channel_entities()
+
+        # Define handler functions
         async def handle_album(event: events.Album.Event):
             """Handle complete album from subscribed channels."""
             await self._on_album(event)
 
-        # SECONDARY: Register NewMessage handler for single (non-grouped) messages
-        @self.client.on(events.NewMessage(chats=channel_entities))
         async def handle_new_message(event: events.NewMessage.Event):
             """Handle single message from subscribed channels."""
             # Skip grouped messages - Album event handles complete albums
@@ -259,13 +281,43 @@ class TelegramListener:
                 return
             await self._on_single_message(event.message)
 
+        # Store references for later removal
+        self._album_handler = handle_album
+        self._message_handler = handle_new_message
+
+        # Register handlers with channel filter
+        self.client.add_event_handler(
+            handle_album,
+            events.Album(chats=channel_entities)
+        )
+        self.client.add_event_handler(
+            handle_new_message,
+            events.NewMessage(chats=channel_entities)
+        )
+
         logger.info(
             f"Subscribed to {len(channel_entities)} channels "
             f"(events.Album for albums, events.NewMessage for singles)"
         )
 
-        # Keep client running
-        await self.client.run_until_disconnected()
+    async def _resubscribe_to_channels(self):
+        """
+        Re-register event handlers with updated channel list.
+
+        Called when channels are added/removed to update the subscription
+        without restarting the listener.
+        """
+        # Remove old handlers if they exist
+        if self._album_handler:
+            self.client.remove_event_handler(self._album_handler)
+            logger.debug("Removed old Album handler")
+        if self._message_handler:
+            self.client.remove_event_handler(self._message_handler)
+            logger.debug("Removed old NewMessage handler")
+
+        # Register new handlers with updated channel list
+        await self._register_event_handlers()
+        logger.info("Re-subscribed to channels with updated list")
 
     async def _on_album(self, event: events.Album.Event):
         """
@@ -826,22 +878,32 @@ class TelegramListener:
 
     async def reload_channels(self):
         """
-        Reload active channels from database.
+        Reload active channels from database and re-subscribe if changed.
 
         Called by background sync task when channels are added/removed.
+        Automatically re-registers event handlers with updated channel list.
         """
         logger.info("Reloading active channels...")
 
         old_count = len(self.active_channels)
-        await self.load_active_channels()
-        new_count = len(self.active_channels)
+        old_ids = set(self.active_channels.keys())
 
-        if new_count != old_count:
+        await self.load_active_channels()
+
+        new_count = len(self.active_channels)
+        new_ids = set(self.active_channels.keys())
+
+        # Check if channels actually changed (not just count, but which channels)
+        if old_ids != new_ids:
+            added = new_ids - old_ids
+            removed = old_ids - new_ids
+
             logger.info(
-                f"Channel count changed: {old_count} → {new_count} "
-                f"({new_count - old_count:+d})"
+                f"Channel list changed: {old_count} → {new_count} "
+                f"(+{len(added)} added, -{len(removed)} removed)"
             )
-            # Note: Would need to restart subscription to apply changes
-            # For now, we'll handle this in main.py by restarting listener
+
+            # Re-register event handlers with updated channel list
+            await self._resubscribe_to_channels()
         else:
-            logger.info("No channel changes detected")
+            logger.debug("No channel changes detected")

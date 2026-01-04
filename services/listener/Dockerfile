@@ -40,8 +40,8 @@ RUN groupadd --system --gid 1001 listener && \
     useradd --system --uid 1001 --gid listener listener
 
 # Create directories for data persistence and set ownership
-RUN mkdir -p /data/sessions /var/log/listener && \
-    chown -R listener:listener /app /data /var/log/listener
+RUN mkdir -p /data/sessions /var/log/listener /var/cache/media-buffer && \
+    chown -R listener:listener /app /data /var/log/listener /var/cache/media-buffer
 
 # Switch to non-root user
 USER listener

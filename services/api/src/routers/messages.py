@@ -241,6 +241,113 @@ async def get_message_album(
     )
 
 
+@router.get("/{message_id}/forward-context")
+async def get_forward_context(message_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Get forward chain context for a message.
+
+    If this message was forwarded from another channel, returns:
+    - Original source channel info
+    - Original message stats (views, forwards)
+    - Reactions from original message
+    - Comments from original message
+    - Propagation timing
+    """
+    # Check if message has forward chain data
+    result = await db.execute(text("""
+        SELECT
+            mf.id as forward_id,
+            mf.original_message_id,
+            mf.propagation_seconds,
+            mf.social_data_fetched_at,
+            dc.id as discovered_channel_id,
+            dc.telegram_id as source_telegram_id,
+            dc.name as source_name,
+            dc.username as source_username,
+            dc.participant_count as source_subscribers,
+            dc.verified as source_verified,
+            dc.join_status,
+            om.content as original_content,
+            om.views as original_views,
+            om.forwards as original_forwards,
+            om.comments_count as original_comments_count,
+            om.original_date,
+            om.has_media as original_has_media
+        FROM message_forwards mf
+        JOIN discovered_channels dc ON dc.id = mf.discovered_channel_id
+        LEFT JOIN original_messages om ON om.message_forward_id = mf.id
+        WHERE mf.local_message_id = :message_id
+    """), {"message_id": message_id})
+
+    row = result.fetchone()
+    if not row:
+        return {"has_forward_context": False}
+
+    forward_data = dict(row._mapping)
+
+    # Get reactions
+    reactions_result = await db.execute(text("""
+        SELECT emoji, count, custom_emoji_id
+        FROM forward_reactions
+        WHERE message_forward_id = :forward_id
+        ORDER BY count DESC
+    """), {"forward_id": forward_data["forward_id"]})
+
+    reactions = [
+        {"emoji": r[0], "count": r[1], "custom_emoji_id": r[2]}
+        for r in reactions_result.fetchall()
+    ]
+
+    # Get sample comments (most recent 10)
+    comments_result = await db.execute(text("""
+        SELECT
+            author_username,
+            author_first_name,
+            content,
+            comment_date
+        FROM forward_comments
+        WHERE message_forward_id = :forward_id
+        ORDER BY comment_date DESC
+        LIMIT 10
+    """), {"forward_id": forward_data["forward_id"]})
+
+    comments = [
+        {
+            "author": r[0] or r[1] or "Anonymous",
+            "content": r[2],
+            "date": r[3].isoformat() if r[3] else None
+        }
+        for r in comments_result.fetchall()
+    ]
+
+    return {
+        "has_forward_context": True,
+        "source": {
+            "name": forward_data["source_name"],
+            "username": forward_data["source_username"],
+            "subscribers": forward_data["source_subscribers"],
+            "verified": forward_data["source_verified"],
+            "telegram_id": forward_data["source_telegram_id"],
+            "join_status": forward_data["join_status"],
+        },
+        "original": {
+            "message_id": forward_data["original_message_id"],
+            "content": forward_data["original_content"],
+            "views": forward_data["original_views"],
+            "forwards": forward_data["original_forwards"],
+            "comments_count": forward_data["original_comments_count"],
+            "date": forward_data["original_date"].isoformat() if forward_data["original_date"] else None,
+            "has_media": forward_data["original_has_media"],
+        },
+        "propagation_seconds": forward_data["propagation_seconds"],
+        "social_fetched_at": forward_data["social_data_fetched_at"].isoformat() if forward_data["social_data_fetched_at"] else None,
+        "reactions": reactions,
+        "reactions_total": sum(r["count"] for r in reactions),
+        "comments": comments,
+        "comments_fetched": len(comments),
+    }
+
+
 @router.get("/{message_id}", response_model=MessageDetail)
 async def get_message(message_id: int, db: AsyncSession = Depends(get_db)):
     """

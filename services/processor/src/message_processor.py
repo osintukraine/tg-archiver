@@ -58,6 +58,8 @@ from telethon import TelegramClient
 from config.settings import settings
 from models.base import AsyncSessionLocal
 from models.message import Message
+from models.discovered_channel import DiscoveredChannel
+from models.message_forward import MessageForward
 
 from .entity_extractor import EntityExtractor
 from media_archiver import MediaArchiver  # From shared/python
@@ -541,10 +543,124 @@ class MessageProcessor:
 
             await session.commit()
 
+            # Track forward chain if this is a forwarded message
+            if message.forward_from_channel_id and message.forward_from_message_id:
+                await self._track_forward_chain(
+                    message=message,
+                    db_message_id=db_message.id,
+                    forward_date=forward_date_parsed,
+                    telegram_date=telegram_date,
+                    session=session,
+                )
+
         except Exception as e:
             await session.rollback()
             logger.error(f"Failed to persist message {message.message_id}: {e}")
             raise
+
+    async def _track_forward_chain(
+        self,
+        message: ProcessedMessage,
+        db_message_id: int,
+        forward_date: Optional[datetime],
+        telegram_date: Optional[datetime],
+        session: AsyncSession,
+    ) -> None:
+        """
+        Track forward chain by recording discovered channel and forward link.
+
+        When we receive a forwarded message, we:
+        1. Upsert the source channel into discovered_channels (for auto-join)
+        2. Create a message_forwards record linking our message to the original
+
+        Args:
+            message: The processed message with forward metadata
+            db_message_id: Database ID of the persisted message
+            forward_date: When the original message was posted
+            telegram_date: When our copy was posted (forward time)
+            session: Database session
+        """
+        from sqlalchemy.dialects.postgresql import insert
+        from sqlalchemy import select, update
+
+        try:
+            # Step 1: Upsert discovered channel
+            # Check if this channel is already in our monitored channels
+            from models.channel import Channel
+
+            monitored_check = await session.execute(
+                select(Channel.id).where(Channel.telegram_id == message.forward_from_channel_id)
+            )
+            is_monitored = monitored_check.scalar_one_or_none() is not None
+
+            discovered_channel_id = None
+
+            if not is_monitored:
+                # Channel is not monitored - add to discovered_channels
+                discovered_upsert = insert(DiscoveredChannel).values(
+                    telegram_id=message.forward_from_channel_id,
+                    discovered_at=datetime.utcnow(),
+                    discovered_via_message_id=db_message_id,
+                    discovery_count=1,
+                    last_seen_at=datetime.utcnow(),
+                    join_status='pending',
+                ).on_conflict_do_update(
+                    index_elements=['telegram_id'],
+                    set_={
+                        'discovery_count': DiscoveredChannel.discovery_count + 1,
+                        'last_seen_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow(),
+                    }
+                ).returning(DiscoveredChannel.id)
+
+                result = await session.execute(discovered_upsert)
+                discovered_channel_id = result.scalar_one_or_none()
+
+                logger.info(
+                    f"Discovered channel {message.forward_from_channel_id} via forward "
+                    f"(discovered_channel_id={discovered_channel_id})"
+                )
+            else:
+                # Channel is monitored - check if it's also in discovered_channels
+                discovered_check = await session.execute(
+                    select(DiscoveredChannel.id).where(
+                        DiscoveredChannel.telegram_id == message.forward_from_channel_id
+                    )
+                )
+                discovered_channel_id = discovered_check.scalar_one_or_none()
+
+            # Step 2: Calculate propagation time
+            propagation_seconds = None
+            if forward_date and telegram_date:
+                delta = telegram_date - forward_date
+                propagation_seconds = int(delta.total_seconds())
+
+            # Step 3: Insert message_forwards record
+            forward_insert = insert(MessageForward).values(
+                local_message_id=db_message_id,
+                original_channel_id=message.forward_from_channel_id,
+                original_message_id=message.forward_from_message_id,
+                discovered_channel_id=discovered_channel_id,
+                original_date=forward_date,
+                forward_date=telegram_date,
+                propagation_seconds=propagation_seconds,
+            ).on_conflict_do_nothing(
+                index_elements=['local_message_id']
+            )
+
+            await session.execute(forward_insert)
+            await session.commit()
+
+            logger.debug(
+                f"Tracked forward: local_msg={db_message_id} <- "
+                f"original={message.forward_from_channel_id}/{message.forward_from_message_id} "
+                f"(propagation={propagation_seconds}s)"
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to track forward chain: {e}")
+            # Don't fail the whole message processing for forward tracking
+            await session.rollback()
 
     def get_stats(self) -> dict:
         """Get comprehensive processing statistics."""

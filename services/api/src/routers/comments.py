@@ -120,8 +120,8 @@ async def translate_comment(
         SELECT
             id,
             content,
-            translated_content,
-            original_language,
+            content_translated,
+            language_detected,
             translation_method
         FROM message_comments
         WHERE id = :comment_id
@@ -134,12 +134,12 @@ async def translate_comment(
         raise HTTPException(status_code=404, detail="Comment not found")
 
     # If already translated, return cached
-    if comment.translated_content:
+    if comment.content_translated:
         return TranslateResponse(
             comment_id=comment.id,
             original_content=comment.content or "",
-            translated_content=comment.translated_content,
-            original_language=comment.original_language or "unknown",
+            translated_content=comment.content_translated,
+            original_language=comment.language_detected or "unknown",
             translation_method="cached",
             cached=True,
         )
@@ -173,8 +173,8 @@ async def translate_comment(
             await db.execute(
                 text("""
                     UPDATE message_comments
-                    SET original_language = 'en',
-                        translated_content = content,
+                    SET language_detected = 'en',
+                        content_translated = content,
                         translation_method = 'none',
                         translation_confidence = 1.0,
                         translated_at = :now
@@ -209,8 +209,8 @@ async def translate_comment(
         await db.execute(
             text("""
                 UPDATE message_comments
-                SET original_language = :original_lang,
-                    translated_content = :translated_content,
+                SET language_detected = :original_lang,
+                    content_translated = :translated_content,
                     translation_method = :translation_method,
                     translation_confidence = :confidence,
                     translated_at = :now
@@ -284,11 +284,11 @@ async def get_comment(
         SELECT
             id,
             content,
-            translated_content,
-            original_language,
+            content_translated,
+            language_detected,
             translation_method,
             author_user_id,
-            telegram_date as created_at
+            comment_date as created_at
         FROM message_comments
         WHERE id = :comment_id
     """)
@@ -302,10 +302,10 @@ async def get_comment(
     return CommentResponse(
         id=comment.id,
         content=comment.content or "",
-        translated_content=comment.translated_content,
-        original_language=comment.original_language,
+        translated_content=comment.content_translated,
+        original_language=comment.language_detected,
         translation_method=comment.translation_method,
         author_user_id=comment.author_user_id,
         created_at=comment.created_at,
-        has_translation=comment.translated_content is not None,
+        has_translation=comment.content_translated is not None,
     )

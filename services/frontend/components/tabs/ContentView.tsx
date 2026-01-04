@@ -9,6 +9,105 @@ import EngagementBar from '@/components/EngagementBar';
 import SocialGraphIndicator from '@/components/SocialGraphIndicator';
 import { MediaLightbox } from '@/components/MediaLightbox';
 
+// YouTube URL patterns
+const YOUTUBE_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:\S*)?/g;
+const URL_PATTERN = /(https?:\/\/[^\s<]+[^\s<.,;:!?"')\]])/g;
+
+// Extract YouTube video ID from URL
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// Component to render content with clickable links and YouTube embeds
+function FormattedContent({ content, embedYouTube = true }: { content: string; embedYouTube?: boolean }) {
+  if (!content) return <span>No content</span>;
+
+  // Find all YouTube URLs for embedding
+  const youtubeMatches: { id: string; url: string }[] = [];
+  if (embedYouTube) {
+    const ytRegex = new RegExp(YOUTUBE_PATTERN.source, 'g');
+    let ytMatch;
+    while ((ytMatch = ytRegex.exec(content)) !== null) {
+      const id = extractYouTubeId(ytMatch[0]);
+      if (id && !youtubeMatches.find(m => m.id === id)) {
+        youtubeMatches.push({ id, url: ytMatch[0] });
+      }
+    }
+  }
+
+  // Split content by URLs and render with links
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let partKey = 0;
+  const urlRegex = new RegExp(URL_PATTERN.source, 'g');
+  let urlMatch;
+
+  while ((urlMatch = urlRegex.exec(content)) !== null) {
+    if (urlMatch.index > lastIndex) {
+      parts.push(<span key={partKey++}>{content.slice(lastIndex, urlMatch.index)}</span>);
+    }
+    const url = urlMatch[0];
+    const isYouTube = extractYouTubeId(url) !== null;
+    parts.push(
+      <a
+        key={partKey++}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`text-blue-500 hover:text-blue-600 hover:underline ${isYouTube ? 'inline-flex items-center gap-1' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        title={isYouTube ? 'Open YouTube video in new tab' : 'Open link in new tab'}
+      >
+        {isYouTube && (
+          <svg className="w-4 h-4 text-red-500 inline-block" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
+        )}
+        {url}
+      </a>
+    );
+    lastIndex = urlMatch.index + url.length;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push(<span key={partKey++}>{content.slice(lastIndex)}</span>);
+  }
+
+  return (
+    <>
+      <div className="whitespace-pre-wrap">{parts.length > 0 ? parts : content}</div>
+      {embedYouTube && youtubeMatches.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {youtubeMatches.map(({ id }) => (
+            <div
+              key={id}
+              className="relative w-full rounded-lg overflow-hidden bg-black"
+              style={{ paddingBottom: '56.25%' }}
+            >
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src={`https://www.youtube-nocookie.com/embed/${id}`}
+                title="YouTube video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 interface ContentViewProps {
   message: Message;
 }
@@ -136,11 +235,9 @@ export function ContentView({ message }: ContentViewProps) {
         mode="compact"
       />
 
-      {/* Message Content */}
-      <div className="prose prose-sm max-w-none">
-        <div className="whitespace-pre-wrap text-sm leading-relaxed">
-          {displayContent}
-        </div>
+      {/* Message Content with clickable links and YouTube embeds */}
+      <div className="prose prose-sm max-w-none text-sm leading-relaxed">
+        <FormattedContent content={displayContent || ''} embedYouTube={true} />
       </div>
 
       {/* Translation Notice */}

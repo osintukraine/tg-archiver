@@ -112,3 +112,77 @@ npm run test -- components/__tests__/PostCard.test.tsx
 ```
 
 Python services don't have comprehensive test coverage yet. Manual testing via Docker logs.
+
+## Critical Instructions for Claude Code
+
+### CSRF Protection (MANDATORY)
+
+**All API interactions involving authentication or state changes MUST account for CSRF protection.**
+
+- CSRF is enabled by default (`CSRF_ENABLED=true`)
+- State-changing requests (POST, PUT, PATCH, DELETE) require the `X-CSRF-Token` header
+- The token is read from the `csrf_token` cookie set by the API
+- Frontend clients (`lib/api.ts`, `lib/admin-api.ts`) handle this automatically
+- When adding new API endpoints or frontend API calls, always include CSRF token handling
+
+### Building Services (MANDATORY)
+
+**Always use Docker to build frontend and backend components.**
+
+```bash
+# Build specific service
+docker-compose build api
+docker-compose build frontend
+
+# Rebuild and restart (force recreate to pick up new image)
+docker-compose build api && docker-compose up -d --force-recreate api
+docker-compose build frontend && docker-compose up -d --force-recreate frontend
+```
+
+**IMPORTANT:** Always use `--force-recreate` when restarting after a build. Without it, Docker may reuse the old container and ignore the new image.
+
+Never run `npm run build` or Python directly for production testing. Always use Docker containers.
+
+### Database Queries (MANDATORY)
+
+**Before running ANY psql command, ALWAYS list the database schema first.**
+
+```bash
+# List all tables
+docker-compose exec postgres psql -U archiver -d tg_archiver -c "\dt"
+
+# Describe a specific table
+docker-compose exec postgres psql -U archiver -d tg_archiver -c "\d table_name"
+```
+
+**NEVER guess table names or column names.** Always verify schema before querying.
+
+### API Testing (MANDATORY)
+
+**When testing API endpoints, use JWT authentication with credentials from `.env`.**
+
+1. Read credentials from `.env`:
+   ```bash
+   grep -E "^JWT_ADMIN" .env
+   ```
+
+2. Use `username` field (not `email`) for login:
+   ```bash
+   # Get token - use "admin" as username, password from JWT_ADMIN_PASSWORD
+   docker-compose exec api curl -s -X POST http://localhost:8000/api/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"admin","password":"<PASSWORD_FROM_ENV>"}'
+   ```
+
+3. Use token for authenticated requests:
+   ```bash
+   docker-compose exec api curl -s http://localhost:8000/api/admin/endpoint \
+     -H "Authorization: Bearer <TOKEN>"
+   ```
+
+**NEVER guess or hallucinate:**
+- Usernames or passwords
+- Database table names or column names
+- API endpoint paths
+
+Always read from `.env`, schema, or source code first.

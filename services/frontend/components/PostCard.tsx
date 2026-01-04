@@ -28,6 +28,125 @@ import { formatNumber, calculateViralityRatio, getViralityColor } from '@/lib/ut
 import { MediaLightbox } from './MediaLightbox';
 import { ForwardContext } from './ForwardContext';
 
+// YouTube URL patterns
+const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:\S*)?/g;
+const URL_REGEX = /(https?:\/\/[^\s<]+[^\s<.,;:!?"')\]])/g;
+
+// Extract YouTube video ID from URL
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// Component to render content with clickable links and YouTube embeds
+function FormattedContent({
+  content,
+  className = '',
+  embedYouTube = true
+}: {
+  content: string;
+  className?: string;
+  embedYouTube?: boolean;
+}) {
+  if (!content) return <span className={className}>No content</span>;
+
+  // Find all YouTube URLs for embedding
+  const youtubeMatches: { id: string; url: string }[] = [];
+  if (embedYouTube) {
+    let match;
+    const ytRegex = new RegExp(YOUTUBE_REGEX.source, 'g');
+    while ((match = ytRegex.exec(content)) !== null) {
+      const id = extractYouTubeId(match[0]);
+      if (id && !youtubeMatches.find(m => m.id === id)) {
+        youtubeMatches.push({ id, url: match[0] });
+      }
+    }
+  }
+
+  // Split content by URLs and render with links
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let partKey = 0;
+
+  const urlRegex = new RegExp(URL_REGEX.source, 'g');
+  let urlMatch;
+
+  while ((urlMatch = urlRegex.exec(content)) !== null) {
+    // Add text before the URL
+    if (urlMatch.index > lastIndex) {
+      parts.push(
+        <span key={partKey++}>{content.slice(lastIndex, urlMatch.index)}</span>
+      );
+    }
+
+    const url = urlMatch[0];
+    const isYouTube = extractYouTubeId(url) !== null;
+
+    // Add the clickable link
+    parts.push(
+      <a
+        key={partKey++}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`text-accent-primary hover:underline ${isYouTube ? 'inline-flex items-center gap-1' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+        title={isYouTube ? 'Open YouTube video in new tab' : 'Open link in new tab'}
+      >
+        {isYouTube && (
+          <svg className="w-4 h-4 text-red-500 inline" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+          </svg>
+        )}
+        {url}
+      </a>
+    );
+
+    lastIndex = urlMatch.index + url.length;
+  }
+
+  // Add remaining text
+  if (lastIndex < content.length) {
+    parts.push(<span key={partKey++}>{content.slice(lastIndex)}</span>);
+  }
+
+  return (
+    <div className={className}>
+      <div className="whitespace-pre-wrap">{parts.length > 0 ? parts : content}</div>
+
+      {/* YouTube Embeds */}
+      {embedYouTube && youtubeMatches.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {youtubeMatches.map(({ id }) => (
+            <div
+              key={id}
+              className="relative w-full rounded-lg overflow-hidden bg-black"
+              style={{ paddingBottom: '56.25%' }} // 16:9 aspect ratio
+            >
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src={`https://www.youtube-nocookie.com/embed/${id}`}
+                title="YouTube video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Helper to get country info from channel folder
 function getCountryInfo(folder: string | null | undefined): { flag: string; label: string; color: string } | null {
   if (!folder) return null;
@@ -360,7 +479,7 @@ export function PostCard({
 
           {/* Content: 2-line preview */}
           <div className="text-text-primary text-sm line-clamp-2 mb-auto">
-            {displayContent || 'No content'}
+            <FormattedContent content={displayContent || ''} embedYouTube={false} />
           </div>
 
           {/* Entity chips removed from compact view - too noisy.
@@ -534,9 +653,11 @@ export function PostCard({
 
         {/* Content */}
         <div className="space-y-2">
-          <div className="text-text-primary leading-relaxed">
-            {displayContent || 'No content'}
-          </div>
+          <FormattedContent
+            content={displayContent || ''}
+            className="text-text-primary leading-relaxed"
+            embedYouTube={true}
+          />
         </div>
 
         {/* Media */}
@@ -1088,9 +1209,11 @@ export function PostCard({
 
             {/* Content */}
             <div className="prose prose-invert max-w-none">
-              <div className="text-lg leading-relaxed text-text-primary whitespace-pre-wrap">
-                {displayContent || 'No content'}
-              </div>
+              <FormattedContent
+                content={displayContent || ''}
+                className="text-lg leading-relaxed text-text-primary"
+                embedYouTube={true}
+              />
             </div>
 
             {/* Translation */}

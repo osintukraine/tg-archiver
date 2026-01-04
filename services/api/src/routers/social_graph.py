@@ -503,7 +503,10 @@ async def get_message_social_graph(
     views = message.views or 0
     forwards = message.forwards or 0
     reactions_total = sum(r["count"] for r in reactions_data)
-    engagement_rate = ((forwards + reactions_total) / views) if views > 0 else 0.0
+    # Engagement rate as ratio (0-1), capped at 1.0 to avoid nonsense percentages
+    # when reactions exceed views (can happen with low view counts)
+    raw_engagement = ((forwards + reactions_total) / views) if views > 0 else 0.0
+    engagement_rate = min(raw_engagement, 1.0)
 
     # Determine virality level based on forward count
     if forwards >= 1000:

@@ -425,7 +425,7 @@ export function MetadataTab({ message }: MetadataTabProps) {
                     Copy
                   </button>
                 </div>
-                <div className="font-mono text-xs bg-muted dark:bg-gray-800 p-2 rounded break-all">
+                <div className="font-mono text-xs bg-muted dark:bg-gray-800 p-2 rounded-sm break-all">
                   {message.metadata_hash}
                 </div>
                 <p className="text-xs text-muted-foreground dark:text-gray-500">
@@ -449,7 +449,7 @@ export function MetadataTab({ message }: MetadataTabProps) {
                     Copy
                   </button>
                 </div>
-                <div className="font-mono text-xs bg-muted dark:bg-gray-800 p-2 rounded break-all">
+                <div className="font-mono text-xs bg-muted dark:bg-gray-800 p-2 rounded-sm break-all">
                   {message.content_hash}
                 </div>
                 <p className="text-xs text-muted-foreground dark:text-gray-500">

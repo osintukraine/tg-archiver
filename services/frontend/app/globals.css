@@ -1,6 +1,315 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@config '../tailwind.config.ts';
+
+/* Topic classes are built dynamically (`topic-${topic}`); v4 ignores the JS config safelist */
+@source inline('topic-{news,announcement,discussion,media,important,archive,offtopic,other,rule_based}');
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility glass {
+  /* Glass morphism effect */
+  background-color: var(--bg-elevated);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.1);
+  opacity: 0.9;
+}
+
+@utility immersive-overlay {
+  /* Immersive mode glass overlay */
+  backdrop-filter: blur(16px);
+  background: rgba(0, 0, 0, 0.7);
+}
+
+@utility immersive-glass {
+  backdrop-filter: blur(12px);
+  background: rgba(15, 20, 25, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+}
+
+@utility importance-critical {
+  /* Importance level badges */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-accent-danger/20 text-accent-danger border border-accent-danger/30;
+}
+
+@utility importance-high {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-accent-warning/20 text-accent-warning border border-accent-warning/30;
+}
+
+@utility importance-medium {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-accent-primary/20 text-accent-primary border border-accent-primary/30;
+}
+
+@utility importance-low {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold text-text-tertiary border;
+  background-color: color-mix(in srgb, var(--text-tertiary) 20%, transparent);
+  border-color: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
+}
+
+@utility importance-minimal {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold text-text-tertiary border;
+  background-color: color-mix(in srgb, var(--border-subtle) 20%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 30%, transparent);
+}
+
+@utility topic-news {
+  /* Topic badges - Generic categories for any Telegram archive */
+
+  /* News - Red (breaking news, updates) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30;
+}
+
+@utility topic-rule_based {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30;
+}
+
+@utility topic-announcement {
+  /* Announcement - Green (official announcements) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30;
+}
+
+@utility topic-discussion {
+  /* Discussion - Cyan (conversations, threads) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30;
+}
+
+@utility topic-media {
+  /* Media - Blue (photos, videos, documents) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30;
+}
+
+@utility topic-important {
+  /* Important - Purple (high priority content) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30;
+}
+
+@utility topic-archive {
+  /* Archive - Indigo (historical content) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30;
+}
+
+@utility topic-offtopic {
+  /* Off-topic - Pink (unrelated content) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-pink-500/20 text-pink-400 border border-pink-500/30;
+}
+
+@utility topic-other {
+  /* Other - Gray (fallback) */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30;
+}
+
+@utility virality-viral {
+  /* Virality color variants */
+  @apply text-red-400 bg-red-500/20;
+}
+
+@utility virality-elevated {
+  @apply text-yellow-400 bg-yellow-500/20;
+}
+
+@utility virality-normal {
+  @apply text-text-tertiary bg-gray-500/10;
+}
+
+@utility country-border-ua {
+  /* Country flag gradient borders for message cards */
+  /* Uses pseudo-element for gradient border with rounded corners */
+  position: relative;
+  transition: all 0.2s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(0.5rem + 2px);
+    padding: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: -1;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+@utility country-border-ru {
+  position: relative;
+  transition: all 0.2s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(0.5rem + 2px);
+    padding: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: -1;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+@utility country-border-unaffiliated {
+  position: relative;
+  transition: all 0.2s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(0.5rem + 2px);
+    padding: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: -1;
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+@utility category-border-primary {
+  /* Category 1: Blue accent */
+  &::before {
+    background: linear-gradient(
+      to bottom,
+      #3b82f6 0%,
+      #3b82f6 50%,
+      #60a5fa 50%,
+      #60a5fa 100%
+    );
+  }
+
+  /* Show gradient border on hover */
+  &:hover::before {
+    opacity: 1;
+  }
+
+  /* Subtle glow effect on hover for better visibility */
+  &:hover {
+    box-shadow:
+      0 0 15px rgba(59, 130, 246, 0.3),
+      0 0 15px rgba(96, 165, 250, 0.3);
+  }
+}
+
+@utility category-border-secondary {
+  /* Category 2: Purple accent */
+  &::before {
+    background: linear-gradient(
+      to bottom,
+      #8b5cf6 0%,
+      #8b5cf6 33.33%,
+      #a78bfa 33.33%,
+      #a78bfa 66.66%,
+      #c4b5fd 66.66%,
+      #c4b5fd 100%
+    );
+  }
+  &:hover::before {
+    opacity: 1;
+  }
+
+  &:hover {
+    box-shadow:
+      0 0 12px rgba(139, 92, 246, 0.25),
+      0 0 12px rgba(167, 139, 250, 0.25);
+  }
+}
+
+@utility category-border-default {
+  /* Uncategorized: Solid gray */
+  &::before {
+    background: #6b7280;
+  }
+  &:hover::before {
+    opacity: 1;
+  }
+
+  &:hover {
+    box-shadow: 0 0 15px rgba(107, 114, 128, 0.2);
+  }
+}
+
+@utility needs-review-glow {
+  /* Review status glow effect */
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  animation: pulse-orange 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@utility no-scrollbar {
+  /* Entity chips scrollbar hiding */
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@utility sentiment-positive {
+  /* Sentiment badge styles */
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30;
+}
+
+@utility sentiment-negative {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30;
+}
+
+@utility sentiment-neutral {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30;
+}
+
+@utility sentiment-urgent {
+  @apply inline-block px-2 py-1 rounded-sm text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30;
+}
+
+@utility urgency-gradient {
+  /* Urgency meter gradient */
+  background: linear-gradient(
+    to right,
+    var(--color-green-500) 0%,
+    var(--color-yellow-500) 40%,
+    var(--color-orange-500) 60%,
+    var(--color-red-500) 80%
+  );
+}
+
+@utility animate-scroll-x {
+  /* RSS Ticker horizontal scroll animation */
+  animation: scroll-x 30s linear infinite;
+}
 
 @layer base {
   /* Light theme (default) */
@@ -55,180 +364,6 @@
 }
 
 @layer components {
-  /* Glass morphism effect */
-  .glass {
-    background-color: var(--bg-elevated);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--border-subtle);
-    border-radius: 0.5rem;
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    opacity: 0.9;
-  }
-
-  /* Immersive mode glass overlay */
-  .immersive-overlay {
-    backdrop-filter: blur(16px);
-    background: rgba(0, 0, 0, 0.7);
-  }
-
-  .immersive-glass {
-    backdrop-filter: blur(12px);
-    background: rgba(15, 20, 25, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.75rem;
-  }
-
-  /* Importance level badges */
-  .importance-critical {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-accent-danger/20 text-accent-danger border border-accent-danger/30;
-  }
-
-  .importance-high {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-accent-warning/20 text-accent-warning border border-accent-warning/30;
-  }
-
-  .importance-medium {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-accent-primary/20 text-accent-primary border border-accent-primary/30;
-  }
-
-  .importance-low {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold text-text-tertiary border;
-    background-color: color-mix(in srgb, var(--text-tertiary) 20%, transparent);
-    border-color: color-mix(in srgb, var(--text-tertiary) 30%, transparent);
-  }
-
-  .importance-minimal {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold text-text-tertiary border;
-    background-color: color-mix(in srgb, var(--border-subtle) 20%, transparent);
-    border-color: color-mix(in srgb, var(--border-subtle) 30%, transparent);
-  }
-
-  /* Topic badges - Generic categories for any Telegram archive */
-
-  /* News - Red (breaking news, updates) */
-  .topic-news,
-  .topic-rule_based {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30;
-  }
-
-  /* Announcement - Green (official announcements) */
-  .topic-announcement {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30;
-  }
-
-  /* Discussion - Cyan (conversations, threads) */
-  .topic-discussion {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30;
-  }
-
-  /* Media - Blue (photos, videos, documents) */
-  .topic-media {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30;
-  }
-
-  /* Important - Purple (high priority content) */
-  .topic-important {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30;
-  }
-
-  /* Archive - Indigo (historical content) */
-  .topic-archive {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30;
-  }
-
-  /* Off-topic - Pink (unrelated content) */
-  .topic-offtopic {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-pink-500/20 text-pink-400 border border-pink-500/30;
-  }
-
-  /* Other - Gray (fallback) */
-  .topic-other {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30;
-  }
-
-  /* Virality color variants */
-  .virality-viral {
-    @apply text-red-400 bg-red-500/20;
-  }
-
-  .virality-elevated {
-    @apply text-yellow-400 bg-yellow-500/20;
-  }
-
-  .virality-normal {
-    @apply text-text-tertiary bg-gray-500/10;
-  }
-
-  /* Country flag gradient borders for message cards */
-  /* Uses pseudo-element for gradient border with rounded corners */
-
-  .country-border-ua,
-  .country-border-ru,
-  .country-border-unaffiliated {
-    position: relative;
-    transition: all 0.2s ease;
-  }
-
-  .country-border-ua::before,
-  .country-border-ru::before,
-  .country-border-unaffiliated::before {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: calc(0.5rem + 2px);
-    padding: 2px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    pointer-events: none;
-    z-index: -1;
-    -webkit-mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-  }
-
-  /* Category 1: Blue accent */
-  .category-border-primary::before {
-    background: linear-gradient(to bottom, #3B82F6 0%, #3B82F6 50%, #60A5FA 50%, #60A5FA 100%);
-  }
-
-  /* Category 2: Purple accent */
-  .category-border-secondary::before {
-    background: linear-gradient(to bottom, #8B5CF6 0%, #8B5CF6 33.33%, #A78BFA 33.33%, #A78BFA 66.66%, #C4B5FD 66.66%, #C4B5FD 100%);
-  }
-
-  /* Uncategorized: Solid gray */
-  .category-border-default::before {
-    background: #6B7280;
-  }
-
-  /* Show gradient border on hover */
-  .category-border-primary:hover::before,
-  .category-border-secondary:hover::before,
-  .category-border-default:hover::before {
-    opacity: 1;
-  }
-
-  /* Subtle glow effect on hover for better visibility */
-  .category-border-primary:hover {
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.3), 0 0 15px rgba(96, 165, 250, 0.3);
-  }
-
-  .category-border-secondary:hover {
-    box-shadow: 0 0 12px rgba(139, 92, 246, 0.25), 0 0 12px rgba(167, 139, 250, 0.25);
-  }
-
-  .category-border-default:hover {
-    box-shadow: 0 0 15px rgba(107, 114, 128, 0.2);
-  }
-
-  /* Review status glow effect */
-  .needs-review-glow {
-    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
-    animation: pulse-orange 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
   @keyframes pulse-orange {
     0%, 100% {
       box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
@@ -236,48 +371,6 @@
     50% {
       box-shadow: 0 0 30px rgba(245, 158, 11, 0.4);
     }
-  }
-
-  /* Entity chips scrollbar hiding */
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  /* Sentiment badge styles */
-  .sentiment-positive {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30;
-  }
-
-  .sentiment-negative {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30;
-  }
-
-  .sentiment-neutral {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-gray-500/20 text-gray-400 border border-gray-500/30;
-  }
-
-  .sentiment-urgent {
-    @apply inline-block px-2 py-1 rounded text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30;
-  }
-
-  /* Urgency meter gradient */
-  .urgency-gradient {
-    background: linear-gradient(to right,
-      theme('colors.green.500') 0%,
-      theme('colors.yellow.500') 40%,
-      theme('colors.orange.500') 60%,
-      theme('colors.red.500') 80%
-    );
-  }
-
-  /* RSS Ticker horizontal scroll animation */
-  .animate-scroll-x {
-    animation: scroll-x 30s linear infinite;
   }
 
   @keyframes scroll-x {

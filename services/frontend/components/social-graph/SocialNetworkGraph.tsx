@@ -107,19 +107,19 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-3">
               {node.views !== undefined && (
-                <div className="bg-background/50 rounded p-2 text-center">
+                <div className="bg-background/50 rounded-sm p-2 text-center">
                   <p className="text-xs text-muted-foreground">Views</p>
                   <p className="text-sm font-medium">{node.views?.toLocaleString() || '0'}</p>
                 </div>
               )}
               {node.forwards !== undefined && (
-                <div className="bg-background/50 rounded p-2 text-center">
+                <div className="bg-background/50 rounded-sm p-2 text-center">
                   <p className="text-xs text-muted-foreground">Forwards</p>
                   <p className="text-sm font-medium">{node.forwards?.toLocaleString() || '0'}</p>
                 </div>
               )}
               {node.comments_count !== undefined && (
-                <div className="bg-background/50 rounded p-2 text-center">
+                <div className="bg-background/50 rounded-sm p-2 text-center">
                   <p className="text-xs text-muted-foreground">Comments</p>
                   <p className="text-sm font-medium">{node.comments_count || '0'}</p>
                 </div>
@@ -128,7 +128,7 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
             {node.content && (
               <div>
                 <span className="text-xs font-medium text-muted-foreground">Content Preview:</span>
-                <p className="text-xs p-2 bg-background/50 rounded mt-1 max-h-16 overflow-y-auto">
+                <p className="text-xs p-2 bg-background/50 rounded-sm mt-1 max-h-16 overflow-y-auto">
                   {node.content.substring(0, 200)}{node.content.length > 200 ? '...' : ''}
                 </p>
               </div>
@@ -179,19 +179,19 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
             {(node.original_views || node.original_forwards || node.original_comments) && (
               <div className="grid grid-cols-3 gap-2 mt-2">
                 {node.original_views !== undefined && (
-                  <div className="bg-background/50 rounded p-1.5 text-center">
+                  <div className="bg-background/50 rounded-sm p-1.5 text-center">
                     <p className="text-xs text-muted-foreground">Views</p>
                     <p className="text-sm font-medium">{node.original_views?.toLocaleString() || '0'}</p>
                   </div>
                 )}
                 {node.original_forwards !== undefined && (
-                  <div className="bg-background/50 rounded p-1.5 text-center">
+                  <div className="bg-background/50 rounded-sm p-1.5 text-center">
                     <p className="text-xs text-muted-foreground">Forwards</p>
                     <p className="text-sm font-medium">{node.original_forwards?.toLocaleString() || '0'}</p>
                   </div>
                 )}
                 {node.original_comments !== undefined && (
-                  <div className="bg-background/50 rounded p-1.5 text-center">
+                  <div className="bg-background/50 rounded-sm p-1.5 text-center">
                     <p className="text-xs text-muted-foreground">Comments</p>
                     <p className="text-sm font-medium">{node.original_comments?.toLocaleString() || '0'}</p>
                   </div>
@@ -211,7 +211,7 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
             {node.original_content && (
               <div className="mt-2">
                 <span className="text-xs font-medium text-muted-foreground">Original:</span>
-                <p className="text-xs p-2 bg-background/50 rounded mt-1 max-h-16 overflow-y-auto">
+                <p className="text-xs p-2 bg-background/50 rounded-sm mt-1 max-h-16 overflow-y-auto">
                   {node.original_content.substring(0, 150)}{node.original_content.length > 150 ? '...' : ''}
                 </p>
               </div>
@@ -281,7 +281,7 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
               <p className="text-sm font-medium">{node.channel_name}</p>
             )}
             {node.views && (
-              <div className="bg-background/50 rounded p-1.5 text-center inline-block">
+              <div className="bg-background/50 rounded-sm p-1.5 text-center inline-block">
                 <p className="text-xs text-muted-foreground">Views on forward</p>
                 <p className="text-sm font-medium">{node.views?.toLocaleString() || '0'}</p>
               </div>
@@ -336,7 +336,7 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
                     </span>
                   </div>
                 )}
-                <p className="text-sm p-2 bg-background/50 rounded max-h-20 overflow-y-auto">
+                <p className="text-sm p-2 bg-background/50 rounded-sm max-h-20 overflow-y-auto">
                   {showOriginal || !hasTranslation
                     ? (node.text || node.content)
                     : translatedContent}
@@ -413,6 +413,44 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
 }
 
 // Color palette for nodes and edges - vibrant, distinct colors
+/**
+ * Create a Sigma v4 renderer. Sigma touches WebGL/window, so it is imported lazily (client only).
+ */
+async function createSigma(graph: any, container: HTMLElement, isDark: boolean) {
+  const [{ default: Sigma }, { DEFAULT_PRIMITIVES, DEFAULT_EDGE_PRIMITIVES, DEFAULT_STYLES }, { extremityArrow }] =
+    await Promise.all([import('sigma'), import('sigma/types'), import('sigma/rendering')]);
+
+  return new Sigma(graph, container, {
+    // Primitives are not merged with defaults, so spread them and only add arrow heads
+    primitives: {
+      ...DEFAULT_PRIMITIVES,
+      edges: { ...DEFAULT_EDGE_PRIMITIVES, extremities: [extremityArrow()], defaultHead: 'arrow' },
+    },
+    styles: {
+      nodes: {
+        ...DEFAULT_STYLES.nodes,
+        size: {
+          whenState: 'isHovered',
+          then: (attrs: any) => (attrs.size ?? 10) * 1.3,
+          else: { attribute: 'size', defaultValue: 10 },
+        },
+        labelSize: 12,
+        labelColor: isDark ? '#e2e8f0' : '#334155',
+      },
+      edges: {
+        ...DEFAULT_STYLES.edges,
+        labelVisibility: 'hidden',
+      },
+    },
+    settings: {
+      renderEdgeLabels: false,
+      minCameraRatio: 0.1,
+      maxCameraRatio: 10,
+      stagePadding: 50, // Add padding around the graph for labels
+    },
+  });
+}
+
 function getColorPalette(isDark: boolean) {
   return {
     message: { bg: isDark ? '#3b82f6' : '#2563eb', border: isDark ? '#60a5fa' : '#1d4ed8' },      // Blue - center message
@@ -522,7 +560,6 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
     const initSigma = async () => {
       try {
         const Graph = (await import('graphology')).default;
-        const Sigma = (await import('sigma')).default;
         const forceAtlas2 = (await import('graphology-layout-forceatlas2')).default;
 
         if (!mounted || !containerRef.current) return;
@@ -609,18 +646,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
         });
 
         // Create Sigma instance
-        const sigma = new Sigma(graph, containerRef.current, {
-          renderEdgeLabels: false,
-          defaultEdgeType: 'arrow',
-          labelSize: 12,
-          labelWeight: 'bold',
-          labelColor: { color: isDark ? '#e2e8f0' : '#334155' },
-          defaultNodeColor: isDark ? '#475569' : '#64748b',
-          defaultEdgeColor: isDark ? '#4a5568' : '#a0aec0',
-          minCameraRatio: 0.1,
-          maxCameraRatio: 10,
-          stagePadding: 50, // Add padding around the graph for labels
-        });
+        const sigma = await createSigma(graph, containerRef.current, isDark);
 
         // Set Sigma canvas background to transparent so container bg shows through
         const canvas = containerRef.current.querySelector('canvas');
@@ -644,25 +670,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
           setSelectedNode(null);
         });
 
-        // Hover effects
-        let hoveredNode: string | null = null;
-
-        sigma.on('enterNode', ({ node }) => {
-          hoveredNode = node;
-          sigma.setSetting('nodeReducer', (n, data) => {
-            if (n === hoveredNode) {
-              return { ...data, size: data.size * 1.3 };
-            }
-            return data;
-          });
-          sigma.refresh();
-        });
-
-        sigma.on('leaveNode', () => {
-          hoveredNode = null;
-          sigma.setSetting('nodeReducer', null);
-          sigma.refresh();
-        });
+        // Hover enlargement is handled by the isHovered style rule in createSigma
 
         graphRef.current = graph;
         sigmaRef.current = sigma;
@@ -705,7 +713,6 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
         graph.setEdgeAttribute(edge, 'color', getEdgeColor(edgeType, isDark));
       });
 
-      sigmaRef.current.setSetting('labelColor', { color: isDark ? '#e2e8f0' : '#334155' });
       sigmaRef.current.refresh();
     }
   }, [isDark, isInitialized, mounted]);
@@ -722,20 +729,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
     sigmaRef.current.kill();
 
     const initNewSigma = async () => {
-      const Sigma = (await import('sigma')).default;
-
-      const sigma = new Sigma(graph, targetContainer, {
-        renderEdgeLabels: false,
-        defaultEdgeType: 'arrow',
-        labelSize: 12,
-        labelWeight: 'bold',
-        labelColor: { color: isDark ? '#e2e8f0' : '#334155' },
-        defaultNodeColor: isDark ? '#475569' : '#64748b',
-        defaultEdgeColor: isDark ? '#4a5568' : '#a0aec0',
-        minCameraRatio: 0.1,
-        maxCameraRatio: 10,
-        stagePadding: 50,
-      });
+      const sigma = await createSigma(graph, targetContainer, isDark);
 
       sigma.on('clickNode', ({ node }) => {
         const nodeAttrs = graph.getNodeAttributes(node);
@@ -924,7 +918,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
             {/* Virality Badge */}
             {metadata.virality && metadata.virality !== 'none' && (
-              <div className="px-4 py-3 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+              <div className="px-4 py-3 bg-linear-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
                 <div className="flex items-center gap-2">
                   <span
                     className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
@@ -963,7 +957,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                     .map((reaction: any, idx: number) => (
                       <div
                         key={idx}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-full border border-muted shadow-sm"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-full border border-muted shadow-xs"
                       >
                         <span className="text-lg">{reaction.emoji}</span>
                         <span className="text-sm font-medium">
@@ -972,7 +966,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                       </div>
                     ))}
                   {reactions.some((r: any) => r.emoji.includes('ReactionPaid')) && (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 rounded-full border border-yellow-200 dark:border-yellow-800">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 rounded-full border border-yellow-200 dark:border-yellow-800">
                       <span className="text-lg">⭐</span>
                       <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
                         {reactions.find((r: any) => r.emoji.includes('ReactionPaid'))?.count || 0} Paid
@@ -1104,7 +1098,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
       {/* Fullscreen Modal */}
       {isFullscreen && (
-        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
+        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xs flex flex-col">
           {/* Fullscreen Header */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-3">
@@ -1139,7 +1133,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
           {/* Fullscreen Graph Container */}
           <div className="flex-1 relative">
             {/* Legend */}
-            <div className="absolute top-4 left-4 z-10 bg-background/90 backdrop-blur rounded-lg p-3 border shadow-lg">
+            <div className="absolute top-4 left-4 z-10 bg-background/90 backdrop-blur-sm rounded-lg p-3 border shadow-lg">
               <p className="text-xs font-medium mb-2">Legend</p>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 text-xs">
@@ -1175,7 +1169,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
             {/* Selected Node Panel in Fullscreen */}
             {selectedNode && (
-              <div className="absolute top-4 right-4 z-10 w-80 bg-background/95 backdrop-blur rounded-lg border shadow-lg">
+              <div className="absolute top-4 right-4 z-10 w-80 bg-background/95 backdrop-blur-sm rounded-lg border shadow-lg">
                 <SelectedNodePanel node={selectedNode} onClose={() => setSelectedNode(null)} />
               </div>
             )}

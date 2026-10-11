@@ -29,7 +29,7 @@ function MessageCard({ message }: { message: Message }) {
       className="block glass p-3 sm:p-4 hover:bg-bg-secondary/50 transition-colors"
     >
       <div className="flex items-start gap-2 sm:gap-3">
-        <span className="text-lg sm:text-xl flex-shrink-0">
+        <span className="text-lg sm:text-xl shrink-0">
           {message.media_type ? '🖼️' : '💬'}
         </span>
         <div className="flex-1 min-w-0">
@@ -56,7 +56,7 @@ function MessageCard({ message }: { message: Message }) {
               <span>📎 {message.media_type}</span>
             )}
             {message.topic && (
-              <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded text-xs">
+              <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-sm text-xs">
                 {message.topic}
               </span>
             )}
@@ -245,7 +245,7 @@ function SearchPageContent() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by keywords..."
-            className="flex-1 bg-bg-secondary border border-border rounded-lg px-4 py-3 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+            className="flex-1 bg-bg-secondary border border-border rounded-lg px-4 py-3 text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
           />
           <button
             type="submit"
@@ -300,7 +300,7 @@ function SearchPageContent() {
                   value={channelUsername}
                   onChange={(e) => setChannelUsername(e.target.value)}
                   disabled={dataLoading}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
                 >
                   <option value="">All Channels</option>
                   {Object.entries(channelsByCategory).map(([catName, catChannels]) => (
@@ -322,7 +322,7 @@ function SearchPageContent() {
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   disabled={dataLoading}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
                 >
                   <option value="">All Topics</option>
                   {topics.map(t => (
@@ -339,7 +339,7 @@ function SearchPageContent() {
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   disabled={dataLoading}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
                 >
                   <option value="">All Categories</option>
                   {categories.map(c => (
@@ -359,7 +359,7 @@ function SearchPageContent() {
                   value={channelFolder}
                   onChange={(e) => setChannelFolder(e.target.value)}
                   disabled={dataLoading}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary disabled:opacity-50"
                 >
                   <option value="">All Folders</option>
                   {folders.map(f => (
@@ -375,7 +375,7 @@ function SearchPageContent() {
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="">All Languages</option>
                   <option value="en">English</option>
@@ -392,7 +392,7 @@ function SearchPageContent() {
                 <select
                   value={hasMedia}
                   onChange={(e) => setHasMedia(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="any">Any</option>
                   <option value="true">With Media</option>
@@ -408,7 +408,7 @@ function SearchPageContent() {
                 <select
                   value={mediaType}
                   onChange={(e) => setMediaType(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="">All Types</option>
                   <option value="photo">Photos</option>
@@ -424,7 +424,7 @@ function SearchPageContent() {
                 <select
                   value={hasComments}
                   onChange={(e) => setHasComments(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="any">Any</option>
                   <option value="true">Has Comments</option>
@@ -437,7 +437,7 @@ function SearchPageContent() {
                 <select
                   value={days}
                   onChange={(e) => setDays(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="">All Time</option>
                   <option value="1">Last 24 Hours</option>
@@ -456,7 +456,7 @@ function SearchPageContent() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="telegram_date">Date (Telegram)</option>
                   <option value="created_at">Date Added</option>
@@ -470,7 +470,7 @@ function SearchPageContent() {
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-accent-primary"
                 >
                   <option value="desc">Newest First</option>
                   <option value="asc">Oldest First</option>

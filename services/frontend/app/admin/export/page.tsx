@@ -214,7 +214,7 @@ export default function ExportPage() {
         </div>
         <button
           onClick={fetchData}
-          className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
+          className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
         >
           Refresh
         </button>
@@ -262,7 +262,7 @@ export default function ExportPage() {
             <select
               value={exportType}
               onChange={(e) => setExportType(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             >
               <option value="messages">Messages</option>
               <option value="channels" disabled>Channels (coming soon)</option>
@@ -275,7 +275,7 @@ export default function ExportPage() {
             <select
               value={format}
               onChange={(e) => setFormat(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             >
               <option value="json">JSON</option>
               <option value="jsonl">JSONL (streaming)</option>
@@ -289,7 +289,7 @@ export default function ExportPage() {
             <select
               value={profile}
               onChange={(e) => setProfile(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             >
               {Object.entries(profiles).map(([key, prof]) => (
                 <option key={key} value={key}>
@@ -308,7 +308,7 @@ export default function ExportPage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             />
           </div>
 
@@ -319,7 +319,7 @@ export default function ExportPage() {
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             />
           </div>
 
@@ -329,7 +329,7 @@ export default function ExportPage() {
             <select
               value={hasMedia}
               onChange={(e) => setHasMedia(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             >
               <option value="">All</option>
               <option value="true">With media only</option>
@@ -343,7 +343,7 @@ export default function ExportPage() {
             <select
               value={selectedTopic}
               onChange={(e) => setSelectedTopic(e.target.value)}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             >
               <option value="">All Topics</option>
               {topicOptions.filter(t => t.value !== '').map((t) => (
@@ -360,7 +360,7 @@ export default function ExportPage() {
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g., December 2024 Archive"
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
             />
           </div>
         </div>
@@ -370,7 +370,7 @@ export default function ExportPage() {
           <label className="block text-sm text-text-secondary mb-1">
             Channels (select to filter, leave empty for all)
           </label>
-          <div className="max-h-32 overflow-y-auto bg-bg-secondary border border-border-subtle rounded p-2">
+          <div className="max-h-32 overflow-y-auto bg-bg-secondary border border-border-subtle rounded-sm p-2">
             <div className="flex flex-wrap gap-2">
               {channels.map((ch) => (
                 <label key={ch.id} className="flex items-center gap-1 text-sm">
@@ -384,7 +384,7 @@ export default function ExportPage() {
                         setSelectedChannels(selectedChannels.filter((id) => id !== ch.id));
                       }
                     }}
-                    className="rounded"
+                    className="rounded-sm"
                   />
                   <span className="text-text-primary">{ch.name || ch.username}</span>
                 </label>
@@ -400,7 +400,7 @@ export default function ExportPage() {
 
         {/* Estimate */}
         {estimate && (
-          <div className="bg-bg-secondary p-4 rounded mb-4">
+          <div className="bg-bg-secondary p-4 rounded-sm mb-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <div className="text-text-tertiary">Estimated Rows</div>
@@ -432,14 +432,14 @@ export default function ExportPage() {
         <div className="flex gap-4">
           <button
             onClick={estimateExport}
-            className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
+            className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
           >
             Estimate Size
           </button>
           <button
             onClick={createExport}
             disabled={creating}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50 transition-colors"
           >
             {creating ? 'Creating...' : 'Start Export'}
           </button>
@@ -453,7 +453,7 @@ export default function ExportPage() {
         {loading ? (
           <div className="animate-pulse space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-bg-secondary rounded"></div>
+              <div key={i} className="h-16 bg-bg-secondary rounded-sm"></div>
             ))}
           </div>
         ) : jobs.length > 0 ? (
@@ -461,7 +461,7 @@ export default function ExportPage() {
             {jobs.map((job) => (
               <div
                 key={job.id}
-                className="bg-bg-secondary p-4 rounded flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="bg-bg-secondary p-4 rounded-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -502,14 +502,14 @@ export default function ExportPage() {
                   {job.download_url && (
                     <a
                       href={job.download_url}
-                      className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
+                      className="px-3 py-1 bg-green-500 text-white text-sm rounded-sm hover:bg-green-600"
                     >
                       Download
                     </a>
                   )}
                   <button
                     onClick={() => deleteJob(job.id)}
-                    className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                    className="px-3 py-1 bg-red-500 text-white text-sm rounded-sm hover:bg-red-600"
                   >
                     {job.status === 'processing' || job.status === 'pending' ? 'Cancel' : 'Delete'}
                   </button>
@@ -529,7 +529,7 @@ export default function ExportPage() {
         <h2 className="text-lg font-semibold text-text-primary mb-4">Column Profiles Reference</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Object.entries(profiles).map(([key, prof]) => (
-            <div key={key} className="bg-bg-secondary p-4 rounded">
+            <div key={key} className="bg-bg-secondary p-4 rounded-sm">
               <h3 className="font-medium text-text-primary">{prof.name}</h3>
               <p className="text-sm text-text-tertiary mb-2">{prof.description}</p>
               <div className="text-xs text-text-tertiary">

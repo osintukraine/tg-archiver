@@ -34,7 +34,7 @@ export function StatCard({
         <div className="flex-1">
           <p className="text-sm text-text-secondary mb-1">{title}</p>
           {loading ? (
-            <div className="h-8 w-24 bg-bg-secondary animate-pulse rounded" />
+            <div className="h-8 w-24 bg-bg-secondary animate-pulse rounded-sm" />
           ) : (
             <p className="text-3xl font-semibold text-text-primary">{value}</p>
           )}

@@ -363,7 +363,7 @@ export function PostCard({
       >
         {/* Media Thumbnail - Left side */}
         {hasMedia && firstMediaUrl && (
-          <div className="flex-shrink-0 w-20 h-16 sm:w-32 sm:h-24 rounded-lg overflow-hidden bg-bg-secondary relative group">
+          <div className="shrink-0 w-20 h-16 sm:w-32 sm:h-24 rounded-lg overflow-hidden bg-bg-secondary relative group">
             {(() => {
               const fileType = getMediaType(0);
 
@@ -428,7 +428,7 @@ export function PostCard({
             })()}
             {hasMultipleMedia && (
               <span
-                className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded cursor-help"
+                className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded-sm cursor-help"
                 title={`This message contains ${mediaUrls.length} media files`}
               >
                 +{mediaUrls.length - 1}
@@ -442,7 +442,7 @@ export function PostCard({
           {/* Header Row: Channel (left) + Classification Badges + Review Status (right) */}
           <div className="flex items-center justify-between mb-1 gap-2">
             {/* Left: Channel name + country flag */}
-            <div className="flex items-center gap-2 min-w-0 flex-shrink">
+            <div className="flex items-center gap-2 min-w-0 shrink">
               {channel && (
                 <span className="text-text-secondary text-xs font-medium truncate">
                   {channel.verified && <span title="Verified channel">✓ </span>}
@@ -454,7 +454,7 @@ export function PostCard({
                 const countryInfo = getCountryInfo(channel?.folder);
                 return countryInfo && (
                   <span
-                    className={`${countryInfo.color} text-lg font-bold flex-shrink-0 cursor-help`}
+                    className={`${countryInfo.color} text-lg font-bold shrink-0 cursor-help`}
                     title={`Source folder: ${channel?.folder || 'Unknown'} - Indicates the origin classification of this channel`}
                   >
                     {countryInfo.flag}
@@ -464,11 +464,11 @@ export function PostCard({
             </div>
 
             {/* Right: Classification badges + Review status (aligned to right corner) */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               {/* Topic badge */}
               {message.topic && (
                 <span
-                  className={`topic-${message.topic.toLowerCase()} px-1.5 py-0.5 rounded text-xs cursor-help`}
+                  className={`topic-${message.topic.toLowerCase()} px-1.5 py-0.5 rounded-sm text-xs cursor-help`}
                   title={`Topic: ${message.topic}`}
                 >
                   {message.topic}
@@ -506,7 +506,7 @@ export function PostCard({
                 mode="compact"
               />
             </div>
-            <span className="flex-shrink-0" title={`Posted on Telegram: ${format(new Date(message.telegram_date || message.created_at), 'MMMM d, yyyy at HH:mm')}`}>
+            <span className="shrink-0" title={`Posted on Telegram: ${format(new Date(message.telegram_date || message.created_at), 'MMMM d, yyyy at HH:mm')}`}>
               {format(new Date(message.telegram_date || message.created_at), 'MMM d, HH:mm')}
             </span>
           </div>
@@ -532,7 +532,7 @@ export function PostCard({
                   const countryInfo = getCountryInfo(channel.folder);
                   return countryInfo && (
                     <span
-                      className={`${countryInfo.color} text-xl flex-shrink-0 cursor-help`}
+                      className={`${countryInfo.color} text-xl shrink-0 cursor-help`}
                       title={`Source folder: ${channel.folder || 'Unknown'} - Channel classification in monitoring system`}
                     >
                       {countryInfo.flag}
@@ -695,7 +695,7 @@ export function PostCard({
                         <source src={url} type={getMimeType(index)} />
                       </video>
                       <button
-                        className="absolute top-2 left-2 p-1.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 left-2 p-1.5 rounded-sm bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
                           setLightboxInitialIndex(index);
@@ -712,7 +712,7 @@ export function PostCard({
                   {fileType === 'audio' && (
                     <div className="p-4 bg-bg-secondary rounded-lg">
                       <div className="flex items-center gap-3 mb-2">
-                        <svg className="w-8 h-8 text-accent-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-8 h-8 text-accent-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                         </svg>
                         <span className="text-sm text-text-secondary">Audio file</span>
@@ -749,7 +749,7 @@ export function PostCard({
                   )}
                   {hasMultipleMedia && fileType !== 'document' && fileType !== 'audio' && (
                     <span
-                      className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded cursor-help"
+                      className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-sm cursor-help"
                       title={`Media ${index + 1} of ${mediaUrls.length} in this message`}
                     >
                       {index + 1}/{mediaUrls.length}
@@ -799,17 +799,17 @@ export function PostCard({
             )}
             {/* Social graph indicators as compact badges */}
             {message.forward_from_channel_id !== null && (
-              <span className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded text-[10px]" title="Forwarded message">
+              <span className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-sm text-[10px]" title="Forwarded message">
                 ↪ Fwd
               </span>
             )}
             {message.replied_to_message_id !== null && (
-              <span className="text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded text-[10px]" title="Reply to another message">
+              <span className="text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-sm text-[10px]" title="Reply to another message">
                 ↩ Reply
               </span>
             )}
             {message.has_comments && (message.comments_count || 0) === 0 && (
-              <span className="text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded text-[10px]" title="Has discussion thread">
+              <span className="text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-sm text-[10px]" title="Has discussion thread">
                 💬 Thread
               </span>
             )}
@@ -833,7 +833,7 @@ export function PostCard({
                   return tags.slice(0, 3).map((tag, i) => (
                     <span
                       key={`${tagType}-${i}`}
-                      className={`${style.bgColor} ${style.color} px-2 py-1 rounded text-xs border border-current/20 flex items-center gap-1 cursor-help`}
+                      className={`${style.bgColor} ${style.color} px-2 py-1 rounded-sm text-xs border border-current/20 flex items-center gap-1 cursor-help`}
                       title={`Tag Type: ${tagType} • Confidence: ${(tag.confidence * 100).toFixed(0)}% • Generated by: ${tag.generated_by} • Click to filter by this tag`}
                     >
                       <span>{style.icon}</span>
@@ -880,13 +880,13 @@ export function PostCard({
                 <div className="text-text-tertiary font-medium">Engagement Details</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {message.views !== null && (
-                    <div className="bg-bg-secondary/50 rounded p-2">
+                    <div className="bg-bg-secondary/50 rounded-sm p-2">
                       <div className="text-text-tertiary">Views</div>
                       <div className="text-text-primary font-mono">{message.views.toLocaleString()}</div>
                     </div>
                   )}
                   {message.forwards !== null && (
-                    <div className="bg-bg-secondary/50 rounded p-2">
+                    <div className="bg-bg-secondary/50 rounded-sm p-2">
                       <div className="text-text-tertiary">Forwards</div>
                       <div className="text-text-primary font-mono">{message.forwards.toLocaleString()}</div>
                       <div className="text-text-tertiary text-[10px]">
@@ -895,7 +895,7 @@ export function PostCard({
                     </div>
                   )}
                   {(message.comments_count || 0) > 0 && (
-                    <div className="bg-bg-secondary/50 rounded p-2">
+                    <div className="bg-bg-secondary/50 rounded-sm p-2">
                       <div className="text-text-tertiary">Comments</div>
                       <div className="text-text-primary font-mono">{message.comments_count}</div>
                     </div>
@@ -911,7 +911,7 @@ export function PostCard({
 
                 {/* Forward Chain Info */}
                 {message.forward_from_channel_id !== null && (
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded p-2">
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-sm p-2">
                     <div className="flex items-center gap-1 text-blue-400 mb-1">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -928,7 +928,7 @@ export function PostCard({
 
                 {/* Reply Info */}
                 {message.replied_to_message_id !== null && (
-                  <div className="bg-green-500/10 border border-green-500/20 rounded p-2">
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-sm p-2">
                     <div className="flex items-center gap-1 text-green-400 mb-1">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -941,7 +941,7 @@ export function PostCard({
 
                 {/* Comments/Discussion Info */}
                 {message.has_comments && (
-                  <div className="bg-purple-500/10 border border-purple-500/20 rounded p-2">
+                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-sm p-2">
                     <div className="flex items-center gap-1 text-purple-400">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -958,7 +958,7 @@ export function PostCard({
 
             {/* Timestamps Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-              <div className="bg-bg-secondary/50 rounded p-2">
+              <div className="bg-bg-secondary/50 rounded-sm p-2">
                 <div
                   className="text-text-tertiary mb-1 cursor-help"
                   title="Original posting time on Telegram platform"
@@ -971,7 +971,7 @@ export function PostCard({
                     : 'N/A'}
                 </div>
               </div>
-              <div className="bg-bg-secondary/50 rounded p-2">
+              <div className="bg-bg-secondary/50 rounded-sm p-2">
                 <div
                   className="text-text-tertiary mb-1 cursor-help"
                   title="When this message was saved to our archive system"
@@ -988,7 +988,7 @@ export function PostCard({
             <div className="flex flex-wrap gap-2">
               {message.language_detected && (
                 <span
-                  className="bg-bg-secondary px-2 py-1 rounded text-text-secondary cursor-help"
+                  className="bg-bg-secondary px-2 py-1 rounded-sm text-text-secondary cursor-help"
                   title={`Detected Language: The AI detected this message was written in ${message.language_detected.toUpperCase()} - Used for translation and analysis`}
                 >
                   <span className="text-text-tertiary text-[10px] mr-1">Lang:</span>
@@ -997,7 +997,7 @@ export function PostCard({
               )}
               {message.translation_provider && (
                 <span
-                  className="bg-bg-secondary px-2 py-1 rounded text-text-secondary cursor-help"
+                  className="bg-bg-secondary px-2 py-1 rounded-sm text-text-secondary cursor-help"
                   title={`Translation Provider: This message was translated using ${message.translation_provider} - Translation is performed automatically for non-English content`}
                 >
                   <span className="text-text-tertiary text-[10px] mr-1">Via:</span>
@@ -1006,7 +1006,7 @@ export function PostCard({
               )}
               {message.is_backfilled && (
                 <span
-                  className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded cursor-help"
+                  className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-sm cursor-help"
                   title="Backfilled: This message was retrieved from channel history during initial channel setup, not captured in real-time. May have incomplete metadata."
                 >
                   📦 Backfilled
@@ -1014,7 +1014,7 @@ export function PostCard({
               )}
               {message.media_type && (
                 <span
-                  className="bg-bg-secondary px-2 py-1 rounded text-text-secondary cursor-help"
+                  className="bg-bg-secondary px-2 py-1 rounded-sm text-text-secondary cursor-help"
                   title={`Media Type: The attached file is a ${message.media_type} - All media is archived locally to prevent data loss from Telegram's ephemeral URLs`}
                 >
                   <span className="text-text-tertiary text-[10px] mr-1">Media:</span>
@@ -1025,7 +1025,7 @@ export function PostCard({
 
             {/* Authenticity Hashes (collapsed) */}
             {(message.content_hash || message.metadata_hash) && (
-              <details className="bg-bg-secondary/30 rounded p-2">
+              <details className="bg-bg-secondary/30 rounded-sm p-2">
                 <summary
                   className="text-text-tertiary cursor-pointer hover:text-text-secondary flex items-center gap-1"
                   title="Cryptographic hashes for verifying message authenticity and detecting tampering"
@@ -1046,7 +1046,7 @@ export function PostCard({
 
             {/* Channel Details */}
             {channel && (
-              <div className="bg-bg-secondary/30 rounded p-2">
+              <div className="bg-bg-secondary/30 rounded-sm p-2">
                 <div
                   className="text-text-tertiary mb-1 cursor-help"
                   title="Source channel information from Telegram"
@@ -1078,7 +1078,7 @@ export function PostCard({
   if (density === 'immersive') {
     return (
       <div
-        className="fixed inset-0 bg-bg-base/95 backdrop-blur-sm z-50 overflow-y-auto p-8"
+        className="fixed inset-0 bg-bg-base/95 backdrop-blur-xs z-50 overflow-y-auto p-8"
         onClick={(e) => {
           if (e.target === e.currentTarget && onDensityChange) {
             onDensityChange('detailed');
@@ -1158,7 +1158,7 @@ export function PostCard({
             {isPhantomMessage && (
               <div className="bg-accent-warning/10 border border-accent-warning/30 rounded-lg p-6">
                 <div className="flex items-start gap-3">
-                  <svg className="w-6 h-6 text-accent-warning flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-accent-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <div>
@@ -1168,7 +1168,7 @@ export function PostCard({
                       The message exists in the database but contains no displayable information.
                     </p>
                     <p className="text-sm text-text-tertiary mt-2">
-                      <strong>Technical details:</strong> The listener captured this message but the <code className="px-1 py-0.5 bg-bg-secondary rounded">grouped_id</code> field
+                      <strong>Technical details:</strong> The listener captured this message but the <code className="px-1 py-0.5 bg-bg-secondary rounded-sm">grouped_id</code> field
                       wasn&apos;t passed to the processor. This is a known limitation being addressed in future updates.
                     </p>
                   </div>
@@ -1183,7 +1183,7 @@ export function PostCard({
                   const countryInfo = getCountryInfo(channel.folder);
                   return countryInfo && (
                     <span
-                      className={`${countryInfo.color} text-3xl flex-shrink-0 cursor-help`}
+                      className={`${countryInfo.color} text-3xl shrink-0 cursor-help`}
                       title={`Source folder: ${channel.folder || 'Unknown'} - Channel classification in monitoring system`}
                     >
                       {countryInfo.flag}
@@ -1196,9 +1196,9 @@ export function PostCard({
                       {channel.verified && <span title="Verified channel">✓ </span>}
                       {channel.name || channel.username}
                     </h2>
-                    {channel.scam && <span className="text-xs px-2 py-1 bg-accent-danger/20 text-accent-danger rounded cursor-help" title="Flagged as scam by Telegram">Scam</span>}
-                    {channel.fake && <span className="text-xs px-2 py-1 bg-accent-warning/20 text-accent-warning rounded cursor-help" title="Flagged as fake by Telegram">Fake</span>}
-                    {channel.restricted && <span className="text-xs px-2 py-1 bg-accent-warning/20 text-accent-warning rounded cursor-help" title="Restricted channel">Restricted</span>}
+                    {channel.scam && <span className="text-xs px-2 py-1 bg-accent-danger/20 text-accent-danger rounded-sm cursor-help" title="Flagged as scam by Telegram">Scam</span>}
+                    {channel.fake && <span className="text-xs px-2 py-1 bg-accent-warning/20 text-accent-warning rounded-sm cursor-help" title="Flagged as fake by Telegram">Fake</span>}
+                    {channel.restricted && <span className="text-xs px-2 py-1 bg-accent-warning/20 text-accent-warning rounded-sm cursor-help" title="Restricted channel">Restricted</span>}
                   </div>
                   {channel.description && (
                     <p className="text-sm text-text-secondary mt-1">{channel.description}</p>
@@ -1262,7 +1262,7 @@ export function PostCard({
                             <source src={url} type={getMimeType(index)} />
                           </video>
                           <button
-                            className="absolute top-2 left-2 p-2 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-2 left-2 p-2 rounded-sm bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => {
                               e.stopPropagation();
                               setLightboxInitialIndex(index);
@@ -1279,7 +1279,7 @@ export function PostCard({
                       {fileType === 'audio' && (
                         <div className="p-4 bg-bg-secondary rounded-lg">
                           <div className="flex items-center gap-3 mb-3">
-                            <svg className="w-8 h-8 text-accent-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-8 h-8 text-accent-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                             </svg>
                             <div>
@@ -1318,7 +1318,7 @@ export function PostCard({
                       )}
                       {hasMultipleMedia && (fileType === 'image' || fileType === 'video') && (
                         <span
-                          className="absolute top-2 right-2 bg-black/70 text-white text-sm px-3 py-1 rounded cursor-help"
+                          className="absolute top-2 right-2 bg-black/70 text-white text-sm px-3 py-1 rounded-sm cursor-help"
                           title={`Media ${index + 1} of ${mediaUrls.length} in this message`}
                         >
                           {index + 1}/{mediaUrls.length}
@@ -1520,7 +1520,7 @@ export function PostCard({
                   {entities.map((entity, i) => (
                     <span
                       key={i}
-                      className="px-3 py-1.5 rounded text-sm cursor-help"
+                      className="px-3 py-1.5 rounded-sm text-sm cursor-help"
                       style={{
                         backgroundColor: 'rgba(100, 116, 131, 0.2)',
                         color: '#64748b',
@@ -1559,7 +1559,7 @@ export function PostCard({
                           {tags.map((tag, i) => (
                             <span
                               key={i}
-                              className={`${style.bgColor} ${style.color} px-3 py-1.5 rounded text-sm border border-current/20 flex items-center gap-2 cursor-help`}
+                              className={`${style.bgColor} ${style.color} px-3 py-1.5 rounded-sm text-sm border border-current/20 flex items-center gap-2 cursor-help`}
                               title={`Tag: ${tag.tag} • Type: ${tagType} • Confidence: ${(tag.confidence * 100).toFixed(0)}% • Generated by: ${tag.generated_by}`}
                             >
                               <span>{tag.tag}</span>

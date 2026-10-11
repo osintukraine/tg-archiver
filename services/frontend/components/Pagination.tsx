@@ -56,7 +56,7 @@ export function Pagination({ currentPage, totalPages, hasNext, hasPrev }: Pagina
       <button
         onClick={() => goToPage(currentPage - 1)}
         disabled={!hasPrev}
-        className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg text-text-primary font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+        className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg text-text-primary font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-hidden focus:ring-2 focus:ring-primary"
       >
         ← Previous
       </button>
@@ -80,7 +80,7 @@ export function Pagination({ currentPage, totalPages, hasNext, hasPrev }: Pagina
               key={pageNum}
               onClick={() => goToPage(pageNum)}
               className={`
-                min-w-[40px] px-3 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary
+                min-w-[40px] px-3 py-2 rounded-lg font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-primary
                 ${
                   isActive
                     ? 'bg-primary text-white'
@@ -103,7 +103,7 @@ export function Pagination({ currentPage, totalPages, hasNext, hasPrev }: Pagina
       <button
         onClick={() => goToPage(currentPage + 1)}
         disabled={!hasNext}
-        className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg text-text-primary font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+        className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border rounded-lg text-text-primary font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-hidden focus:ring-2 focus:ring-primary"
       >
         Next →
       </button>

@@ -78,7 +78,7 @@ function TimeframeToggle<T extends string>({
           onClick={() => onChange(opt)}
           className={`px-3 py-1 text-sm rounded-md transition-colors ${
             value === opt
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
           }`}
         >
@@ -99,7 +99,7 @@ function TopicBar({ item, maxCount }: { item: TopicItem; maxCount: number }) {
       href={`/search?topic=${encodeURIComponent(item.topic)}`}
       className="group flex items-center gap-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg px-2 -mx-2 transition-colors"
     >
-      <div className="w-28 flex-shrink-0 text-sm text-gray-700 dark:text-gray-300 truncate">
+      <div className="w-28 shrink-0 text-sm text-gray-700 dark:text-gray-300 truncate">
         {label}
       </div>
       <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -169,7 +169,12 @@ export default function ActivityTab() {
   };
 
   // Format tooltip
-  const formatTooltip = (value: number, _name: string, props: { payload?: { timestamp?: string } }) => {
+  const formatTooltip = (
+    rawValue: unknown,
+    _name: unknown,
+    props: { payload?: { timestamp?: string } },
+  ): [string, string] => {
+    const value = Number(rawValue);
     const timestamp = props.payload?.timestamp;
     if (!timestamp) return [value.toLocaleString(), 'Messages'];
 
@@ -229,7 +234,7 @@ export default function ActivityTab() {
       </div>
 
       {/* Platform Summary Stats */}
-      <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/50 p-6">
+      <div className="bg-linear-to-r from-blue-500/10 to-purple-500/10 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl border border-blue-200/50 dark:border-blue-800/50 p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
           <Database className="w-5 h-5" />
           Platform Summary

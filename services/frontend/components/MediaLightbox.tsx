@@ -124,7 +124,7 @@ export function MediaLightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center"
+      className="fixed inset-0 z-100 bg-black/95 backdrop-blur-xs flex items-center justify-center"
       onClick={onClose}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -246,7 +246,7 @@ export function MediaLightbox({
             return (
               <button
                 key={index}
-                className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
                   isActive
                     ? 'border-accent-primary scale-105'
                     : 'border-transparent opacity-60 hover:opacity-100'

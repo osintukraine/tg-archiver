@@ -82,20 +82,20 @@ function GridThumbnail({ message, onClick }: GridThumbnailProps) {
 
       {/* Video indicator */}
       {isVideo && (
-        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs">
+        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-sm bg-black/70 text-white text-xs">
           🎬
         </div>
       )}
 
       {/* Multi-media indicator */}
       {mediaCount > 1 && (
-        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs">
+        <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-sm bg-black/70 text-white text-xs">
           1/{mediaCount}
         </div>
       )}
 
       {/* Bottom info */}
-      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+      <div className="absolute bottom-0 left-0 right-0 p-2 bg-linear-to-t from-black/80 to-transparent">
         <div className="flex items-center justify-between">
           <span className="text-sm">{countryFlag}</span>
         </div>

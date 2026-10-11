@@ -127,7 +127,7 @@ export default function ConfigPage() {
             <select
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
-              className="bg-bg-tertiary border border-border-subtle rounded px-2 py-1 text-sm"
+              className="bg-bg-tertiary border border-border-subtle rounded-sm px-2 py-1 text-sm"
             >
               <option value="true">true</option>
               <option value="false">false</option>
@@ -138,20 +138,20 @@ export default function ConfigPage() {
               value={editValue}
               onChange={(e) => setEditValue(e.target.value)}
               placeholder={item.is_secret ? 'Enter new value' : undefined}
-              className="bg-bg-tertiary border border-border-subtle rounded px-2 py-1 text-sm w-48"
+              className="bg-bg-tertiary border border-border-subtle rounded-sm px-2 py-1 text-sm w-48"
               autoFocus
             />
           )}
           <button
             onClick={() => saveConfig(item.key)}
             disabled={saving}
-            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-500 disabled:opacity-50"
+            className="px-2 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-500 disabled:opacity-50"
           >
             {saving ? '...' : 'Save'}
           </button>
           <button
             onClick={cancelEditing}
-            className="px-2 py-1 text-xs bg-bg-tertiary rounded hover:bg-bg-secondary"
+            className="px-2 py-1 text-xs bg-bg-tertiary rounded-sm hover:bg-bg-secondary"
           >
             Cancel
           </button>
@@ -198,7 +198,7 @@ export default function ConfigPage() {
         </div>
         <button
           onClick={fetchConfig}
-          className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
+          className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
         >
           Refresh
         </button>
@@ -254,7 +254,7 @@ export default function ConfigPage() {
 
           <p className="text-sm text-text-secondary mb-4">
             These values are set at deployment time and cannot be changed from the UI.
-            To modify them, update your <code className="bg-bg-tertiary px-1 rounded">.env</code> file and restart services.
+            To modify them, update your <code className="bg-bg-tertiary px-1 rounded-sm">.env</code> file and restart services.
           </p>
 
           {envVars.length > 0 ? (
@@ -277,12 +277,12 @@ export default function ConfigPage() {
                     <p className="text-xs text-text-tertiary mt-1">{env.description}</p>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
-                    <code className="bg-bg-tertiary px-2 py-1 rounded text-sm font-mono text-text-secondary">
+                    <code className="bg-bg-tertiary px-2 py-1 rounded-sm text-sm font-mono text-text-secondary">
                       {env.value}
                     </code>
                     <button
                       onClick={() => navigator.clipboard.writeText(env.value)}
-                      className="p-1 hover:bg-bg-tertiary rounded transition-colors"
+                      className="p-1 hover:bg-bg-tertiary rounded-sm transition-colors"
                       title="Copy value"
                     >
                       <svg className="w-4 h-4 text-text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -336,7 +336,7 @@ export default function ConfigPage() {
                         )}
                       </div>
                     </div>
-                    <div className="ml-4 flex-shrink-0">
+                    <div className="ml-4 shrink-0">
                       {renderConfigValue(item)}
                     </div>
                   </div>

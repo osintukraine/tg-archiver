@@ -56,19 +56,19 @@ export function EnhancedPostCard({ message, className = '' }: EnhancedPostCardPr
           <div className="overflow-x-auto -mx-2 px-2">
             <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-4 sm:w-full">
               <TabsTrigger value="content" className="flex items-center gap-1 px-2 sm:px-3">
-                <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                <MessageSquare className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Content</span>
               </TabsTrigger>
               <TabsTrigger value="social" className="flex items-center gap-1 px-2 sm:px-3">
-                <GitBranch className="h-4 w-4 flex-shrink-0" />
+                <GitBranch className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Social</span>
               </TabsTrigger>
               <TabsTrigger value="metadata" className="flex items-center gap-1 px-2 sm:px-3">
-                <Database className="h-4 w-4 flex-shrink-0" />
+                <Database className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Metadata</span>
               </TabsTrigger>
               <TabsTrigger value="json" className="flex items-center gap-1 px-2 sm:px-3">
-                <Code className="h-4 w-4 flex-shrink-0" />
+                <Code className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Raw</span>
               </TabsTrigger>
             </TabsList>

@@ -125,25 +125,25 @@ export function ForwardContext({ messageId, hasForward }: ForwardContextProps) {
 
           {/* Original stats */}
           <div className="grid grid-cols-4 gap-2">
-            <div className="bg-background-tertiary rounded p-2 text-center">
+            <div className="bg-background-tertiary rounded-sm p-2 text-center">
               <div className="text-lg font-bold text-text-primary">
                 {data.original?.views?.toLocaleString() || "—"}
               </div>
               <div className="text-xs text-text-tertiary">Views</div>
             </div>
-            <div className="bg-background-tertiary rounded p-2 text-center">
+            <div className="bg-background-tertiary rounded-sm p-2 text-center">
               <div className="text-lg font-bold text-text-primary">
                 {data.original?.forwards?.toLocaleString() || "—"}
               </div>
               <div className="text-xs text-text-tertiary">Forwards</div>
             </div>
-            <div className="bg-background-tertiary rounded p-2 text-center">
+            <div className="bg-background-tertiary rounded-sm p-2 text-center">
               <div className="text-lg font-bold text-text-primary">
                 {data.reactions_total.toLocaleString()}
               </div>
               <div className="text-xs text-text-tertiary">Reactions</div>
             </div>
-            <div className="bg-background-tertiary rounded p-2 text-center">
+            <div className="bg-background-tertiary rounded-sm p-2 text-center">
               <div className="text-lg font-bold text-text-primary">
                 {data.original?.comments_count?.toLocaleString() || "—"}
               </div>
@@ -159,7 +159,7 @@ export function ForwardContext({ messageId, hasForward }: ForwardContextProps) {
                 {data.reactions.slice(0, 8).map((r, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 bg-background-tertiary px-2 py-0.5 rounded text-sm"
+                    className="inline-flex items-center gap-1 bg-background-tertiary px-2 py-0.5 rounded-sm text-sm"
                   >
                     <span>{r.emoji}</span>
                     <span className="text-text-secondary">{r.count}</span>
@@ -183,7 +183,7 @@ export function ForwardContext({ messageId, hasForward }: ForwardContextProps) {
               </div>
               <div className="space-y-1.5 max-h-32 overflow-y-auto">
                 {data.comments.slice(0, 5).map((c, i) => (
-                  <div key={i} className="text-sm bg-background-tertiary rounded px-2 py-1.5">
+                  <div key={i} className="text-sm bg-background-tertiary rounded-sm px-2 py-1.5">
                     <span className="text-text-tertiary">{c.author}: </span>
                     <span className="text-text-secondary">{c.content?.slice(0, 150)}{(c.content?.length || 0) > 150 ? "..." : ""}</span>
                   </div>

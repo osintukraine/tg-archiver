@@ -82,7 +82,7 @@ export default function AdminDashboard() {
         </div>
         <button
           onClick={fetchStats}
-          className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors text-sm"
+          className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors text-sm"
         >
           Refresh Stats
         </button>

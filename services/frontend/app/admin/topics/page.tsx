@@ -178,19 +178,19 @@ export default function TopicsPage() {
               type="checkbox"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded"
+              className="rounded-sm"
             />
             Show inactive
           </label>
           <button
             onClick={seedDefaults}
-            className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
+            className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
           >
             Seed Defaults
           </button>
           <button
             onClick={openCreateModal}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            className="px-4 py-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 transition-colors"
           >
             + Add Topic
           </button>
@@ -232,7 +232,7 @@ export default function TopicsPage() {
                   className={`hover:bg-bg-secondary ${!topic.is_active ? 'opacity-50' : ''}`}
                 >
                   <td className="px-4 py-3">
-                    <div className={`w-6 h-6 rounded ${getColorClass(topic.color)}`} />
+                    <div className={`w-6 h-6 rounded-sm ${getColorClass(topic.color)}`} />
                   </td>
                   <td className="px-4 py-3 font-mono text-sm text-text-primary">{topic.name}</td>
                   <td className="px-4 py-3 text-text-primary font-medium">{topic.label}</td>
@@ -298,7 +298,7 @@ export default function TopicsPage() {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
                       placeholder="e.g., important"
-                      className="w-full bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary"
+                      className="w-full bg-bg-secondary border border-border rounded-sm px-3 py-2 text-text-primary"
                       required
                       disabled={!!editingTopic}
                     />
@@ -310,7 +310,7 @@ export default function TopicsPage() {
                       value={formData.label}
                       onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                       placeholder="e.g., Important"
-                      className="w-full bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary"
+                      className="w-full bg-bg-secondary border border-border rounded-sm px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
@@ -323,7 +323,7 @@ export default function TopicsPage() {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Brief description of this topic"
-                    className="w-full bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary"
+                    className="w-full bg-bg-secondary border border-border rounded-sm px-3 py-2 text-text-primary"
                   />
                 </div>
 
@@ -333,7 +333,7 @@ export default function TopicsPage() {
                     <select
                       value={formData.color}
                       onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                      className="w-full bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary"
+                      className="w-full bg-bg-secondary border border-border rounded-sm px-3 py-2 text-text-primary"
                     >
                       {COLOR_OPTIONS.map((c) => (
                         <option key={c.value} value={c.value}>{c.label}</option>
@@ -346,7 +346,7 @@ export default function TopicsPage() {
                       type="number"
                       value={formData.sort_order}
                       onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
-                      className="w-full bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary"
+                      className="w-full bg-bg-secondary border border-border rounded-sm px-3 py-2 text-text-primary"
                     />
                   </div>
                 </div>
@@ -356,7 +356,7 @@ export default function TopicsPage() {
                     type="checkbox"
                     checked={formData.is_active}
                     onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="rounded"
+                    className="rounded-sm"
                   />
                   Active
                 </label>
@@ -366,14 +366,14 @@ export default function TopicsPage() {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary rounded"
+                  className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary text-text-secondary rounded-sm"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : editingTopic ? 'Save Changes' : 'Create Topic'}
                 </button>

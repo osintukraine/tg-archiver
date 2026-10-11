@@ -516,13 +516,13 @@ export default function ChannelsPage() {
                   placeholder="Search channels..."
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                  className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
                 />
               </div>
               <select
                 value={categoryId}
                 onChange={(e) => { setCategoryId(e.target.value ? parseInt(e.target.value) : ''); setPage(1); }}
-                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                className="bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
               >
                 <option value="">All Categories</option>
                 {categories.map((cat) => (
@@ -532,7 +532,7 @@ export default function ChannelsPage() {
               <select
                 value={folder}
                 onChange={(e) => { setFolder(e.target.value); setPage(1); }}
-                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                className="bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
               >
                 <option value="">All Folders</option>
                 {folders.map((f) => (
@@ -542,7 +542,7 @@ export default function ChannelsPage() {
               <select
                 value={rule}
                 onChange={(e) => { setRule(e.target.value); setPage(1); }}
-                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                className="bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
               >
                 <option value="">All Rules</option>
                 {RULES.map((r) => (
@@ -555,7 +555,7 @@ export default function ChannelsPage() {
                     type="checkbox"
                     checked={activeOnly === true}
                     onChange={(e) => setActiveOnly(e.target.checked ? true : undefined)}
-                    className="rounded"
+                    className="rounded-sm"
                   />
                   Active only
                 </label>
@@ -585,7 +585,7 @@ export default function ChannelsPage() {
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+                className="px-4 py-2 bg-bg-secondary rounded-sm disabled:opacity-50"
               >
                 Previous
               </button>
@@ -595,7 +595,7 @@ export default function ChannelsPage() {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+                className="px-4 py-2 bg-bg-secondary rounded-sm disabled:opacity-50"
               >
                 Next
               </button>
@@ -613,7 +613,7 @@ export default function ChannelsPage() {
             </p>
             <button
               onClick={() => openCategoryModal()}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-sm"
             >
               + New Category
             </button>
@@ -707,13 +707,13 @@ export default function ChannelsPage() {
                   placeholder="Search discovered channels..."
                   value={discoveredSearch}
                   onChange={(e) => { setDiscoveredSearch(e.target.value); setDiscoveredPage(1); }}
-                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                  className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
                 />
               </div>
               <select
                 value={discoveredStatusFilter}
                 onChange={(e) => { setDiscoveredStatusFilter(e.target.value); setDiscoveredPage(1); }}
-                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                className="bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
               >
                 <option value="">All Status</option>
                 <option value="pending">Pending</option>
@@ -834,7 +834,7 @@ export default function ChannelsPage() {
               <button
                 onClick={() => setDiscoveredPage((p) => Math.max(1, p - 1))}
                 disabled={discoveredPage === 1}
-                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+                className="px-4 py-2 bg-bg-secondary rounded-sm disabled:opacity-50"
               >
                 Previous
               </button>
@@ -844,7 +844,7 @@ export default function ChannelsPage() {
               <button
                 onClick={() => setDiscoveredPage((p) => Math.min(discoveredTotalPages, p + 1))}
                 disabled={discoveredPage === discoveredTotalPages}
-                className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+                className="px-4 py-2 bg-bg-secondary rounded-sm disabled:opacity-50"
               >
                 Next
               </button>
@@ -874,7 +874,7 @@ export default function ChannelsPage() {
               <select
                 value={promoteForm.category_id}
                 onChange={(e) => setPromoteForm({ ...promoteForm, category_id: parseInt(e.target.value) || 0 })}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               >
                 <option value={0}>Uncategorized</option>
                 {categories.map((cat) => (
@@ -887,7 +887,7 @@ export default function ChannelsPage() {
               <select
                 value={promoteForm.folder}
                 onChange={(e) => setPromoteForm({ ...promoteForm, folder: e.target.value })}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               >
                 <option value="">No Folder</option>
                 {folders.map((f) => (
@@ -900,7 +900,7 @@ export default function ChannelsPage() {
               <select
                 value={promoteForm.rule}
                 onChange={(e) => setPromoteForm({ ...promoteForm, rule: e.target.value })}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               >
                 {RULES.map((r) => (
                   <option key={r} value={r}>{r}</option>
@@ -916,7 +916,7 @@ export default function ChannelsPage() {
               </button>
               <button
                 onClick={handlePromoteChannel}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded"
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-sm"
               >
                 Promote to Full Archiving
               </button>
@@ -938,7 +938,7 @@ export default function ChannelsPage() {
               <select
                 value={editCategoryId}
                 onChange={(e) => setEditCategoryId(parseInt(e.target.value) || 0)}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               >
                 <option value={0}>Uncategorized</option>
                 {categories.map((cat) => (
@@ -951,7 +951,7 @@ export default function ChannelsPage() {
               <select
                 value={selectedChannel.rule || ''}
                 onChange={(e) => handleUpdateChannel(selectedChannel.id, { rule: e.target.value || null })}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               >
                 <option value="">None</option>
                 {RULES.map((r) => (
@@ -965,7 +965,7 @@ export default function ChannelsPage() {
                 id="active"
                 checked={selectedChannel.active}
                 onChange={(e) => handleUpdateChannel(selectedChannel.id, { active: e.target.checked })}
-                className="rounded"
+                className="rounded-sm"
               />
               <label htmlFor="active" className="text-sm">Active</label>
             </div>
@@ -988,7 +988,7 @@ export default function ChannelsPage() {
               </button>
               <button
                 onClick={() => handleUpdateChannel(selectedChannel.id, { category_id: editCategoryId })}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded"
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-sm"
               >
                 Save Category
               </button>
@@ -1016,7 +1016,7 @@ export default function ChannelsPage() {
                 value={categoryForm.name}
                 onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
                 placeholder="e.g., News, Tech, Sports"
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               />
             </div>
             <div>
@@ -1024,7 +1024,7 @@ export default function ChannelsPage() {
               <select
                 value={categoryForm.color}
                 onChange={(e) => setCategoryForm({ ...categoryForm, color: e.target.value })}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               >
                 <option value="gray">Gray</option>
                 <option value="blue">Blue</option>
@@ -1041,7 +1041,7 @@ export default function ChannelsPage() {
                 onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
                 placeholder="Optional description..."
                 rows={2}
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               />
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t border-border-subtle">
@@ -1058,7 +1058,7 @@ export default function ChannelsPage() {
               <button
                 onClick={handleSaveCategory}
                 disabled={!categoryForm.name.trim()}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded disabled:opacity-50"
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-sm disabled:opacity-50"
               >
                 {editingCategory ? 'Save Changes' : 'Create Category'}
               </button>

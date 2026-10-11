@@ -7,9 +7,9 @@ import { EnhancedPostCard } from '@/components/EnhancedPostCard';
 import { PostNavigation } from '@/components/PostNavigation';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -18,8 +18,8 @@ interface PageProps {
  * Creates proper OpenGraph and Twitter Card meta tags for rich embeds
  * when sharing post URLs on social media platforms.
  */
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const id = parseInt(params.id, 10);
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
+  const id = parseInt((await props.params).id, 10);
 
   if (isNaN(id)) {
     return { title: 'Invalid Message ID' };
@@ -98,8 +98,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 /**
  * Individual message page (Server Component)
  */
-export default async function MessagePage({ params }: PageProps) {
-  const id = parseInt(params.id, 10);
+export default async function MessagePage(props: PageProps) {
+  const id = parseInt((await props.params).id, 10);
 
   if (isNaN(id)) {
     notFound();

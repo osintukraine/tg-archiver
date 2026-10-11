@@ -60,7 +60,7 @@ export function Modal({
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/50 backdrop-blur-xs"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -81,7 +81,7 @@ export function Modal({
             </h2>
             <button
               onClick={onClose}
-              className="text-text-tertiary hover:text-text-primary transition-colors p-1 rounded hover:bg-bg-secondary"
+              className="text-text-tertiary hover:text-text-primary transition-colors p-1 rounded-sm hover:bg-bg-secondary"
               aria-label="Close"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

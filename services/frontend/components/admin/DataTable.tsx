@@ -146,7 +146,7 @@ export function DataTable<T>({
                         if (el) el.indeterminate = someSelected;
                       }}
                       onChange={toggleAll}
-                      className="rounded border-border-subtle"
+                      className="rounded-sm border-border-subtle"
                     />
                   </th>
                 )}
@@ -183,17 +183,17 @@ export function DataTable<T>({
                   <tr key={idx} className="animate-pulse">
                     {selectable && (
                       <td className="px-4 py-4">
-                        <div className="w-4 h-4 bg-bg-tertiary rounded" />
+                        <div className="w-4 h-4 bg-bg-tertiary rounded-sm" />
                       </td>
                     )}
                     {columns.map((col) => (
                       <td key={String(col.key)} className="px-4 py-4">
-                        <div className="h-4 bg-bg-tertiary rounded w-3/4" />
+                        <div className="h-4 bg-bg-tertiary rounded-sm w-3/4" />
                       </td>
                     ))}
                     {rowActions && (
                       <td className="px-4 py-4">
-                        <div className="h-4 bg-bg-tertiary rounded w-16" />
+                        <div className="h-4 bg-bg-tertiary rounded-sm w-16" />
                       </td>
                     )}
                   </tr>
@@ -232,7 +232,7 @@ export function DataTable<T>({
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleRow(key)}
-                            className="rounded border-border-subtle"
+                            className="rounded-sm border-border-subtle"
                           />
                         </td>
                       )}
@@ -276,7 +276,7 @@ export function DataTable<T>({
               <button
                 onClick={() => onPageChange?.(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-3 py-2.5 sm:px-3 sm:py-1.5 rounded bg-bg-secondary hover:bg-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
+                className="px-3 py-2.5 sm:px-3 sm:py-1.5 rounded-sm bg-bg-secondary hover:bg-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
               >
                 Prev
               </button>
@@ -318,7 +318,7 @@ export function DataTable<T>({
               <button
                 onClick={() => onPageChange?.(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-3 py-2.5 sm:px-3 sm:py-1.5 rounded bg-bg-secondary hover:bg-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
+                className="px-3 py-2.5 sm:px-3 sm:py-1.5 rounded-sm bg-bg-secondary hover:bg-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
               >
                 Next
               </button>

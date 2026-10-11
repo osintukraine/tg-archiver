@@ -39,7 +39,7 @@ export function ConfirmActionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60"
@@ -68,7 +68,7 @@ export function ConfirmActionModal({
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Enter reason for this action..."
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   rows={3}
                   required={requireReason}
                 />

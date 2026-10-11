@@ -85,7 +85,7 @@ function ArticleCard({ article }: { article: RssArticle }) {
           href={article.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-shrink-0 p-2 rounded-lg bg-bg-secondary hover:bg-primary/10 text-text-secondary hover:text-primary transition-colors"
+          className="shrink-0 p-2 rounded-lg bg-bg-secondary hover:bg-primary/10 text-text-secondary hover:text-primary transition-colors"
           title="Read full article"
         >
           <ExternalLink className="w-5 h-5" />
@@ -150,7 +150,7 @@ export default function NewsPage() {
           <select
             value={hours}
             onChange={(e) => setHours(Number(e.target.value))}
-            className="bg-bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            className="bg-bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary"
           >
             <option value={6}>Last 6 hours</option>
             <option value={12}>Last 12 hours</option>
@@ -185,10 +185,10 @@ export default function NewsPage() {
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="glass rounded-xl p-6 animate-pulse">
-              <div className="h-4 bg-bg-tertiary rounded w-1/4 mb-3" />
-              <div className="h-6 bg-bg-tertiary rounded w-3/4 mb-2" />
-              <div className="h-4 bg-bg-tertiary rounded w-full mb-2" />
-              <div className="h-4 bg-bg-tertiary rounded w-2/3" />
+              <div className="h-4 bg-bg-tertiary rounded-sm w-1/4 mb-3" />
+              <div className="h-6 bg-bg-tertiary rounded-sm w-3/4 mb-2" />
+              <div className="h-4 bg-bg-tertiary rounded-sm w-full mb-2" />
+              <div className="h-4 bg-bg-tertiary rounded-sm w-2/3" />
             </div>
           ))}
         </div>

@@ -404,7 +404,7 @@ export default function ImportPage() {
     >
       {/* Drag overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-50 bg-bg-primary/90 backdrop-blur-sm flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-bg-primary/90 backdrop-blur-xs flex items-center justify-center">
           <div className="border-4 border-dashed border-blue-500 rounded-2xl p-16 bg-blue-500/10">
             <div className="text-center">
               <div className="text-6xl mb-4">📁</div>
@@ -425,7 +425,7 @@ export default function ImportPage() {
         </div>
         <button
           onClick={() => fetchJobs()}
-          className="px-4 py-2 bg-bg-secondary rounded hover:bg-bg-tertiary transition-colors"
+          className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
         >
           Refresh
         </button>
@@ -472,7 +472,7 @@ export default function ImportPage() {
 
       {/* Error Alert */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded p-4 flex justify-between items-center">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-sm p-4 flex justify-between items-center">
           <span className="text-red-400">{error}</span>
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">
             Dismiss
@@ -520,7 +520,7 @@ export default function ImportPage() {
           {loading ? (
             <div className="animate-pulse space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-bg-secondary rounded"></div>
+                <div key={i} className="h-16 bg-bg-secondary rounded-sm"></div>
               ))}
             </div>
           ) : jobs.length > 0 ? (
@@ -585,7 +585,7 @@ export default function ImportPage() {
                   {canValidate && (
                     <button
                       onClick={triggerValidation}
-                      className="px-3 py-1.5 bg-yellow-500 text-white text-sm rounded hover:bg-yellow-600"
+                      className="px-3 py-1.5 bg-yellow-500 text-white text-sm rounded-sm hover:bg-yellow-600"
                     >
                       Validate
                     </button>
@@ -593,7 +593,7 @@ export default function ImportPage() {
                   {canStart && (
                     <button
                       onClick={startImport}
-                      className="px-3 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600"
+                      className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-sm hover:bg-green-600"
                     >
                       Start Import
                     </button>
@@ -613,7 +613,7 @@ export default function ImportPage() {
                   </button>
                   <button
                     onClick={() => deleteJob(activeJob.id)}
-                    className="px-3 py-1.5 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                    className="px-3 py-1.5 bg-red-500 text-white text-sm rounded-sm hover:bg-red-600"
                   >
                     {activeJob.status === 'processing' ? 'Cancel' : 'Delete'}
                   </button>
@@ -637,7 +637,7 @@ export default function ImportPage() {
 
               {/* Logs Panel */}
               {showLogs && (
-                <div className="mb-6 bg-bg-secondary rounded p-4 max-h-48 overflow-y-auto">
+                <div className="mb-6 bg-bg-secondary rounded-sm p-4 max-h-48 overflow-y-auto">
                   <h3 className="font-medium text-text-primary mb-2">Event Log</h3>
                   {logs.length > 0 ? (
                     <div className="space-y-1 text-sm font-mono">
@@ -671,7 +671,7 @@ export default function ImportPage() {
               {/* Channels by Folder */}
               <div className="space-y-4">
                 {Object.entries(activeJob.channels_by_folder || {}).map(([folder, channels]) => (
-                  <div key={folder} className="bg-bg-secondary rounded overflow-hidden">
+                  <div key={folder} className="bg-bg-secondary rounded-sm overflow-hidden">
                     {/* Folder Header */}
                     <div
                       onClick={() => toggleFolder(folder)}
@@ -691,7 +691,7 @@ export default function ImportPage() {
                           e.stopPropagation();
                           selectAllInFolder(folder, channels);
                         }}
-                        className="text-xs px-2 py-1 bg-bg-tertiary rounded hover:bg-bg-secondary"
+                        className="text-xs px-2 py-1 bg-bg-tertiary rounded-sm hover:bg-bg-secondary"
                       >
                         Toggle All
                       </button>
@@ -715,7 +715,7 @@ export default function ImportPage() {
                                 channel.status === 'joined' ||
                                 channel.status === 'join_failed'
                               }
-                              className="rounded"
+                              className="rounded-sm"
                             />
 
                             {/* Channel Info */}
@@ -779,19 +779,19 @@ export default function ImportPage() {
           <div>
             <h3 className="font-medium text-text-primary mb-2">Required Column</h3>
             <ul className="list-disc list-inside text-text-secondary space-y-1">
-              <li><code className="bg-bg-secondary px-1 rounded">Channel</code> or <code className="bg-bg-secondary px-1 rounded">URL</code> - Telegram channel URL or username</li>
+              <li><code className="bg-bg-secondary px-1 rounded-sm">Channel</code> or <code className="bg-bg-secondary px-1 rounded-sm">URL</code> - Telegram channel URL or username</li>
             </ul>
 
             <h3 className="font-medium text-text-primary mt-4 mb-2">Optional Columns</h3>
             <ul className="list-disc list-inside text-text-secondary space-y-1">
-              <li><code className="bg-bg-secondary px-1 rounded">Name</code> - Display name for the channel</li>
-              <li><code className="bg-bg-secondary px-1 rounded">Folder</code> - Target Telegram folder (will be created if needed)</li>
+              <li><code className="bg-bg-secondary px-1 rounded-sm">Name</code> - Display name for the channel</li>
+              <li><code className="bg-bg-secondary px-1 rounded-sm">Folder</code> - Target Telegram folder (will be created if needed)</li>
             </ul>
           </div>
 
           <div>
             <h3 className="font-medium text-text-primary mb-2">Example CSV</h3>
-            <pre className="bg-bg-secondary p-4 rounded text-sm font-mono overflow-x-auto">
+            <pre className="bg-bg-secondary p-4 rounded-sm text-sm font-mono overflow-x-auto">
 {`Channel,Name,Folder
 https://t.me/example_channel,Example Channel,News
 @another_channel,Another Channel,Updates

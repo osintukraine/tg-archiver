@@ -145,7 +145,7 @@ export function JSONView({ message }: JSONViewProps) {
               type="checkbox"
               checked={showRaw}
               onChange={(e) => setShowRaw(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded-sm border-gray-300"
             />
             Show all fields
           </label>
@@ -188,7 +188,7 @@ export function JSONView({ message }: JSONViewProps) {
       </div>
 
       <div className="text-xs text-muted-foreground">
-        <p>API Endpoint: <code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">GET /api/messages/{message.id}</code></p>
+        <p>API Endpoint: <code className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-sm">GET /api/messages/{message.id}</code></p>
       </div>
     </div>
   );

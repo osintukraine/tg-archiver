@@ -163,7 +163,7 @@ export default function FeedTokensPage() {
       </p>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-sm mb-4">
           {error}
         </div>
       )}
@@ -178,12 +178,12 @@ export default function FeedTokensPage() {
             <strong>Save this token now!</strong> It will not be shown again.
           </p>
           <div className="flex items-center gap-2">
-            <code className="bg-white px-3 py-2 rounded border flex-1 font-mono text-sm break-all">
+            <code className="bg-white px-3 py-2 rounded-sm border flex-1 font-mono text-sm break-all">
               {newToken.token}
             </code>
             <button
               onClick={copyToken}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              className="px-4 py-2 bg-green-600 text-white rounded-sm hover:bg-green-700"
             >
               {copiedToken ? '✓ Copied!' : 'Copy'}
             </button>
@@ -206,13 +206,13 @@ export default function FeedTokensPage() {
             placeholder="Label (optional) e.g., 'My Feedly'"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="flex-1 px-3 py-2 border rounded"
+            className="flex-1 px-3 py-2 border rounded-sm"
             maxLength={100}
           />
           <button
             onClick={createToken}
             disabled={creating}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700 disabled:opacity-50"
           >
             {creating ? 'Creating...' : 'Create Token'}
           </button>
@@ -236,14 +236,14 @@ export default function FeedTokensPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <code className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
+                      <code className="font-mono text-sm bg-gray-100 px-2 py-1 rounded-sm">
                         {token.prefix}...
                       </code>
                       {token.label && (
                         <span className="text-gray-700">{token.label}</span>
                       )}
                       {!token.is_active && (
-                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-sm">
                           Revoked
                         </span>
                       )}

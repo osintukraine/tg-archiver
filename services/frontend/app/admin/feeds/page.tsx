@@ -339,7 +339,7 @@ function FeedManagement() {
             resetForm();
             setShowCreateModal(true);
           }}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          className="px-4 py-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 transition-colors"
         >
           Add Feed
         </button>
@@ -405,13 +405,13 @@ function FeedManagement() {
               placeholder="Search feeds..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+              className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
             />
           </div>
           <select
             value={category}
             onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-            className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+            className="bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
           >
             <option value="">All Categories</option>
             {CATEGORIES.map((c) => (
@@ -423,7 +423,7 @@ function FeedManagement() {
               type="checkbox"
               checked={activeOnly === true}
               onChange={(e) => setActiveOnly(e.target.checked ? true : undefined)}
-              className="rounded"
+              className="rounded-sm"
             />
             Active only
           </label>
@@ -452,7 +452,7 @@ function FeedManagement() {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+            className="px-4 py-2 bg-bg-secondary rounded-sm disabled:opacity-50"
           >
             Previous
           </button>
@@ -462,7 +462,7 @@ function FeedManagement() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-4 py-2 bg-bg-secondary rounded disabled:opacity-50"
+            className="px-4 py-2 bg-bg-secondary rounded-sm disabled:opacity-50"
           >
             Next
           </button>
@@ -489,7 +489,7 @@ function FeedManagement() {
                   ? setSelectedFeed({ ...selectedFeed, name: e.target.value })
                   : setFormData({ ...formData, name: e.target.value })
                 }
-                className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
               />
             </div>
             <div>
@@ -502,7 +502,7 @@ function FeedManagement() {
                     ? setSelectedFeed({ ...selectedFeed, url: e.target.value })
                     : setFormData({ ...formData, url: e.target.value })
                   }
-                  className="flex-1 bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                  className="flex-1 bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
                 />
                 <button
                   onClick={() => {
@@ -512,7 +512,7 @@ function FeedManagement() {
                       setShowTestModal(true);
                     }
                   }}
-                  className="px-3 py-2 bg-bg-tertiary rounded hover:bg-bg-secondary transition-colors text-sm"
+                  className="px-3 py-2 bg-bg-tertiary rounded-sm hover:bg-bg-secondary transition-colors text-sm"
                 >
                   Test
                 </button>
@@ -527,7 +527,7 @@ function FeedManagement() {
                     ? setSelectedFeed({ ...selectedFeed, category: e.target.value })
                     : setFormData({ ...formData, category: e.target.value })
                   }
-                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                  className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
@@ -543,7 +543,7 @@ function FeedManagement() {
                     ? setSelectedFeed({ ...selectedFeed, language: e.target.value })
                     : setFormData({ ...formData, language: e.target.value })
                   }
-                  className="w-full bg-bg-secondary border border-border-subtle rounded px-3 py-2"
+                  className="w-full bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2"
                   placeholder="en"
                 />
               </div>
@@ -557,7 +557,7 @@ function FeedManagement() {
                   ? setSelectedFeed({ ...selectedFeed, is_active: e.target.checked })
                   : setFormData({ ...formData, is_active: e.target.checked })
                 }
-                className="rounded"
+                className="rounded-sm"
               />
               <label htmlFor="is_active" className="text-sm">Active</label>
             </div>
@@ -577,13 +577,13 @@ function FeedManagement() {
                 <>
                   <button
                     onClick={() => handleDelete(selectedFeed.id)}
-                    className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                    className="px-4 py-2 bg-red-500 text-white rounded-sm hover:bg-red-600 transition-colors"
                   >
                     Delete
                   </button>
                   <button
                     onClick={() => handleUpdate(selectedFeed.id, selectedFeed)}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                    className="px-4 py-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 transition-colors"
                   >
                     Save Changes
                   </button>
@@ -591,7 +591,7 @@ function FeedManagement() {
               ) : (
                 <button
                   onClick={handleCreate}
-                  className="ml-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  className="ml-auto px-4 py-2 bg-blue-500 text-white rounded-sm hover:bg-blue-600 transition-colors"
                 >
                   Create Feed
                 </button>
@@ -627,7 +627,7 @@ function FeedManagement() {
               </div>
 
               {testResult.error && (
-                <div className="p-3 bg-red-500/10 rounded text-red-400 text-sm">
+                <div className="p-3 bg-red-500/10 rounded-sm text-red-400 text-sm">
                   {testResult.error}
                 </div>
               )}
@@ -649,7 +649,7 @@ function FeedManagement() {
                       <div className="text-sm text-text-secondary mb-2">Sample Items</div>
                       <div className="space-y-2">
                         {testResult.sample_items.map((item, i) => (
-                          <div key={i} className="p-2 bg-bg-secondary rounded text-sm">
+                          <div key={i} className="p-2 bg-bg-secondary rounded-sm text-sm">
                             <div className="font-medium">{item.title}</div>
                             <div className="text-text-tertiary text-xs mt-1">{item.published}</div>
                           </div>

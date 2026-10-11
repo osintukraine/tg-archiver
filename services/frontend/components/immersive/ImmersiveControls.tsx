@@ -31,7 +31,7 @@ export function ImmersiveControls() {
           {/* Left: Exit button */}
           <button
             onClick={toggleImmersive}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/60 backdrop-blur-xs text-white hover:bg-black/80 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -40,7 +40,7 @@ export function ImmersiveControls() {
           </button>
 
           {/* Center: Position indicator */}
-          <div className="px-3 py-2 rounded-lg bg-black/60 backdrop-blur-sm text-white text-sm">
+          <div className="px-3 py-2 rounded-lg bg-black/60 backdrop-blur-xs text-white text-sm">
             {currentIndex + 1} / {queue.length}
           </div>
 
@@ -49,7 +49,7 @@ export function ImmersiveControls() {
             {/* View mode toggle */}
             <button
               onClick={() => setViewMode(viewMode === 'stream' ? 'grid' : 'stream')}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
+              className={`p-2 rounded-lg backdrop-blur-xs transition-colors ${
                 viewMode === 'grid'
                   ? 'bg-white/20 text-white'
                   : 'bg-black/60 text-white hover:bg-black/80'
@@ -72,7 +72,7 @@ export function ImmersiveControls() {
               <>
                 <button
                   onClick={() => toggleLayer('rss')}
-                  className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
+                  className={`p-2 rounded-lg backdrop-blur-xs transition-colors ${
                     layers.rss
                       ? 'bg-blue-500/80 text-white'
                       : 'bg-black/60 text-white hover:bg-black/80'
@@ -90,7 +90,7 @@ export function ImmersiveControls() {
             {/* Sort mode toggle */}
             <button
               onClick={() => setSortMode(sortMode === 'newest' ? 'smart' : 'newest')}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
+              className={`p-2 rounded-lg backdrop-blur-xs transition-colors ${
                 sortMode === 'smart'
                   ? 'bg-purple-500/80 text-white'
                   : 'bg-black/60 text-white hover:bg-black/80'
@@ -103,7 +103,7 @@ export function ImmersiveControls() {
             {/* Skip watched toggle */}
             <button
               onClick={() => setSkipWatched(!skipWatched)}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
+              className={`p-2 rounded-lg backdrop-blur-xs transition-colors ${
                 skipWatched
                   ? 'bg-amber-500/80 text-white'
                   : 'bg-black/60 text-white hover:bg-black/80'
@@ -116,7 +116,7 @@ export function ImmersiveControls() {
             {/* Reset button */}
             <button
               onClick={resetQueue}
-              className="p-2 rounded-lg backdrop-blur-sm bg-black/60 text-white hover:bg-red-500/80 transition-colors"
+              className="p-2 rounded-lg backdrop-blur-xs bg-black/60 text-white hover:bg-red-500/80 transition-colors"
               title="Reset to Latest"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,7 +127,7 @@ export function ImmersiveControls() {
             {/* Help button */}
             <button
               onClick={() => setShowHelp(!showHelp)}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-colors ${
+              className={`p-2 rounded-lg backdrop-blur-xs transition-colors ${
                 showHelp
                   ? 'bg-white/20 text-white'
                   : 'bg-black/60 text-white hover:bg-black/80'
@@ -145,7 +145,7 @@ export function ImmersiveControls() {
       {/* Help overlay */}
       {showHelp && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs"
           onClick={() => setShowHelp(false)}
         >
           <div
@@ -170,27 +170,27 @@ export function ImmersiveControls() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-white/70">Next video</span>
-                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded">↓ or →</span>
+                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded-sm">↓ or →</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/70">Previous video</span>
-                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded">↑ or ←</span>
+                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded-sm">↑ or ←</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/70">Pause / Play</span>
-                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded">Space</span>
+                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded-sm">Space</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/70">Mute / Unmute</span>
-                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded">M</span>
+                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded-sm">M</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/70">Exit immersive mode</span>
-                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded">Esc</span>
+                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded-sm">Esc</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/70">Toggle immersive mode</span>
-                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded">I</span>
+                  <span className="text-white font-mono bg-white/10 px-2 py-0.5 rounded-sm">I</span>
                 </div>
               </div>
             </div>
@@ -202,7 +202,7 @@ export function ImmersiveControls() {
                 <div className="space-y-3 text-sm">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="bg-blue-500/80 text-white text-xs font-medium px-2 py-0.5 rounded">RSS</span>
+                      <span className="bg-blue-500/80 text-white text-xs font-medium px-2 py-0.5 rounded-sm">RSS</span>
                       <span className="text-white">News Ticker</span>
                     </div>
                     <p className="text-white/60 text-xs">Shows latest RSS news headlines scrolling at the top. Click headlines to open articles.</p>
@@ -234,7 +234,7 @@ export function ImmersiveControls() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="bg-white/10 text-white text-xs font-medium px-2 py-0.5 rounded">↻</span>
+                    <span className="bg-white/10 text-white text-xs font-medium px-2 py-0.5 rounded-sm">↻</span>
                     <span className="text-white">Reset</span>
                   </div>
                   <p className="text-white/60 text-xs">Clears watch history, returns to newest-first sort, and jumps to the latest video.</p>

@@ -163,7 +163,7 @@ export function StreamView() {
         {currentIndex > 0 && (
           <button
             onClick={goToPrevious}
-            className="p-3 rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
+            className="p-3 rounded-full bg-black/60 backdrop-blur-xs text-white hover:bg-black/80"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -180,7 +180,7 @@ export function StreamView() {
         {currentIndex < queue.length - 1 && (
           <button
             onClick={goToNext}
-            className="p-3 rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
+            className="p-3 rounded-full bg-black/60 backdrop-blur-xs text-white hover:bg-black/80"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -198,7 +198,7 @@ export function StreamView() {
         {/* Mute/Unmute button */}
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className="p-3 rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
+          className="p-3 rounded-full bg-black/60 backdrop-blur-xs text-white hover:bg-black/80"
           title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
         >
           {isMuted ? (
@@ -216,7 +216,7 @@ export function StreamView() {
         {/* Pause/Play button */}
         <button
           onClick={() => setIsPaused(!isPaused)}
-          className="p-3 rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80"
+          className="p-3 rounded-full bg-black/60 backdrop-blur-xs text-white hover:bg-black/80"
           title={isPaused ? 'Play (Space)' : 'Pause (Space)'}
         >
           {isPaused ? (

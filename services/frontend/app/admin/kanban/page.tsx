@@ -118,7 +118,7 @@ export default function KanbanPage() {
               <select
                 value={days}
                 onChange={(e) => setDays(parseInt(e.target.value))}
-                className="bg-bg-secondary border border-border-subtle rounded px-3 py-2 text-sm"
+                className="bg-bg-secondary border border-border-subtle rounded-sm px-3 py-2 text-sm"
               >
                 <option value={0}>All Time</option>
                 <option value={1}>Last 24 hours</option>
@@ -190,9 +190,9 @@ export default function KanbanPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {laneOrder.map((lane) => (
             <div key={lane} className="glass p-4 animate-pulse">
-              <div className="h-6 bg-bg-tertiary rounded w-24 mb-4" />
+              <div className="h-6 bg-bg-tertiary rounded-sm w-24 mb-4" />
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-24 bg-bg-tertiary rounded mb-2" />
+                <div key={i} className="h-24 bg-bg-tertiary rounded-sm mb-2" />
               ))}
             </div>
           ))}
@@ -238,7 +238,7 @@ export default function KanbanPage() {
                     >
                       {/* Thumbnail */}
                       {item.has_media && item.thumbnail_url && (
-                        <div className="aspect-video bg-bg-tertiary rounded mb-2 overflow-hidden relative">
+                        <div className="aspect-video bg-bg-tertiary rounded-sm mb-2 overflow-hidden relative">
                           {/\.(mp4|mov|webm|avi|mkv)$/i.test(item.thumbnail_url) ? (
                             <video
                               src={getMediaUrl(item.thumbnail_url) || ''}
@@ -339,14 +339,14 @@ export default function KanbanPage() {
                       src={getMediaUrl(selectedItem.thumbnail_url) || ''}
                       controls
                       autoPlay
-                      className="max-w-full rounded"
+                      className="max-w-full rounded-sm"
                       preload="metadata"
                     />
                   ) : (
                     <img
                       src={getMediaUrl(selectedItem.thumbnail_url) || ''}
                       alt=""
-                      className="max-w-full rounded"
+                      className="max-w-full rounded-sm"
                     />
                   )}
                 </div>

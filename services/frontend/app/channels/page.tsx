@@ -130,7 +130,7 @@ function ChannelCard({ channel }: { channel: Channel }) {
     >
       <div className="flex items-start gap-3 sm:gap-4">
         {/* Avatar */}
-        <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${gradientColors} flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
+        <div className={`w-12 h-12 rounded-full bg-linear-to-br ${gradientColors} flex items-center justify-center text-white font-bold text-lg shrink-0`}>
           {(channel.name || channel.username || 'C')[0].toUpperCase()}
         </div>
 
@@ -142,13 +142,13 @@ function ChannelCard({ channel }: { channel: Channel }) {
               {channel.name || channel.username || `Channel ${channel.id}`}
             </h3>
             {channel.verified && (
-              <span className="text-accent-primary flex-shrink-0" title="Verified">✓</span>
+              <span className="text-accent-primary shrink-0" title="Verified">✓</span>
             )}
             {channel.scam && (
-              <span className="text-red-500 text-xs px-2 py-0.5 bg-red-500/10 rounded flex-shrink-0">SCAM</span>
+              <span className="text-red-500 text-xs px-2 py-0.5 bg-red-500/10 rounded-sm shrink-0">SCAM</span>
             )}
             {channel.fake && (
-              <span className="text-orange-500 text-xs px-2 py-0.5 bg-orange-500/10 rounded flex-shrink-0">FAKE</span>
+              <span className="text-orange-500 text-xs px-2 py-0.5 bg-orange-500/10 rounded-sm shrink-0">FAKE</span>
             )}
           </div>
 

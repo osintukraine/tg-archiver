@@ -408,7 +408,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search in original or translated text..."
-              className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
 
@@ -425,7 +425,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   setSortBy(e.target.value);
                   router.push(buildFilterUrl({ sortBy: e.target.value }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="telegram_date">Date (Telegram)</option>
                 <option value="created_at">Date Added</option>
@@ -446,7 +446,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   setSortOrder(newValue);
                   router.push(buildFilterUrl({ sortOrder: newValue }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="desc">Descending (Newest First)</option>
                 <option value="asc">Ascending (Oldest First)</option>
@@ -469,7 +469,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   router.push(buildFilterUrl({ channelUsername: e.target.value }));
                 }}
                 disabled={channelsLoading}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
               >
                 <option value="">All Channels</option>
                 {!channelsLoading && Object.entries(channelsByCategory).map(([catName, catChannels]) => (
@@ -500,7 +500,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   setHasMedia(e.target.value);
                   router.push(buildFilterUrl({ hasMedia: e.target.value }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="any">Any (with or without media)</option>
                 <option value="true">With Media (photos/videos)</option>
@@ -520,7 +520,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   setMediaType(e.target.value);
                   router.push(buildFilterUrl({ mediaType: e.target.value }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="">All Media Types</option>
                 <option value="photo">Photos</option>
@@ -543,7 +543,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   setLanguage(e.target.value);
                   router.push(buildFilterUrl({ language: e.target.value }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="">All Languages</option>
                 <option value="en">English</option>
@@ -571,7 +571,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   router.push(buildFilterUrl({ topic: e.target.value }));
                 }}
                 disabled={topicsLoading}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
               >
                 <option value="">All Topics</option>
                 {!topicsLoading && topics.map(t => (
@@ -595,7 +595,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   router.push(buildFilterUrl({ categoryId: e.target.value }));
                 }}
                 disabled={categoriesLoading}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
               >
                 <option value="">All Categories</option>
                 {!categoriesLoading && categories.map(c => (
@@ -619,7 +619,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   router.push(buildFilterUrl({ channelFolder: e.target.value }));
                 }}
                 disabled={foldersLoading}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
               >
                 <option value="">All Folders</option>
                 {!foldersLoading && folders.map(f => (
@@ -645,7 +645,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   setHasComments(e.target.value);
                   router.push(buildFilterUrl({ hasComments: e.target.value }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="any">Any</option>
                 <option value="true">Has Comments</option>
@@ -671,7 +671,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                     router.push(buildFilterUrl({ minViews }));
                   }
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -693,7 +693,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                     router.push(buildFilterUrl({ minForwards }));
                   }
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary"
               />
             </div>
           </div>
@@ -715,7 +715,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   }
                   router.push(buildFilterUrl({ days: e.target.value, dateFrom: '', dateTo: '' }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               >
                 <option value="">All Time</option>
                 <option value="1">Last 24 Hours</option>
@@ -739,7 +739,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   if (e.target.value) setDays('');
                   router.push(buildFilterUrl({ dateFrom: e.target.value, days: '' }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
 
@@ -756,7 +756,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                   if (e.target.value) setDays('');
                   router.push(buildFilterUrl({ dateTo: e.target.value, days: '' }));
                 }}
-                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-3 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
           </div>
@@ -768,7 +768,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
                 <div className="mb-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm text-amber-400">
                   <p className="font-medium">Feed authentication is required</p>
                   <p className="text-xs mt-1">
-                    Add <code className="bg-amber-500/20 px-1 rounded">?token=YOUR_TOKEN</code> to the URL.
+                    Add <code className="bg-amber-500/20 px-1 rounded-sm">?token=YOUR_TOKEN</code> to the URL.
                     Create a token in <a href="/settings/feed-tokens" className="underline hover:text-amber-300">Settings</a>.
                   </p>
                 </div>
@@ -777,7 +777,7 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
               <button
                 onClick={() => setShowFeedMenu(!showFeedMenu)}
                 disabled={feedUrlGenerating}
-                className="w-full px-6 py-3 bg-accent-secondary hover:bg-accent-secondary/90 border border-accent-secondary text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-accent-secondary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-6 py-3 bg-accent-secondary hover:bg-accent-secondary/90 border border-accent-secondary text-white font-medium rounded-lg transition-colors focus:outline-hidden focus:ring-2 focus:ring-accent-secondary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Subscribe to feed with current filters"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">

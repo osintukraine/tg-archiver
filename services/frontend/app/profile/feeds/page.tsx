@@ -223,7 +223,7 @@ export default function FeedTokensPage() {
       </p>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-sm mb-4">
           {error}
         </div>
       )}
@@ -238,12 +238,12 @@ export default function FeedTokensPage() {
             <strong>Save this token now!</strong> It will not be shown again.
           </p>
           <div className="flex items-center gap-2">
-            <code className="bg-white px-3 py-2 rounded border flex-1 font-mono text-sm break-all">
+            <code className="bg-white px-3 py-2 rounded-sm border flex-1 font-mono text-sm break-all">
               {newToken.token}
             </code>
             <button
               onClick={copyToken}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              className="px-4 py-2 bg-green-600 text-white rounded-sm hover:bg-green-700"
             >
               {copiedToken ? 'Copied!' : 'Copy'}
             </button>
@@ -266,13 +266,13 @@ export default function FeedTokensPage() {
             placeholder="Name (optional) e.g., 'My Feedly'"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="flex-1 px-3 py-2 border border-border-default rounded bg-bg-base"
+            className="flex-1 px-3 py-2 border border-border-default rounded-sm bg-bg-base"
             maxLength={100}
           />
           <button
             onClick={createToken}
             disabled={creating}
-            className="px-4 py-2 bg-accent-primary text-white rounded hover:bg-accent-primary-hover disabled:opacity-50"
+            className="px-4 py-2 bg-accent-primary text-white rounded-sm hover:bg-accent-primary-hover disabled:opacity-50"
           >
             {creating ? 'Creating...' : 'Create Token'}
           </button>
@@ -297,14 +297,14 @@ export default function FeedTokensPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <code className="font-mono text-sm bg-bg-secondary px-2 py-1 rounded">
+                        <code className="font-mono text-sm bg-bg-secondary px-2 py-1 rounded-sm">
                           Token #{token.id}
                         </code>
                         {token.name && (
                           <span className="text-text-primary font-medium">{token.name}</span>
                         )}
                         {!token.is_active && (
-                          <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                          <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-sm">
                             Revoked
                           </span>
                         )}
@@ -354,7 +354,7 @@ export default function FeedTokensPage() {
                         {subscriptions[token.id]?.map((sub) => (
                           <div
                             key={sub.id}
-                            className="bg-bg-base border border-border-default rounded p-3"
+                            className="bg-bg-base border border-border-default rounded-sm p-3"
                           >
                             <div className="flex items-start justify-between">
                               <div>

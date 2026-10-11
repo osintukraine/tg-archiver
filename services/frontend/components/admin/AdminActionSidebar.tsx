@@ -232,7 +232,7 @@ export function AdminActionSidebar() {
             </div>
             <button
               onClick={() => setIsExpanded(false)}
-              className="p-1 hover:bg-red-700 rounded transition-colors"
+              className="p-1 hover:bg-red-700 rounded-sm transition-colors"
               title="Close panel"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,12 +245,12 @@ export function AdminActionSidebar() {
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
             {/* Status Messages */}
             {error && (
-              <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded text-sm">
+              <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-sm text-sm">
                 {error}
               </div>
             )}
             {successMessage && (
-              <div className="bg-green-500/20 border border-green-500/30 text-green-400 px-3 py-2 rounded text-sm">
+              <div className="bg-green-500/20 border border-green-500/30 text-green-400 px-3 py-2 rounded-sm text-sm">
                 {successMessage}
               </div>
             )}
@@ -263,18 +263,18 @@ export function AdminActionSidebar() {
                 {info && (
                   <div className="flex flex-wrap gap-2">
                     {info.is_hidden && (
-                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">Hidden</span>
+                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded-sm">Hidden</span>
                     )}
                     {info.is_deleted && (
-                      <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">Deleted</span>
+                      <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-sm">Deleted</span>
                     )}
                     {info.topic && (
-                      <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded">
+                      <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-sm">
                         Topic: {info.topic}
                       </span>
                     )}
                     {info.admin_notes && (
-                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">Has Notes</span>
+                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-sm">Has Notes</span>
                     )}
                   </div>
                 )}

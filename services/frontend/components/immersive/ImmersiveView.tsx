@@ -95,7 +95,7 @@ function ImmersiveViewInner() {
   // Loading state
   if (isLoading && messages.length === 0) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
+      <div className="fixed inset-0 z-100 bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
           <p className="text-white/60">Loading media queue...</p>
@@ -107,7 +107,7 @@ function ImmersiveViewInner() {
   // Error state
   if (error) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center">
+      <div className="fixed inset-0 z-100 bg-black flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-2">Failed to load queue</p>
           <p className="text-white/40 text-sm">{error.message}</p>
@@ -123,7 +123,7 @@ function ImmersiveViewInner() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100]">
+    <div className="fixed inset-0 z-100">
       {viewMode === 'stream' ? <StreamView /> : <GridView />}
     </div>
   );

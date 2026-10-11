@@ -178,7 +178,7 @@ export default function SuggestChannelPage() {
           <div className="pt-4">
             <Link
               href="/"
-              className="inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-text-primary bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-xs text-base font-medium text-text-primary bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
               Back to Home
             </Link>
@@ -202,7 +202,7 @@ export default function SuggestChannelPage() {
         </div>
 
         {error && (
-          <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded">
+          <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-sm">
             {error}
           </div>
         )}
@@ -222,7 +222,7 @@ export default function SuggestChannelPage() {
                 required
                 value={channelLink}
                 onChange={(e) => setChannelLink(e.target.value)}
-                className={`mt-1 block w-full px-3 py-2 bg-bg-secondary border rounded-md text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                className={`mt-1 block w-full px-3 py-2 bg-bg-secondary border rounded-md text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   channelLink && !channelLinkValidation.valid ? 'border-red-500' : channelLink && channelLinkValidation.valid ? 'border-green-500' : 'border-border-subtle'
                 }`}
                 placeholder="t.me/channel or @channel"
@@ -247,7 +247,7 @@ export default function SuggestChannelPage() {
                 required
                 value={channelName}
                 onChange={(e) => setChannelName(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 bg-bg-secondary border border-border-subtle rounded-md text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="mt-1 block w-full px-3 py-2 bg-bg-secondary border border-border-subtle rounded-md text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Full channel name"
               />
             </div>
@@ -263,7 +263,7 @@ export default function SuggestChannelPage() {
                 required
                 value={sourceOrigin}
                 onChange={(e) => setSourceOrigin(e.target.value as 'ua' | 'ru' | 'unknown')}
-                className="mt-1 block w-full px-3 py-2 bg-bg-secondary border border-border-subtle rounded-md text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="mt-1 block w-full px-3 py-2 bg-bg-secondary border border-border-subtle rounded-md text-text-primary focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="unknown">Unknown</option>
                 <option value="ua">Ukrainian</option>
@@ -285,7 +285,7 @@ export default function SuggestChannelPage() {
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className={`mt-1 block w-full px-3 py-2 bg-bg-secondary border rounded-md text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                className={`mt-1 block w-full px-3 py-2 bg-bg-secondary border rounded-md text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   reason.length > 0 && reason.length < 10 ? 'border-yellow-500' : 'border-border-subtle'
                 }`}
                 placeholder="Why should we archive this channel?"
@@ -306,7 +306,7 @@ export default function SuggestChannelPage() {
                 rows={3}
                 value={valueDescription}
                 onChange={(e) => setValueDescription(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 bg-bg-secondary border border-border-subtle rounded-md text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="mt-1 block w-full px-3 py-2 bg-bg-secondary border border-border-subtle rounded-md text-text-primary placeholder-text-tertiary focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="What intelligence value does it provide?"
               />
             </div>
@@ -325,7 +325,7 @@ export default function SuggestChannelPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-text-primary bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-bg-tertiary disabled:cursor-not-allowed transition-colors"
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-text-primary bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-bg-tertiary disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Submitting...' : 'Submit Suggestion'}
             </button>

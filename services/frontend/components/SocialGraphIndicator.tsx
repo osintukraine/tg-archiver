@@ -35,7 +35,7 @@ export default function SocialGraphIndicator({
       <div className={`flex items-center gap-2 text-xs ${className}`}>
         {forwardFromChannelId && (
           <span
-            className="flex items-center gap-0.5 text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded border border-blue-500/30"
+            className="flex items-center gap-0.5 text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded-sm border border-blue-500/30"
             title="Forwarded message"
           >
             <span>⤴️</span>
@@ -44,7 +44,7 @@ export default function SocialGraphIndicator({
 
         {hasComments && commentsCount > 0 && (
           <span
-            className="flex items-center gap-0.5 text-purple-400 bg-purple-500/15 px-1.5 py-0.5 rounded border border-purple-500/30"
+            className="flex items-center gap-0.5 text-purple-400 bg-purple-500/15 px-1.5 py-0.5 rounded-sm border border-purple-500/30"
             title={`${commentsCount} comments`}
           >
             <span>💬</span>
@@ -54,7 +54,7 @@ export default function SocialGraphIndicator({
 
         {repliedToMessageId && (
           <span
-            className="flex items-center gap-0.5 text-green-400 bg-green-500/15 px-1.5 py-0.5 rounded border border-green-500/30"
+            className="flex items-center gap-0.5 text-green-400 bg-green-500/15 px-1.5 py-0.5 rounded-sm border border-green-500/30"
             title="Reply to another message"
           >
             <span>↩️</span>
@@ -68,21 +68,21 @@ export default function SocialGraphIndicator({
   return (
     <div className={`flex flex-wrap gap-2 text-sm ${className}`}>
       {forwardFromChannelId && (
-        <div className="flex items-center gap-2 text-blue-400 bg-blue-500/15 px-3 py-1.5 rounded border border-blue-500/30">
+        <div className="flex items-center gap-2 text-blue-400 bg-blue-500/15 px-3 py-1.5 rounded-sm border border-blue-500/30">
           <span>⤴️</span>
           <span>Forwarded Message</span>
         </div>
       )}
 
       {hasComments && commentsCount > 0 && (
-        <div className="flex items-center gap-2 text-purple-400 bg-purple-500/15 px-3 py-1.5 rounded border border-purple-500/30">
+        <div className="flex items-center gap-2 text-purple-400 bg-purple-500/15 px-3 py-1.5 rounded-sm border border-purple-500/30">
           <span>💬</span>
           <span>{commentsCount} {commentsCount === 1 ? 'Comment' : 'Comments'}</span>
         </div>
       )}
 
       {repliedToMessageId && (
-        <div className="flex items-center gap-2 text-green-400 bg-green-500/15 px-3 py-1.5 rounded border border-green-500/30">
+        <div className="flex items-center gap-2 text-green-400 bg-green-500/15 px-3 py-1.5 rounded-sm border border-green-500/30">
           <span>↩️</span>
           <span>Reply Thread</span>
         </div>

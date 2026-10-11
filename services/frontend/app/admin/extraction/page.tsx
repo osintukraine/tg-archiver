@@ -243,14 +243,14 @@ export default function ExtractionPage() {
         <div className="flex gap-2">
           <button
             onClick={handleReload}
-            className="px-4 py-2 bg-yellow-600/20 text-yellow-400 rounded hover:bg-yellow-600/30 transition-colors"
+            className="px-4 py-2 bg-yellow-600/20 text-yellow-400 rounded-sm hover:bg-yellow-600/30 transition-colors"
             title="Reload patterns in processor"
           >
             Reload Processor
           </button>
           <button
             onClick={openCreateModal}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors"
+            className="px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-500 transition-colors"
           >
             + Add Pattern
           </button>
@@ -317,7 +317,7 @@ export default function ExtractionPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-xs ${getColorClass(pattern.color)}`}>
+                      <span className={`px-2 py-0.5 rounded-sm text-xs ${getColorClass(pattern.color)}`}>
                         {pattern.entity_type}
                       </span>
                       <span className="font-medium text-text-primary">{pattern.name}</span>
@@ -337,7 +337,7 @@ export default function ExtractionPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <code className="text-xs text-text-secondary bg-bg-tertiary px-2 py-1 rounded max-w-xs truncate block">
+                    <code className="text-xs text-text-secondary bg-bg-tertiary px-2 py-1 rounded-sm max-w-xs truncate block">
                       {pattern.pattern.length > 50
                         ? pattern.pattern.slice(0, 50) + '...'
                         : pattern.pattern}
@@ -347,19 +347,19 @@ export default function ExtractionPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => openTestModal(pattern.id)}
-                        className="px-2 py-1 text-xs bg-purple-600/20 text-purple-400 rounded hover:bg-purple-600/30"
+                        className="px-2 py-1 text-xs bg-purple-600/20 text-purple-400 rounded-sm hover:bg-purple-600/30"
                       >
                         Test
                       </button>
                       <button
                         onClick={() => openEditModal(pattern)}
-                        className="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded hover:bg-blue-600/30"
+                        className="px-2 py-1 text-xs bg-blue-600/20 text-blue-400 rounded-sm hover:bg-blue-600/30"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(pattern)}
-                        className="px-2 py-1 text-xs bg-red-600/20 text-red-400 rounded hover:bg-red-600/30"
+                        className="px-2 py-1 text-xs bg-red-600/20 text-red-400 rounded-sm hover:bg-red-600/30"
                       >
                         Delete
                       </button>
@@ -387,11 +387,11 @@ export default function ExtractionPage() {
             <ul className="list-disc list-inside space-y-1">
               <li>
                 <strong>Regex patterns</strong> use Python regex syntax (e.g.,{' '}
-                <code className="bg-bg-tertiary px-1 rounded">#[a-zA-Z0-9_]+</code>)
+                <code className="bg-bg-tertiary px-1 rounded-sm">#[a-zA-Z0-9_]+</code>)
               </li>
               <li>
                 <strong>Keyword lists</strong> are JSON arrays (e.g.,{' '}
-                <code className="bg-bg-tertiary px-1 rounded">[&quot;HIMARS&quot;, &quot;Javelin&quot;]</code>)
+                <code className="bg-bg-tertiary px-1 rounded-sm">[&quot;HIMARS&quot;, &quot;Javelin&quot;]</code>)
               </li>
               <li>
                 Click &quot;Reload Processor&quot; after making changes for them to take effect
@@ -419,7 +419,7 @@ export default function ExtractionPage() {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2"
+                  className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2"
                   placeholder="e.g., Custom Pattern"
                 />
               </div>
@@ -432,7 +432,7 @@ export default function ExtractionPage() {
                   <select
                     value={formData.entity_type}
                     onChange={(e) => setFormData({ ...formData, entity_type: e.target.value })}
-                    className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2"
+                    className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2"
                   >
                     {ENTITY_TYPES.map((type) => (
                       <option key={type} value={type}>
@@ -449,7 +449,7 @@ export default function ExtractionPage() {
                   <select
                     value={formData.pattern_type}
                     onChange={(e) => setFormData({ ...formData, pattern_type: e.target.value })}
-                    className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2"
+                    className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2"
                   >
                     <option value="regex">Regex</option>
                     <option value="keyword_list">Keyword List</option>
@@ -464,7 +464,7 @@ export default function ExtractionPage() {
                 <textarea
                   value={formData.pattern}
                   onChange={(e) => setFormData({ ...formData, pattern: e.target.value })}
-                  className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2 font-mono text-sm h-24"
+                  className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2 font-mono text-sm h-24"
                   placeholder={
                     formData.pattern_type === 'regex'
                       ? 'e.g., \\b(HIMARS|Javelin|Bradley)\\b'
@@ -481,7 +481,7 @@ export default function ExtractionPage() {
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2"
+                  className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2"
                   placeholder="Optional description"
                 />
               </div>
@@ -494,7 +494,7 @@ export default function ExtractionPage() {
                   <select
                     value={formData.color}
                     onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                    className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2"
+                    className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2"
                   >
                     {COLORS.map((color) => (
                       <option key={color} value={color}>
@@ -514,7 +514,7 @@ export default function ExtractionPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })
                     }
-                    className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2"
+                    className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2"
                   />
                 </div>
 
@@ -526,7 +526,7 @@ export default function ExtractionPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, case_sensitive: e.target.checked })
                       }
-                      className="rounded"
+                      className="rounded-sm"
                     />
                     <span className="text-sm text-text-secondary">Case sensitive</span>
                   </label>
@@ -538,7 +538,7 @@ export default function ExtractionPage() {
                   type="checkbox"
                   checked={formData.enabled}
                   onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                  className="rounded"
+                  className="rounded-sm"
                 />
                 <span className="text-sm text-text-secondary">Enabled</span>
               </div>
@@ -547,14 +547,14 @@ export default function ExtractionPage() {
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={closeModal}
-                className="px-4 py-2 bg-bg-tertiary rounded hover:bg-bg-primary transition-colors"
+                className="px-4 py-2 bg-bg-tertiary rounded-sm hover:bg-bg-primary transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !formData.name || !formData.pattern}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-500 transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving...' : editingPattern ? 'Update' : 'Create'}
               </button>
@@ -577,7 +577,7 @@ export default function ExtractionPage() {
                 <textarea
                   value={testText}
                   onChange={(e) => setTestText(e.target.value)}
-                  className="w-full bg-bg-tertiary border border-border-subtle rounded px-3 py-2 h-32"
+                  className="w-full bg-bg-tertiary border border-border-subtle rounded-sm px-3 py-2 h-32"
                   placeholder="Enter text to test the pattern against..."
                 />
               </div>
@@ -602,7 +602,7 @@ export default function ExtractionPage() {
                           {testResult.matches.map((match, i) => (
                             <span
                               key={i}
-                              className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-sm"
+                              className="px-2 py-1 bg-green-500/20 text-green-400 rounded-sm text-sm"
                             >
                               {match}
                             </span>
@@ -618,14 +618,14 @@ export default function ExtractionPage() {
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => setShowTestModal(false)}
-                className="px-4 py-2 bg-bg-tertiary rounded hover:bg-bg-primary transition-colors"
+                className="px-4 py-2 bg-bg-tertiary rounded-sm hover:bg-bg-primary transition-colors"
               >
                 Close
               </button>
               <button
                 onClick={handleTest}
                 disabled={testing || !testText}
-                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-500 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-purple-600 text-white rounded-sm hover:bg-purple-500 transition-colors disabled:opacity-50"
               >
                 {testing ? 'Testing...' : 'Test Pattern'}
               </button>

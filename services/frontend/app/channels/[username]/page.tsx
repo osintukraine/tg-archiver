@@ -11,20 +11,20 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 interface ChannelPageProps {
-  params: {
+  params: Promise<{
     username: string;
-  };
-  searchParams: {
+  }>;
+  searchParams: Promise<{
     page?: string;
     page_size?: string;
-  };
+  }>;
 }
 
 /**
  * Generate metadata for channel pages (OpenGraph + Twitter Cards)
  */
-export async function generateMetadata({ params }: ChannelPageProps): Promise<Metadata> {
-  const { username } = params;
+export async function generateMetadata(props: ChannelPageProps): Promise<Metadata> {
+  const { username } = await props.params;
 
   try {
     const channel = await getChannelByUsername(username);
@@ -66,8 +66,9 @@ export async function generateMetadata({ params }: ChannelPageProps): Promise<Me
   }
 }
 
-export default async function ChannelPage({ params, searchParams }: ChannelPageProps) {
-  const { username } = params;
+export default async function ChannelPage(props: ChannelPageProps) {
+  const { username } = await props.params;
+  const searchParams = await props.searchParams;
 
   // Fetch channel info
   let channel;
@@ -105,7 +106,7 @@ export default async function ChannelPage({ params, searchParams }: ChannelPageP
       <div className="glass p-8 rounded-xl mb-8">
         <div className="flex items-start gap-4">
           {/* Channel Icon/Avatar Placeholder */}
-          <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent-secondary rounded-full flex items-center justify-center flex-shrink-0">
+          <div className="w-16 h-16 bg-linear-to-br from-primary to-accent-secondary rounded-full flex items-center justify-center shrink-0">
             <span className="text-2xl font-bold text-white">
               {channel.name?.[0]?.toUpperCase() || channel.username?.[0]?.toUpperCase() || '?'}
             </span>
@@ -121,7 +122,7 @@ export default async function ChannelPage({ params, searchParams }: ChannelPageP
                 </svg>
               )}
               {channel.scam && (
-                <span className="px-2 py-1 bg-red-500/10 text-red-500 text-xs font-medium rounded">
+                <span className="px-2 py-1 bg-red-500/10 text-red-500 text-xs font-medium rounded-sm">
                   SCAM
                 </span>
               )}

@@ -73,7 +73,7 @@ export function ContentWarningModal() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] overflow-y-auto"
+      className="fixed inset-0 z-100 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="content-warning-title"
@@ -151,7 +151,7 @@ export function ContentWarningModal() {
               type="checkbox"
               checked={isChecked}
               onChange={(e) => setIsChecked(e.target.checked)}
-              className="mt-1 w-5 h-5 rounded border-border bg-bg-secondary text-accent-primary focus:ring-accent-primary focus:ring-offset-0 cursor-pointer"
+              className="mt-1 w-5 h-5 rounded-sm border-border bg-bg-secondary text-accent-primary focus:ring-accent-primary focus:ring-offset-0 cursor-pointer"
             />
             <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
               {theme.checkboxLabel}

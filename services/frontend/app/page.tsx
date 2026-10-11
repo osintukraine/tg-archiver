@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 interface HomePageProps {
-  searchParams: {
+  searchParams: Promise<{
     q?: string;
     channel_username?: string;
     channel_folder?: string;
@@ -42,10 +42,11 @@ interface HomePageProps {
     sort_order?: string;
     page?: string;
     page_size?: string;
-  };
+  }>;
 }
 
-export default async function HomePage({ searchParams }: HomePageProps) {
+export default async function HomePage(props: HomePageProps) {
+  const searchParams = await props.searchParams;
   // Parse search parameters
   const params = {
     q: searchParams.q,

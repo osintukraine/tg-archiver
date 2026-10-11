@@ -181,11 +181,11 @@ export default function ApiKeysPage() {
   if (loading || authLoading) {
     return (
       <div className="animate-pulse">
-        <div className="h-8 bg-bg-secondary rounded w-1/3 mb-4"></div>
-        <div className="h-4 bg-bg-secondary rounded w-1/2 mb-8"></div>
+        <div className="h-8 bg-bg-secondary rounded-sm w-1/3 mb-4"></div>
+        <div className="h-4 bg-bg-secondary rounded-sm w-1/2 mb-8"></div>
         <div className="space-y-4">
-          <div className="h-24 bg-bg-secondary rounded"></div>
-          <div className="h-24 bg-bg-secondary rounded"></div>
+          <div className="h-24 bg-bg-secondary rounded-sm"></div>
+          <div className="h-24 bg-bg-secondary rounded-sm"></div>
         </div>
       </div>
     );
@@ -228,8 +228,8 @@ export default function ApiKeysPage() {
       <h1 className="text-2xl font-bold text-text-primary mb-2">API Keys</h1>
       <p className="text-text-secondary mb-6">
         Create API keys for programmatic access to the platform. Keys can be used with
-        <code className="mx-1 px-1.5 py-0.5 bg-bg-secondary rounded text-sm">Authorization: Bearer ak_xxx</code>
-        header or <code className="mx-1 px-1.5 py-0.5 bg-bg-secondary rounded text-sm">?api_key=ak_xxx</code> query parameter.
+        <code className="mx-1 px-1.5 py-0.5 bg-bg-secondary rounded-sm text-sm">Authorization: Bearer ak_xxx</code>
+        header or <code className="mx-1 px-1.5 py-0.5 bg-bg-secondary rounded-sm text-sm">?api_key=ak_xxx</code> query parameter.
       </p>
 
       {error && (
@@ -254,12 +254,12 @@ export default function ApiKeysPage() {
             <strong>Save this key now!</strong> It will not be shown again.
           </p>
           <div className="flex items-center gap-2">
-            <code className="bg-white dark:bg-bg-base px-3 py-2 rounded border border-green-300 dark:border-green-900 flex-1 font-mono text-sm break-all text-text-primary">
+            <code className="bg-white dark:bg-bg-base px-3 py-2 rounded-sm border border-green-300 dark:border-green-900 flex-1 font-mono text-sm break-all text-text-primary">
               {newKey.plaintext_key}
             </code>
             <button
               onClick={copyKey}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors whitespace-nowrap"
+              className="px-4 py-2 bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors whitespace-nowrap"
             >
               {copiedKey ? 'Copied!' : 'Copy'}
             </button>
@@ -310,7 +310,7 @@ export default function ApiKeysPage() {
                   placeholder="e.g., Production API, My Script"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-base border border-border-subtle rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 bg-bg-base border border-border-subtle rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50"
                   maxLength={100}
                 />
               </div>
@@ -355,7 +355,7 @@ export default function ApiKeysPage() {
                 <select
                   value={expiresInDays || ''}
                   onChange={(e) => setExpiresInDays(e.target.value ? parseInt(e.target.value) : null)}
-                  className="w-full px-3 py-2 bg-bg-base border border-border-subtle rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 bg-bg-base border border-border-subtle rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50"
                 >
                   <option value="">Never expires</option>
                   <option value="7">7 days</option>
@@ -401,7 +401,7 @@ export default function ApiKeysPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <code className="font-mono text-sm bg-bg-secondary px-2 py-1 rounded">
+                      <code className="font-mono text-sm bg-bg-secondary px-2 py-1 rounded-sm">
                         Key #{key.id}
                       </code>
                       {key.name && (
@@ -410,12 +410,12 @@ export default function ApiKeysPage() {
 
                       {/* Status badges */}
                       {!key.is_active && (
-                        <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded">
+                        <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded-sm">
                           Revoked
                         </span>
                       )}
                       {key.is_expired && key.is_active && (
-                        <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded">
+                        <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-sm">
                           Expired
                         </span>
                       )}
@@ -427,7 +427,7 @@ export default function ApiKeysPage() {
                         {key.scopes.map((scope) => (
                           <span
                             key={scope}
-                            className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded"
+                            className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-sm"
                           >
                             {scope}
                           </span>
@@ -470,10 +470,10 @@ export default function ApiKeysPage() {
           <li>Add the key to your requests using one of these methods:</li>
         </ol>
         <div className="mt-3 space-y-2">
-          <code className="block text-xs bg-white dark:bg-bg-base p-2 rounded border border-blue-200 dark:border-blue-900 text-text-primary">
+          <code className="block text-xs bg-white dark:bg-bg-base p-2 rounded-sm border border-blue-200 dark:border-blue-900 text-text-primary">
             Authorization: Bearer ak_xxxx_xxxxxxxxxxxxx
           </code>
-          <code className="block text-xs bg-white dark:bg-bg-base p-2 rounded border border-blue-200 dark:border-blue-900 text-text-primary">
+          <code className="block text-xs bg-white dark:bg-bg-base p-2 rounded-sm border border-blue-200 dark:border-blue-900 text-text-primary">
             GET /api/messages?api_key=ak_xxxx_xxxxxxxxxxxxx
           </code>
         </div>

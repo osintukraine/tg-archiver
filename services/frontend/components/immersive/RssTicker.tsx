@@ -87,7 +87,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
 
   return (
     <div className="absolute top-16 left-0 right-0 z-20 overflow-hidden">
-      <div className="bg-black/70 backdrop-blur-sm py-2 px-4">
+      <div className="bg-black/70 backdrop-blur-xs py-2 px-4">
         {isLoading && rssItems.length === 0 ? (
           <div className="flex items-center justify-center gap-2 text-white/60 text-sm">
             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -96,7 +96,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
         ) : (
           <div className="flex items-center gap-4">
             {/* RSS indicator */}
-            <div className="flex-shrink-0 flex items-center gap-2 text-cyan-400 text-sm font-medium">
+            <div className="shrink-0 flex items-center gap-2 text-cyan-400 text-sm font-medium">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M5 3a1 1 0 000 2c5.523 0 10 4.477 10 10a1 1 0 102 0C17 8.373 11.627 3 5 3z" />
                 <path d="M4 9a1 1 0 011-1 7 7 0 017 7 1 1 0 11-2 0 5 5 0 00-5-5 1 1 0 01-1-1z" />
@@ -114,7 +114,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors"
+                    className="shrink-0 flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <span className="text-white/50">{item.feed_name}:</span>
@@ -128,7 +128,7 @@ export function RssTicker({ enabled }: RssTickerProps) {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors"
+                    className="shrink-0 flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <span className="text-white/50">{item.feed_name}:</span>

@@ -181,7 +181,7 @@ export default function MessageBrowserPage() {
               placeholder="Search messages..."
               value={filter}
               onChange={(e) => { setFilter(e.target.value); setPage(1); }}
-              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+              className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-64"
             />
             <button
               onClick={() => fetchMessages()}
@@ -276,26 +276,26 @@ export default function MessageBrowserPage() {
                             <textarea
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
-                              className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+                              className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded-sm text-white text-sm"
                               rows={2}
                               autoFocus
                             />
                             <button
                               onClick={() => saveEdit(msg.id, 'content', editValue)}
-                              className="px-2 py-1 bg-green-600 text-white rounded text-xs"
+                              className="px-2 py-1 bg-green-600 text-white rounded-sm text-xs"
                             >
                               Save
                             </button>
                             <button
                               onClick={cancelEditing}
-                              className="px-2 py-1 bg-gray-600 text-white rounded text-xs"
+                              className="px-2 py-1 bg-gray-600 text-white rounded-sm text-xs"
                             >
                               Cancel
                             </button>
                           </div>
                         ) : (
                           <div
-                            className="cursor-pointer hover:bg-gray-700 px-2 py-1 rounded"
+                            className="cursor-pointer hover:bg-gray-700 px-2 py-1 rounded-sm"
                             onClick={() => startEditing(msg.id, 'content', msg.content)}
                             title="Click to edit"
                           >
@@ -311,7 +311,7 @@ export default function MessageBrowserPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {msg.has_media ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900 text-blue-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-900 text-blue-200">
                             {msg.media_type || 'media'}
                           </span>
                         ) : (
@@ -327,7 +327,7 @@ export default function MessageBrowserPage() {
                             msg.topic
                               ? 'bg-purple-900/50 border-purple-500/50 text-purple-200'
                               : 'bg-gray-700 border-gray-600 text-gray-400'
-                          } focus:outline-none focus:ring-1 focus:ring-purple-500`}
+                          } focus:outline-hidden focus:ring-1 focus:ring-purple-500`}
                         >
                           {topicOptions.map(t => (
                             <option key={t.value} value={t.value}>{t.label}</option>
@@ -371,14 +371,14 @@ export default function MessageBrowserPage() {
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1 bg-gray-700 text-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+                  className="px-3 py-1 bg-gray-700 text-gray-300 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1 bg-gray-700 text-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+                  className="px-3 py-1 bg-gray-700 text-gray-300 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
                 >
                   Next
                 </button>

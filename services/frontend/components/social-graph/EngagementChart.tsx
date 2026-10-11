@@ -172,7 +172,7 @@ export function EngagementChart({ messageId }: EngagementChartProps) {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '0.5rem',
                       }}
-                      labelFormatter={(value) => new Date(value).toLocaleString()}
+                      labelFormatter={(value) => new Date(String(value)).toLocaleString()}
                     />
                     <Legend />
                     <Line
@@ -221,7 +221,7 @@ export function EngagementChart({ messageId }: EngagementChartProps) {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '0.5rem',
                       }}
-                      labelFormatter={(value) => new Date(value).toLocaleString()}
+                      labelFormatter={(value) => new Date(String(value)).toLocaleString()}
                       formatter={(value: any) => `${value}%`}
                     />
                     <Legend />

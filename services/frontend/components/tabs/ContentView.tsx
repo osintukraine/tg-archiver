@@ -194,7 +194,7 @@ export function ContentView({ message }: ContentViewProps) {
           {/* Country Flag - Prominent Display */}
           {countryInfo && (
             <span
-              className={`${countryInfo.color} text-xl font-bold flex-shrink-0`}
+              className={`${countryInfo.color} text-xl font-bold shrink-0`}
               title={`Source: ${message.channel?.folder || 'Unknown'}`}
             >
               {countryInfo.flag}
@@ -242,7 +242,7 @@ export function ContentView({ message }: ContentViewProps) {
 
       {/* Translation Notice */}
       {hasTranslation && (
-        <div className="text-xs text-muted-foreground bg-slate-50 dark:bg-slate-800 p-2 rounded">
+        <div className="text-xs text-muted-foreground bg-slate-50 dark:bg-slate-800 p-2 rounded-sm">
           <p className="font-medium mb-1">Original language detected, showing translation</p>
           <details className="cursor-pointer">
             <summary className="hover:text-foreground dark:hover:text-gray-200">Show original text</summary>
@@ -272,7 +272,7 @@ export function ContentView({ message }: ContentViewProps) {
                 <div key={idx} className="border rounded-lg overflow-hidden dark:border-gray-700 relative">
                   {/* Item count for albums */}
                   {message.grouped_id && mediaUrls.length > 1 && (fileType === 'image' || fileType === 'video') && (
-                    <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
+                    <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm z-10">
                       {idx + 1} of {mediaUrls.length}
                     </div>
                   )}
@@ -305,7 +305,7 @@ export function ContentView({ message }: ContentViewProps) {
                         <source src={mediaUrl} />
                       </video>
                       <button
-                        className="absolute top-2 left-2 p-1.5 rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 left-2 p-1.5 rounded-sm bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
                           setLightboxInitialIndex(idx);
@@ -322,7 +322,7 @@ export function ContentView({ message }: ContentViewProps) {
                   {fileType === 'audio' && (
                     <div className="p-4 bg-slate-50 dark:bg-slate-800">
                       <div className="flex items-center gap-3 mb-2">
-                        <svg className="w-6 h-6 text-blue-500 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-6 h-6 text-blue-500 dark:text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                         </svg>
                         <span className="text-sm text-muted-foreground">Audio {mediaUrls.length > 1 ? `(${idx + 1}/${mediaUrls.length})` : ''}</span>

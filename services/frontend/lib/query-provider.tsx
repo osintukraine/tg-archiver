@@ -6,7 +6,7 @@ import { useRef } from 'react';
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   // Use useRef to ensure single instance across hot reloads
-  const queryClientRef = useRef<QueryClient>();
+  const queryClientRef = useRef<QueryClient | null>(null);
 
   if (!queryClientRef.current) {
     queryClientRef.current = new QueryClient({

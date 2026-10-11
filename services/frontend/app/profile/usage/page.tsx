@@ -96,13 +96,13 @@ export default function UsagePage() {
   if (loading || authLoading) {
     return (
       <div className="animate-pulse">
-        <div className="h-8 bg-bg-secondary rounded w-1/3 mb-4"></div>
-        <div className="h-4 bg-bg-secondary rounded w-1/2 mb-8"></div>
+        <div className="h-8 bg-bg-secondary rounded-sm w-1/3 mb-4"></div>
+        <div className="h-4 bg-bg-secondary rounded-sm w-1/2 mb-8"></div>
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="h-24 bg-bg-secondary rounded"></div>
-          <div className="h-24 bg-bg-secondary rounded"></div>
-          <div className="h-24 bg-bg-secondary rounded"></div>
-          <div className="h-24 bg-bg-secondary rounded"></div>
+          <div className="h-24 bg-bg-secondary rounded-sm"></div>
+          <div className="h-24 bg-bg-secondary rounded-sm"></div>
+          <div className="h-24 bg-bg-secondary rounded-sm"></div>
+          <div className="h-24 bg-bg-secondary rounded-sm"></div>
         </div>
       </div>
     );
@@ -165,7 +165,7 @@ export default function UsagePage() {
             {tierInfo.label}
           </div>
           {user?.roles.includes('admin') && (
-            <span className="px-2 py-1 text-xs rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+            <span className="px-2 py-1 text-xs rounded-sm bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
               Admin
             </span>
           )}
@@ -257,7 +257,7 @@ export default function UsagePage() {
                 {usage.keys.slice(0, 5).map((key) => (
                   <div key={key.id} className="px-6 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <code className="text-sm font-mono bg-bg-secondary px-2 py-0.5 rounded">
+                      <code className="text-sm font-mono bg-bg-secondary px-2 py-0.5 rounded-sm">
                         Key #{key.id}
                       </code>
                       {key.name && <span className="text-text-primary">{key.name}</span>}

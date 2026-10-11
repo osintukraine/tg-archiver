@@ -32,7 +32,7 @@ export function GlassPanel({ message }: GlassPanelProps) {
       <div className="absolute bottom-4 left-4 z-40">
         <button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-2 px-3 py-2 rounded-full bg-black/70 backdrop-blur-sm text-white hover:bg-black/90 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-full bg-black/70 backdrop-blur-xs text-white hover:bg-black/90 transition-colors"
           title="Show info panel"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,12 +68,12 @@ export function GlassPanel({ message }: GlassPanelProps) {
                 <span className="text-gray-500 text-sm">@{message.channel.username}</span>
               )}
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <span className="text-gray-400 text-sm">{timestamp}</span>
               {/* Minimize button */}
               <button
                 onClick={() => setIsMinimized(true)}
-                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                className="p-1 rounded-sm hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
                 title="Minimize panel"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,7 +134,7 @@ export function GlassPanel({ message }: GlassPanelProps) {
                     Topic
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-300">
+                    <span className="px-2 py-1 rounded-sm text-xs bg-purple-500/20 text-purple-300">
                       {message.topic}
                     </span>
                   </div>

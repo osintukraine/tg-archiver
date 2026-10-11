@@ -112,7 +112,7 @@ export default function AuditPage() {
       </div>
 
       {error && (
-        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded">
+        <div className="bg-red-500/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-sm">
           {error}
         </div>
       )}
@@ -154,7 +154,7 @@ export default function AuditPage() {
         <span className="text-text-tertiary text-sm">Filter:</span>
         <button
           onClick={() => setActionFilter('all')}
-          className={`px-4 py-2 rounded transition-colors ${actionFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-secondary'}`}
+          className={`px-4 py-2 rounded-sm transition-colors ${actionFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-secondary'}`}
         >
           All
         </button>
@@ -162,14 +162,14 @@ export default function AuditPage() {
           <button
             key={action}
             onClick={() => setActionFilter(action)}
-            className={`px-4 py-2 rounded transition-colors ${actionFilter === action ? 'bg-purple-600 text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-secondary'}`}
+            className={`px-4 py-2 rounded-sm transition-colors ${actionFilter === action ? 'bg-purple-600 text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-secondary'}`}
           >
             {getActionInfo(action).icon} {getActionInfo(action).label} ({count})
           </button>
         ))}
         <button
           onClick={fetchActions}
-          className="ml-auto px-4 py-2 bg-bg-tertiary text-text-secondary rounded hover:bg-bg-secondary transition-colors"
+          className="ml-auto px-4 py-2 bg-bg-tertiary text-text-secondary rounded-sm hover:bg-bg-secondary transition-colors"
         >
           Refresh
         </button>
@@ -196,7 +196,7 @@ export default function AuditPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className={`px-3 py-1 rounded text-sm font-medium ${actionInfo.color}`}>
+                        <span className={`px-3 py-1 rounded-sm text-sm font-medium ${actionInfo.color}`}>
                           {actionInfo.icon} {actionInfo.label}
                         </span>
                         <Link
@@ -219,7 +219,7 @@ export default function AuditPage() {
                         {a.ip_address && (
                           <>
                             <span>from</span>
-                            <span className="font-mono text-xs bg-bg-tertiary px-1.5 py-0.5 rounded">
+                            <span className="font-mono text-xs bg-bg-tertiary px-1.5 py-0.5 rounded-sm">
                               {a.ip_address}
                             </span>
                           </>
@@ -239,7 +239,7 @@ export default function AuditPage() {
                     <h4 className="text-sm font-medium text-text-tertiary mb-3">Action Details</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {details.map(({ key, value }) => (
-                        <div key={key} className="bg-bg-elevated p-2 rounded border border-border-subtle">
+                        <div key={key} className="bg-bg-elevated p-2 rounded-sm border border-border-subtle">
                           <span className="text-text-tertiary block text-xs capitalize">{key}</span>
                           <span className="font-medium text-text-primary text-sm break-all">{value}</span>
                         </div>

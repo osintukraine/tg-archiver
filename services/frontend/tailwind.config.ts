@@ -6,18 +6,6 @@ const config: Config = {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  safelist: [
-    // Topic classes (dynamically generated, need to be preserved)
-    'topic-news',
-    'topic-announcement',
-    'topic-discussion',
-    'topic-media',
-    'topic-important',
-    'topic-archive',
-    'topic-offtopic',
-    'topic-other',
-    'topic-rule_based',
-  ],
   darkMode: 'class', // Enable dark mode via class strategy
   theme: {
     extend: {

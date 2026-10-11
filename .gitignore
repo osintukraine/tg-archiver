@@ -16,6 +16,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+# ...but the Next.js frontend keeps real source in lib/
+!services/frontend/lib/
 lib64/
 parts/
 sdist/

@@ -109,27 +109,32 @@ export default function NewsPage() {
     }
   }, [router]);
 
-  const fetchArticles = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${API_URL}/api/stream/rss?limit=50&hours=${hours}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch articles: ${response.status}`);
-      }
-      const data = await response.json();
-      setArticles(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load articles');
-    } finally {
-      setLoading(false);
-    }
-  }, [hours]);
+  // Promise-chain form: every setState runs in a callback after the request resolves.
+  // Callers that start a refetch set loading/error themselves (see startLoading).
+  const fetchArticles = useCallback(
+    () =>
+      fetch(`${API_URL}/api/stream/rss?limit=50&hours=${hours}`)
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Failed to fetch articles: ${response.status}`);
+          }
+          setArticles(await response.json());
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : 'Failed to load articles');
+        })
+        .finally(() => setLoading(false)),
+    [hours]
+  );
 
   useEffect(() => {
     fetchArticles();
   }, [fetchArticles]);
+
+  const startLoading = () => {
+    setLoading(true);
+    setError(null);
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -149,7 +154,10 @@ export default function NewsPage() {
           {/* Time range selector */}
           <select
             value={hours}
-            onChange={(e) => setHours(Number(e.target.value))}
+            onChange={(e) => {
+              startLoading();
+              setHours(Number(e.target.value));
+            }}
             className="bg-bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-primary"
           >
             <option value={6}>Last 6 hours</option>
@@ -162,7 +170,10 @@ export default function NewsPage() {
 
           {/* Refresh button */}
           <button
-            onClick={fetchArticles}
+            onClick={() => {
+              startLoading();
+              fetchArticles();
+            }}
             disabled={loading}
             className="p-2 rounded-lg bg-bg-secondary hover:bg-bg-tertiary text-text-secondary hover:text-primary transition-colors disabled:opacity-50"
             title="Refresh"

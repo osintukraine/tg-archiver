@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { adminApi } from '@/lib/admin-api';
-import { getMediaUrl } from '@/lib/api';
 import { useTopics } from '@/lib/hooks/useTopics';
 
 /**
@@ -32,6 +31,27 @@ interface SortConfig {
   direction: 'asc' | 'desc';
 }
 
+// Raw message shape returned by /api/messages/ (only fields used here)
+interface ApiMessage {
+  id: number;
+  message_id: number;
+  channel_id: number;
+  channel?: { name?: string; username?: string } | null;
+  content?: string | null;
+  telegram_date: string;
+  views: number | null;
+  forwards: number | null;
+  media_items?: unknown[];
+  media_type: string | null;
+  language_detected: string | null;
+  topic?: string | null;
+}
+
+function SortIcon({ column, sortConfig }: { column: keyof MessageRow; sortConfig: SortConfig }) {
+  if (sortConfig.key !== column) return <span className="text-gray-600 ml-1">&#8597;</span>;
+  return <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+}
+
 export default function MessageBrowserPage() {
   const { topicOptions } = useTopics();
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -46,51 +66,64 @@ export default function MessageBrowserPage() {
   const [total, setTotal] = useState(0);
   const pageSize = 50;
 
-  const fetchMessages = useCallback(async () => {
+  const [messagesReload, setMessagesReload] = useState(0);
+  const reloadMessages = () => {
     setLoading(true);
     setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        page_size: pageSize.toString(),
-        sort_by: sortConfig.key,
-        sort_dir: sortConfig.direction,
-      });
-      if (filter) {
-        params.set('q', filter);
-      }
+    setMessagesReload(k => k + 1);
+  };
 
-      const data = await adminApi.get(`/api/messages/?${params}`);
-
-      // Transform API response to our row format
-      const rows: MessageRow[] = (data.items || []).map((msg: any) => ({
-        id: msg.id,
-        message_id: msg.message_id,
-        channel_id: msg.channel_id,
-        channel_name: msg.channel?.name || 'Unknown',
-        channel_username: msg.channel?.username || '',
-        content: msg.content || '',
-        telegram_date: msg.telegram_date,
-        views: msg.views,
-        forwards: msg.forwards,
-        has_media: msg.media_items?.length > 0 || msg.media_type !== null,
-        media_type: msg.media_type,
-        language_detected: msg.language_detected,
-        topic: msg.topic || null,
-      }));
-
-      setMessages(rows);
-      setTotal(data.total || rows.length);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch messages');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, sortConfig, filter]);
+  // Show loading again while rendering when the query changes (instead of in the effect)
+  const queryKey = JSON.stringify([page, sortConfig, filter]);
+  const [prevQueryKey, setPrevQueryKey] = useState(queryKey);
+  if (prevQueryKey !== queryKey) {
+    setPrevQueryKey(queryKey);
+    setLoading(true);
+    setError(null);
+  }
 
   useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          page_size: pageSize.toString(),
+          sort_by: sortConfig.key,
+          sort_dir: sortConfig.direction,
+        });
+        if (filter) {
+          params.set('q', filter);
+        }
+
+        const data = await adminApi.get(`/api/messages/?${params}`);
+
+        // Transform API response to our row format
+        const rows: MessageRow[] = ((data.items || []) as ApiMessage[]).map((msg) => ({
+          id: msg.id,
+          message_id: msg.message_id,
+          channel_id: msg.channel_id,
+          channel_name: msg.channel?.name || 'Unknown',
+          channel_username: msg.channel?.username || '',
+          content: msg.content || '',
+          telegram_date: msg.telegram_date,
+          views: msg.views,
+          forwards: msg.forwards,
+          has_media: (msg.media_items?.length ?? 0) > 0 || msg.media_type !== null,
+          media_type: msg.media_type,
+          language_detected: msg.language_detected,
+          topic: msg.topic || null,
+        }));
+
+        setMessages(rows);
+        setTotal(data.total || rows.length);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch messages');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchMessages();
-  }, [fetchMessages]);
+  }, [page, pageSize, sortConfig, filter, messagesReload]);
 
   const handleSort = (key: keyof MessageRow) => {
     setSortConfig(prev => ({
@@ -149,11 +182,6 @@ export default function MessageBrowserPage() {
     return text.length > maxLen ? text.slice(0, maxLen) + '...' : text;
   };
 
-  const SortIcon = ({ column }: { column: keyof MessageRow }) => {
-    if (sortConfig.key !== column) return <span className="text-gray-600 ml-1">&#8597;</span>;
-    return <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
-  };
-
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -184,7 +212,7 @@ export default function MessageBrowserPage() {
               className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 w-64"
             />
             <button
-              onClick={() => fetchMessages()}
+              onClick={reloadMessages}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
             >
               Refresh
@@ -208,13 +236,13 @@ export default function MessageBrowserPage() {
                     className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
                     onClick={() => handleSort('telegram_date')}
                   >
-                    Date <SortIcon column="telegram_date" />
+                    Date <SortIcon column="telegram_date" sortConfig={sortConfig} />
                   </th>
                   <th
                     className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
                     onClick={() => handleSort('channel_name')}
                   >
-                    Channel <SortIcon column="channel_name" />
+                    Channel <SortIcon column="channel_name" sortConfig={sortConfig} />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[300px]">
                     Content
@@ -223,13 +251,13 @@ export default function MessageBrowserPage() {
                     className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
                     onClick={() => handleSort('views')}
                   >
-                    Views <SortIcon column="views" />
+                    Views <SortIcon column="views" sortConfig={sortConfig} />
                   </th>
                   <th
                     className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white"
                     onClick={() => handleSort('forwards')}
                   >
-                    Fwds <SortIcon column="forwards" />
+                    Fwds <SortIcon column="forwards" sortConfig={sortConfig} />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Media

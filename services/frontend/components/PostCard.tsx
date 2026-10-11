@@ -11,10 +11,10 @@
  * Shows all available data based on user-controlled view density.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { format } from 'date-fns';
 import { getMediaUrl } from '@/lib/api';
-import type { PostCardProps, MessageTag, MediaItem } from '@/lib/types';
+import type { PostCardProps, MessageTag, DensityMode } from '@/lib/types';
 
 // Helper type for media items with resolved URLs
 interface ResolvedMediaItem {
@@ -24,9 +24,7 @@ interface ResolvedMediaItem {
 }
 import EngagementBar from './EngagementBar';
 import SocialGraphIndicator from './SocialGraphIndicator';
-import { formatNumber, calculateViralityRatio, getViralityColor } from '@/lib/utils';
 import { MediaLightbox } from './MediaLightbox';
-import { ForwardContext } from './ForwardContext';
 
 // YouTube URL patterns
 const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:\S*)?/g;
@@ -181,27 +179,32 @@ function getCountryBorderClass(folder: string | null | undefined): string {
   return 'country-border-unaffiliated';
 }
 
+function subscribeTranslationMode(onChange: () => void) {
+  window.addEventListener('translationModeChange', onChange);
+  return () => window.removeEventListener('translationModeChange', onChange);
+}
+
 // Helper to format entities for display
-function formatEntities(entities: Record<string, any> | null | undefined): string[] {
+function formatEntities(entities: Record<string, unknown> | null | undefined): string[] {
   if (!entities) return [];
 
   const formatted: string[] = [];
 
   // Extract hashtags
   if (entities.hashtags && Array.isArray(entities.hashtags)) {
-    formatted.push(...entities.hashtags.map((tag: string) => `#${tag}`));
+    formatted.push(...(entities.hashtags as string[]).map((tag) => `#${tag}`));
   }
 
   // Extract mentions (check if @ is already included)
   if (entities.mentions && Array.isArray(entities.mentions)) {
-    formatted.push(...entities.mentions.map((mention: string) =>
+    formatted.push(...(entities.mentions as string[]).map((mention) =>
       mention.startsWith('@') ? mention : `@${mention}`
     ));
   }
 
   // Extract locations (if GPS coordinates)
   if (entities.locations && Array.isArray(entities.locations)) {
-    formatted.push(...entities.locations.map((loc: any) => `📍 ${loc.name || 'Location'}`));
+    formatted.push(...(entities.locations as { name?: string }[]).map((loc) => `📍 ${loc.name || 'Location'}`));
   }
 
   return formatted.slice(0, 5); // Limit to first 5
@@ -252,34 +255,26 @@ export function PostCard({
   onDensityChange,
   onClick,
 }: PostCardProps) {
-  const [showTranslation, setShowTranslation] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Global translation mode (set by HeaderNav) lives in localStorage; subscribe to its change event
+  const globalTranslation = useSyncExternalStore(
+    subscribeTranslationMode,
+    () => localStorage.getItem('translationMode') === 'translation',
+    () => false
+  );
+  // Local toggle; a global mode change overrides it (store-previous-value pattern)
+  const [showTranslation, setShowTranslation] = useState(globalTranslation);
+  const [prevGlobalTranslation, setPrevGlobalTranslation] = useState(globalTranslation);
+  if (prevGlobalTranslation !== globalTranslation) {
+    setPrevGlobalTranslation(globalTranslation);
+    setShowTranslation(globalTranslation);
+  }
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxInitialIndex, setLightboxInitialIndex] = useState(0);
 
-  // Listen for global translation mode changes
-  useEffect(() => {
-    // Load initial preference from localStorage (client-side only)
-    if (typeof window !== 'undefined') {
-      const translationMode = localStorage.getItem('translationMode');
-      setShowTranslation(translationMode === 'translation');
-
-      // Listen for changes
-      const handleModeChange = (event: CustomEvent<string>) => {
-        setShowTranslation(event.detail === 'translation');
-      };
-
-      window.addEventListener('translationModeChange', handleModeChange as EventListener);
-      return () => {
-        window.removeEventListener('translationModeChange', handleModeChange as EventListener);
-      };
-    }
-  }, []);
-
   // Only format entities for compact and immersive modes (not used in detailed view)
   const entities = density === 'detailed' ? [] : formatEntities(message.entities);
-  // eslint-disable-next-line
-  const currentDensity: any = density; // Use any to bypass TypeScript flow analysis narrowing
+  // Wide-typed comparison so TypeScript flow analysis doesn't narrow `density` after early returns
+  const isDensity = (d: DensityMode): boolean => (density as DensityMode) === d;
 
   // Media Architecture:
   // - message.media_items: Structured array with {url, mime_type, media_type} from API
@@ -297,7 +292,6 @@ export function PostCard({
   const legacyMediaUrls = message.media_urls?.map(s3Key => getMediaUrl(s3Key)).filter(Boolean) as string[] || [];
   const mediaUrls = mediaItems.length > 0 ? mediaItems.map(m => m.url) : legacyMediaUrls;
 
-  const mediaUrl = getMediaUrl(message.first_media_url);  // For backwards compatibility
   const hasMultipleMedia = mediaItems.length > 1;
 
   // Use actual media availability (not just media_type presence)
@@ -347,7 +341,7 @@ export function PostCard({
     : message.content;
 
   // Compact mode: Enhanced browse view with thumbnails
-  if (currentDensity === 'compact') {
+  if (isDensity('compact')) {
     const firstMediaUrl = mediaUrls[0];
 
     const countryBorderClass = getCountryBorderClass(channel?.folder);
@@ -594,7 +588,7 @@ export function PostCard({
                     onDensityChange('compact');
                   }}
                   className={`p-1.5 rounded transition-colors ${
-                    currentDensity === 'compact'
+                    isDensity('compact')
                       ? 'bg-accent-primary text-white'
                       : 'text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary'
                   }`}
@@ -610,7 +604,7 @@ export function PostCard({
                     onDensityChange('detailed');
                   }}
                   className={`p-1.5 rounded transition-colors ${
-                    currentDensity === 'detailed'
+                    isDensity('detailed')
                       ? 'bg-accent-primary text-white'
                       : 'text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary'
                   }`}
@@ -626,7 +620,7 @@ export function PostCard({
                     onDensityChange('immersive');
                   }}
                   className={`p-1.5 rounded transition-colors ${
-                    currentDensity === 'immersive'
+                    isDensity('immersive')
                       ? 'bg-accent-primary text-white'
                       : 'text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary'
                   }`}
@@ -1098,7 +1092,7 @@ export function PostCard({
                       onDensityChange('compact');
                     }}
                     className={`p-1.5 rounded transition-colors ${
-                      currentDensity === 'compact'
+                      isDensity('compact')
                         ? 'bg-accent-primary text-white'
                         : 'text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary'
                     }`}
@@ -1114,7 +1108,7 @@ export function PostCard({
                       onDensityChange('detailed');
                     }}
                     className={`p-1.5 rounded transition-colors ${
-                      currentDensity === 'detailed'
+                      isDensity('detailed')
                         ? 'bg-accent-primary text-white'
                         : 'text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary'
                     }`}
@@ -1130,7 +1124,7 @@ export function PostCard({
                       onDensityChange('immersive');
                     }}
                     className={`p-1.5 rounded transition-colors ${
-                      currentDensity === 'immersive'
+                      isDensity('immersive')
                         ? 'bg-accent-primary text-white'
                         : 'text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary'
                     }`}

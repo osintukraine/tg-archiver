@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function NotFound() {
   return (
     <div className="max-w-4xl mx-auto">
@@ -6,12 +8,12 @@ export default function NotFound() {
         <p className="text-text-secondary mb-4">
           The message you&apos;re looking for doesn&apos;t exist or has been removed.
         </p>
-        <a
+        <Link
           href="/"
           className="inline-block px-4 py-2 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/80 transition-colors"
         >
           Back to Home
-        </a>
+        </Link>
       </div>
     </div>
   );

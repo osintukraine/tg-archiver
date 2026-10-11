@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 
@@ -51,27 +51,33 @@ export default function ConfigPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'platform' | 'environment'>('platform');
 
-  const fetchConfig = useCallback(async () => {
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Re-fetch with the loading state shown (called from event handlers)
+  const refetch = () => {
     setLoading(true);
     setError(null);
-    try {
-      const [configData, envData] = await Promise.all([
-        adminApi.get('/api/admin/config/'),
-        adminApi.get('/api/admin/config/env').catch(() => ({ env_vars: [] })),
-      ]);
-
-      setConfig(configData);
-      setEnvVars(envData.env_vars || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    setReloadKey(k => k + 1);
+  };
 
   useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const [configData, envData] = await Promise.all([
+          adminApi.get('/api/admin/config/'),
+          adminApi.get('/api/admin/config/env').catch(() => ({ env_vars: [] })),
+        ]);
+
+        setConfig(configData);
+        setEnvVars(envData.env_vars || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchConfig();
-  }, [fetchConfig]);
+  }, [reloadKey]);
 
   const startEditing = (item: ConfigItem) => {
     if (item.is_secret) {
@@ -102,7 +108,7 @@ export default function ConfigPage() {
           : `Updated "${key}"`,
       });
       setEditingKey(null);
-      fetchConfig();
+      refetch();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' });
     } finally {
@@ -197,7 +203,7 @@ export default function ConfigPage() {
           </p>
         </div>
         <button
-          onClick={fetchConfig}
+          onClick={refetch}
           className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
         >
           Refresh

@@ -54,6 +54,13 @@ function getApiUrl(): string {
 const API_URL = getApiUrl();
 
 /**
+ * Default response type for untyped admin calls. Dozens of callers rely on an
+ * untyped JSON default; they should pass an explicit <T> as they are migrated.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy untyped default relied on by many callers
+type AdminJson = any;
+
+/**
  * Admin API fetch wrapper with automatic JWT token inclusion
  *
  * @param path - API path (e.g., '/api/admin/channels')
@@ -61,7 +68,7 @@ const API_URL = getApiUrl();
  * @returns Parsed JSON response
  * @throws Error with API error message
  */
-export async function adminFetch<T = any>(
+export async function adminFetch<T = AdminJson>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -106,7 +113,7 @@ export async function adminFetch<T = any>(
           message = error.detail;
         } else if (Array.isArray(error.detail)) {
           // FastAPI validation error format
-          message = error.detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join(', ');
+          message = error.detail.map((e: { msg?: string; message?: string }) => e.msg || e.message || JSON.stringify(e)).join(', ');
         } else {
           message = JSON.stringify(error.detail);
         }
@@ -124,16 +131,16 @@ export async function adminFetch<T = any>(
 /**
  * Admin API GET request
  */
-export async function adminGet<T = any>(path: string): Promise<T> {
+export async function adminGet<T = AdminJson>(path: string): Promise<T> {
   return adminFetch<T>(path, { method: 'GET' });
 }
 
 /**
  * Admin API POST request
  */
-export async function adminPost<T = any>(
+export async function adminPost<T = AdminJson>(
   path: string,
-  data?: any
+  data?: unknown
 ): Promise<T> {
   return adminFetch<T>(path, {
     method: 'POST',
@@ -144,9 +151,9 @@ export async function adminPost<T = any>(
 /**
  * Admin API PUT request
  */
-export async function adminPut<T = any>(
+export async function adminPut<T = AdminJson>(
   path: string,
-  data?: any
+  data?: unknown
 ): Promise<T> {
   return adminFetch<T>(path, {
     method: 'PUT',
@@ -157,9 +164,9 @@ export async function adminPut<T = any>(
 /**
  * Admin API PATCH request
  */
-export async function adminPatch<T = any>(
+export async function adminPatch<T = AdminJson>(
   path: string,
-  data?: any
+  data?: unknown
 ): Promise<T> {
   return adminFetch<T>(path, {
     method: 'PATCH',
@@ -170,7 +177,7 @@ export async function adminPatch<T = any>(
 /**
  * Admin API DELETE request
  */
-export async function adminDelete<T = any>(path: string): Promise<T> {
+export async function adminDelete<T = AdminJson>(path: string): Promise<T> {
   return adminFetch<T>(path, { method: 'DELETE' });
 }
 

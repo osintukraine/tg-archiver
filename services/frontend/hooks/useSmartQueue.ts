@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useEffectEvent, useCallback } from 'react';
 import { searchMessages, getMessage } from '@/lib/api';
 import type { Message } from '@/lib/types';
 import type { SortMode } from '@/contexts/ImmersiveContext';
@@ -52,7 +52,7 @@ export function useSmartQueue({
       });
 
       // Filter to messages with video/image media
-      let filtered = result.items.filter(m => {
+      const filtered = result.items.filter(m => {
         // Check for video or image media
         const hasVideo = m.media_items?.some(item => item.media_type === 'video');
         const hasImage = m.media_items?.some(item => item.media_type === 'image');
@@ -125,11 +125,14 @@ export function useSmartQueue({
   }, [fetchMessages]);
 
   // Initial fetch when enabled, and refetch when sort options change
+  // Effect event: reads the latest fetchMessages without refetching when its other deps change
+  const loadFirstPage = useEffectEvent(() => {
+    setPage(1);
+    fetchMessages(1, false);
+  });
   useEffect(() => {
-    if (enabled) {
-      setPage(1);
-      fetchMessages(1, false);
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- kicks off a fetch; isLoading must flip synchronously with it
+    if (enabled) loadFirstPage();
   }, [enabled, sortMode]);
 
   return {

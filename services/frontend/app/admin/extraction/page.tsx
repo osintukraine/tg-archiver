@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 
@@ -83,22 +83,28 @@ export default function ExtractionPage() {
   const [testResult, setTestResult] = useState<PatternTestResult | null>(null);
   const [testing, setTesting] = useState(false);
 
-  const fetchPatterns = useCallback(async () => {
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Re-fetch with the loading state shown (called from event handlers)
+  const refetch = () => {
     setLoading(true);
     setError(null);
-    try {
-      const data = await adminApi.get('/api/admin/extraction/');
-      setPatterns(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch patterns');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    setReloadKey(k => k + 1);
+  };
 
   useEffect(() => {
+    const fetchPatterns = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/extraction/');
+        setPatterns(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch patterns');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchPatterns();
-  }, [fetchPatterns]);
+  }, [reloadKey]);
 
   const openCreateModal = () => {
     setEditingPattern(null);
@@ -149,7 +155,7 @@ export default function ExtractionPage() {
         setMessage({ type: 'success', text: `Created pattern "${formData.name}"` });
       }
       closeModal();
-      fetchPatterns();
+      refetch();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save' });
     } finally {
@@ -163,7 +169,7 @@ export default function ExtractionPage() {
     try {
       await adminApi.delete(`/api/admin/extraction/${pattern.id}`);
       setMessage({ type: 'success', text: `Deleted pattern "${pattern.name}"` });
-      fetchPatterns();
+      refetch();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to delete' });
     }
@@ -174,7 +180,7 @@ export default function ExtractionPage() {
       await adminApi.put(`/api/admin/extraction/${pattern.id}`, {
         enabled: !pattern.enabled,
       });
-      fetchPatterns();
+      refetch();
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to toggle' });
     }

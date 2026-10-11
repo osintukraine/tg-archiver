@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminApi } from '@/lib/admin-api';
@@ -60,7 +60,6 @@ export function AdminActionSidebar() {
 
   // Panel state
   const [isExpanded, setIsExpanded] = useState(false);
-  const [messageId, setMessageId] = useState<number | null>(null);
   const [info, setInfo] = useState<MessageActionInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,39 +71,57 @@ export function AdminActionSidebar() {
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Extract message ID from pathname
-  useEffect(() => {
-    const match = pathname?.match(/^\/messages\/(\d+)/);
-    if (match) {
-      setMessageId(parseInt(match[1], 10));
-    } else {
-      setMessageId(null);
+  const idMatch = pathname?.match(/^\/messages\/(\d+)/);
+  const messageId = idMatch ? parseInt(idMatch[1], 10) : null;
+
+  // Reset panel state when leaving a message page (adjust state during render)
+  const [prevMessageId, setPrevMessageId] = useState(messageId);
+  if (prevMessageId !== messageId) {
+    setPrevMessageId(messageId);
+    if (messageId === null) {
       setInfo(null);
       setIsExpanded(false);
     }
-  }, [pathname]);
+  }
 
-  // Fetch message action info when expanded
-  const fetchInfo = useCallback(async () => {
-    if (!messageId) return;
-
-    setLoading(true);
-    setError(null);
+  // Re-fetch info after an action (the caller manages the loading state)
+  const refreshInfo = async () => {
     try {
       const data = await adminApi.get(`/api/admin/messages/${messageId}/actions`);
       setInfo(data);
     } catch (err) {
       setError('Failed to load message info');
       console.error(err);
-    } finally {
-      setLoading(false);
     }
-  }, [messageId]);
+  };
 
-  useEffect(() => {
-    if (isExpanded && messageId) {
-      fetchInfo();
+  // Show loading again while rendering when the panel opens or the message changes
+  const infoTarget = isExpanded ? messageId : null;
+  const [prevInfoTarget, setPrevInfoTarget] = useState(infoTarget);
+  if (prevInfoTarget !== infoTarget) {
+    setPrevInfoTarget(infoTarget);
+    if (infoTarget) {
+      setLoading(true);
+      setError(null);
     }
-  }, [isExpanded, messageId, fetchInfo]);
+  }
+
+  // Fetch message action info when expanded
+  useEffect(() => {
+    if (!isExpanded || !messageId) return;
+    const fetchInfo = async () => {
+      try {
+        const data = await adminApi.get(`/api/admin/messages/${messageId}/actions`);
+        setInfo(data);
+      } catch (err) {
+        setError('Failed to load message info');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInfo();
+  }, [isExpanded, messageId]);
 
   // Clear success message after 3 seconds
   useEffect(() => {
@@ -129,7 +146,7 @@ export function AdminActionSidebar() {
         body || {}
       );
       setSuccessMessage(`Action completed: ${result.action}`);
-      await fetchInfo(); // Refresh state
+      await refreshInfo(); // Refresh state
       setActiveModal(null);
       setConfirmConfig(null);
       setPendingAction(null);

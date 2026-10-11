@@ -202,3 +202,43 @@ export interface PostCardProps {
   onDensityChange?: (density: DensityMode) => void;
   onClick?: () => void;
 }
+
+// Social graph API responses (list items are loosely typed; consumers narrow fields they use)
+export interface SocialGraphMetadata {
+  has_author?: boolean;
+  is_forward?: boolean;
+  is_reply?: boolean;
+  has_comments?: boolean;
+  views?: number;
+  forwards?: number;
+  engagement_rate?: number;
+  virality?: string;
+  reach?: string;
+  reactions_total?: number;
+  comments_count?: number;
+  author?: { name?: string };
+}
+
+export interface SocialGraphResponse {
+  nodes?: Record<string, unknown>[];
+  edges?: Record<string, unknown>[];
+  reactions?: { emoji: string; count: number }[];
+  metadata?: SocialGraphMetadata;
+}
+
+export interface EngagementSnapshot {
+  views?: number;
+  forwards?: number;
+  comments_count?: number;
+}
+
+export interface EngagementTimelineResponse {
+  data_points?: Record<string, unknown>[];
+  current_snapshot?: EngagementSnapshot;
+}
+
+export interface CommentThreadResponse {
+  comments?: Record<string, unknown>[];
+  pagination?: { total?: number; has_more?: boolean };
+  metadata?: Record<string, unknown>;
+}

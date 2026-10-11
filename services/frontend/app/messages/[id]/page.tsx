@@ -87,7 +87,7 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
         images: imageUrl ? [imageUrl] : [],
       },
     };
-  } catch (error) {
+  } catch {
     return {
       title: 'Message Not Found',
       description: 'The requested message could not be found.',
@@ -108,7 +108,7 @@ export default async function MessagePage(props: PageProps) {
   let message;
   try {
     message = await getMessage(id);
-  } catch (error) {
+  } catch {
     notFound();
   }
 

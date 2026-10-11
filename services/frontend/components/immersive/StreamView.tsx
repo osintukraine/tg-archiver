@@ -11,7 +11,7 @@ import { RSS_ENABLED } from '@/lib/constants';
 const AUTO_ADVANCE_DELAY = 8000; // 8s for images
 
 export function StreamView() {
-  const { queue, currentIndex, goToNext, goToPrevious, setCurrentIndex, layers } = useImmersive();
+  const { queue, currentIndex, goToNext, goToPrevious, layers } = useImmersive();
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showControls, setShowControls] = useState(true);
@@ -19,9 +19,15 @@ export function StreamView() {
 
   const currentMessage = queue[currentIndex];
 
+  // Show controls again whenever the current item changes (store-previous-prop pattern)
+  const [prevIndex, setPrevIndex] = useState(currentIndex);
+  if (prevIndex !== currentIndex) {
+    setPrevIndex(currentIndex);
+    setShowControls(true);
+  }
+
   // Auto-hide controls
   useEffect(() => {
-    setShowControls(true);
     const timer = setTimeout(() => setShowControls(false), 3000);
 
     const handleMouseMove = () => {

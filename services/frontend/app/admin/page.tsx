@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { getWidgets } from '@/lib/admin/widgets';
 import { StatCard } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
@@ -32,43 +32,37 @@ interface OverviewStats {
   prometheus_available: boolean;
 }
 
+// Widgets self-register on import (see '@/lib/admin/widgets'), so the registry is
+// complete at module load and the components are stable references.
+const widgetsById = new Map(getWidgets().map(w => [w.id, w.component]));
+const MessagesToday = widgetsById.get('messages-today');
+const ActiveChannels = widgetsById.get('active-channels');
+const StorageUsed = widgetsById.get('storage-used');
+const ProcessingLatency = widgetsById.get('processing-latency');
+const SystemStatus = widgetsById.get('system-status');
+const QuickActions = widgetsById.get('quick-actions');
+const RecentActivity = widgetsById.get('recent-activity');
+const TotalArchived = widgetsById.get('total-archived');
+
 export default function AdminDashboard() {
   const [overview, setOverview] = useState<OverviewStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const widgets = getWidgets();
-
-  // Get widget components by ID
-  const getWidget = (id: string) => {
-    const widget = widgets.find(w => w.id === id);
-    return widget?.component;
-  };
-
-  // Widget components
-  const MessagesToday = getWidget('messages-today');
-  const ActiveChannels = getWidget('active-channels');
-  const StorageUsed = getWidget('storage-used');
-  const ProcessingLatency = getWidget('processing-latency');
-  const SystemStatus = getWidget('system-status');
-  const QuickActions = getWidget('quick-actions');
-  const RecentActivity = getWidget('recent-activity');
-  const TotalArchived = getWidget('total-archived');
-
-  // Fetch overview stats
-  const fetchStats = useCallback(async () => {
-    try {
-      const result = await adminApi.get('/api/admin/stats/overview');
-      if (result) setOverview(result);
-    } catch {
-      // Silent fail - stats are supplementary
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
-
+  // Fetch overview stats (on mount and whenever "Refresh Stats" bumps reloadKey)
   useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const result = await adminApi.get('/api/admin/stats/overview');
+        if (result) setOverview(result);
+      } catch {
+        // Silent fail - stats are supplementary
+      } finally {
+        setStatsLoading(false);
+      }
+    };
     fetchStats();
-  }, [fetchStats]);
+  }, [reloadKey]);
 
   return (
     <div className="space-y-8">
@@ -81,7 +75,7 @@ export default function AdminDashboard() {
           </p>
         </div>
         <button
-          onClick={fetchStats}
+          onClick={() => setReloadKey(k => k + 1)}
           className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors text-sm"
         >
           Refresh Stats

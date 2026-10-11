@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useSyncExternalStore, ReactNode } from 'react';
 import type { Message } from '@/lib/types';
 
 export type ViewMode = 'stream' | 'grid';
@@ -57,40 +57,57 @@ interface ImmersiveProviderProps {
 // Storage key for viewed IDs
 const VIEWED_IDS_KEY = 'immersive_viewed_ids';
 
+const viewedIdsListeners = new Set<() => void>();
+
+function subscribeViewedIds(listener: () => void) {
+  viewedIdsListeners.add(listener);
+  return () => {
+    viewedIdsListeners.delete(listener);
+  };
+}
+
+function readViewedIds(): string | null {
+  try {
+    return localStorage.getItem(VIEWED_IDS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeViewedIds(raw: string | null) {
+  try {
+    if (raw === null) localStorage.removeItem(VIEWED_IDS_KEY);
+    else localStorage.setItem(VIEWED_IDS_KEY, raw);
+  } catch {
+    // storage unavailable; ignore
+  }
+  viewedIdsListeners.forEach((listener) => listener());
+}
+
+function parseViewedIds(raw: string | null): Set<number> {
+  if (!raw) return new Set();
+  try {
+    return new Set(JSON.parse(raw));
+  } catch {
+    // Invalid stored data, ignore
+    return new Set();
+  }
+}
+
 export function ImmersiveProvider({ children }: ImmersiveProviderProps) {
   const [isImmersive, setIsImmersive] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('stream');
   const [layers, setLayers] = useState<ImmersiveLayers>({ rss: false });
   const [queue, setQueue] = useState<Message[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = false;
 
   // Queue control state - defaults to newest, skip watched off
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [skipWatched, setSkipWatched] = useState(false);
-  const [viewedIds, setViewedIds] = useState<Set<number>>(() => new Set());
-
-  // Load viewed IDs from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(VIEWED_IDS_KEY);
-      if (stored) {
-        try {
-          const ids = JSON.parse(stored);
-          setViewedIds(new Set(ids));
-        } catch {
-          // Invalid stored data, ignore
-        }
-      }
-    }
-  }, []);
-
-  // Save viewed IDs to localStorage when they change
-  useEffect(() => {
-    if (typeof window !== 'undefined' && viewedIds.size > 0) {
-      localStorage.setItem(VIEWED_IDS_KEY, JSON.stringify(Array.from(viewedIds)));
-    }
-  }, [viewedIds]);
+  // Viewed IDs live in localStorage; the server snapshot (null) keeps hydration consistent
+  const rawViewedIds = useSyncExternalStore(subscribeViewedIds, readViewedIds, () => null);
+  const viewedIds = useMemo(() => parseViewedIds(rawViewedIds), [rawViewedIds]);
 
   const toggleImmersive = useCallback(() => {
     setIsImmersive(prev => !prev);
@@ -102,21 +119,16 @@ export function ImmersiveProvider({ children }: ImmersiveProviderProps) {
 
   // Mark a message as viewed
   const markAsViewed = useCallback((id: number) => {
-    setViewedIds(prev => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
+    const next = new Set(parseViewedIds(readViewedIds()));
+    next.add(id);
+    writeViewedIds(JSON.stringify(Array.from(next)));
   }, []);
 
   // Reset queue: clear viewed IDs, return to newest sort, go to index 0
   const resetQueue = useCallback(() => {
-    setViewedIds(new Set());
+    writeViewedIds(null);
     setSortMode('newest');
     setCurrentIndex(0);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(VIEWED_IDS_KEY);
-    }
   }, []);
 
   // Navigate to next video, optionally skipping watched ones

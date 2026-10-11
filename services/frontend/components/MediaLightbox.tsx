@@ -34,13 +34,15 @@ export function MediaLightbox({
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Reset to initial index when opening
-  useEffect(() => {
+  // Reset to initial index when opening (store-previous-props pattern)
+  const [prevOpen, setPrevOpen] = useState({ isOpen, initialIndex });
+  if (prevOpen.isOpen !== isOpen || prevOpen.initialIndex !== initialIndex) {
+    setPrevOpen({ isOpen, initialIndex });
     if (isOpen) {
       setCurrentIndex(initialIndex);
       setIsLoading(true);
     }
-  }, [isOpen, initialIndex]);
+  }
 
   // Navigation functions
   const goToPrevious = useCallback(() => {

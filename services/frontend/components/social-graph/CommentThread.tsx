@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, Loader2, AlertCircle, Languages, RotateCcw } from 'lucide-react';
 import { useCommentThread } from '@/hooks/useSocialGraph';
 import { translateComment, TranslateCommentResponse } from '@/lib/api';
+import type { ThreadComment } from '@/types/social-graph';
 
 interface CommentThreadProps {
   messageId: number;
 }
 
 interface CommentItemProps {
-  comment: any;
+  comment: ThreadComment;
   onTranslationUpdate: (commentId: number, translation: TranslateCommentResponse) => void;
 }
 
@@ -32,8 +33,8 @@ function CommentItem({ comment, onTranslationUpdate }: CommentItemProps) {
     try {
       const result = await translateComment(comment.id);
       onTranslationUpdate(comment.id, result);
-    } catch (err: any) {
-      setError(err.message || 'Translation failed');
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : 'Translation failed');
     } finally {
       setIsTranslating(false);
     }
@@ -50,7 +51,7 @@ function CommentItem({ comment, onTranslationUpdate }: CommentItemProps) {
             • {new Date(comment.created_at).toLocaleString()}
           </span>
         )}
-        {comment.reactions_count > 0 && (
+        {(comment.reactions_count ?? 0) > 0 && (
           <span className="text-xs text-muted-foreground">
             • {comment.reactions_count} reactions
           </span>
@@ -176,7 +177,7 @@ export function CommentThread({ messageId }: CommentThreadProps) {
   }
 
   // Merge server data with local translations
-  const comments = (data?.comments || []).map((comment: any) => {
+  const comments = ((data?.comments || []) as unknown as ThreadComment[]).map((comment) => {
     const localTranslation = localTranslations[comment.id];
     if (localTranslation) {
       return {
@@ -229,7 +230,7 @@ export function CommentThread({ messageId }: CommentThreadProps) {
           </div>
         ) : (
           <div className="space-y-4">
-            {comments.map((comment: any) => (
+            {comments.map((comment) => (
               <CommentItem
                 key={comment.id}
                 comment={comment}

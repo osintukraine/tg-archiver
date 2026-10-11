@@ -1,10 +1,17 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import type { SearchParams, Channel, MessageTopic, ChannelCategory, TelegramFolder } from '@/lib/types';
 import { getChannels, getTopics, getCategories, getFolders, API_URL } from '@/lib/api';
-import { getAuthHeaders } from '@/lib/auth-utils';
+
+const COLLAPSED_KEY = 'filters-collapsed';
+const COLLAPSED_EVENT = 'filtersCollapsedChange';
+
+function subscribeCollapsed(onChange: () => void) {
+  window.addEventListener(COLLAPSED_EVENT, onChange);
+  return () => window.removeEventListener(COLLAPSED_EVENT, onChange);
+}
 
 interface SearchFiltersProps {
   initialParams: SearchParams;
@@ -12,7 +19,6 @@ interface SearchFiltersProps {
 
 export function SearchFilters({ initialParams }: SearchFiltersProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   // Local state for controlled inputs
   const [query, setQuery] = useState(initialParams.q || '');
@@ -38,20 +44,15 @@ export function SearchFilters({ initialParams }: SearchFiltersProps) {
   const [sortOrder, setSortOrder] = useState(initialParams.sort_order || 'desc');
 
   // Collapse state (persisted in localStorage)
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('filters-collapsed');
-      return saved === 'true';
-    }
-    return false;
-  });
-
-  // Persist collapse state
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('filters-collapsed', isCollapsed.toString());
-    }
-  }, [isCollapsed]);
+  const isCollapsed = useSyncExternalStore(
+    subscribeCollapsed,
+    () => localStorage.getItem(COLLAPSED_KEY) === 'true',
+    () => false
+  );
+  const setIsCollapsed = (collapsed: boolean) => {
+    localStorage.setItem(COLLAPSED_KEY, String(collapsed));
+    window.dispatchEvent(new Event(COLLAPSED_EVENT));
+  };
 
   // Topic filter state
   const [topic, setTopic] = useState(initialParams.topic || '');

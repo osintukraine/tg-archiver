@@ -50,33 +50,44 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchActions()
-  }, [actionFilter])
-
-  const fetchActions = async () => {
+  const [reloadKey, setReloadKey] = useState(0)
+  const refetch = () => {
     setLoading(true)
-    try {
-      // Fetch stats
-      const statsData = await adminApi.get('/api/admin/messages/audit/actions/stats')
-      setStats(statsData)
-
-      // Fetch actions with filter
-      let url = '/api/admin/messages/audit/actions?page_size=50'
-      if (actionFilter !== 'all') {
-        url += `&action_type=${encodeURIComponent(actionFilter)}`
-      }
-
-      const actionsData = await adminApi.get(url)
-      setActions(actionsData.actions || [])
-      setError(null)
-    } catch (err) {
-      setError('Failed to fetch audit data')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
+    setReloadKey(k => k + 1)
   }
+
+  // Show loading again while rendering when the filter changes (instead of in the effect)
+  const [prevActionFilter, setPrevActionFilter] = useState(actionFilter)
+  if (prevActionFilter !== actionFilter) {
+    setPrevActionFilter(actionFilter)
+    setLoading(true)
+  }
+
+  useEffect(() => {
+    const fetchActions = async () => {
+      try {
+        // Fetch stats
+        const statsData = await adminApi.get('/api/admin/messages/audit/actions/stats')
+        setStats(statsData)
+
+        // Fetch actions with filter
+        let url = '/api/admin/messages/audit/actions?page_size=50'
+        if (actionFilter !== 'all') {
+          url += `&action_type=${encodeURIComponent(actionFilter)}`
+        }
+
+        const actionsData = await adminApi.get(url)
+        setActions(actionsData.actions || [])
+        setError(null)
+      } catch (err) {
+        setError('Failed to fetch audit data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchActions()
+  }, [actionFilter, reloadKey])
 
   const getActionInfo = (action: string) => {
     return ACTION_LABELS[action] || { label: action, color: 'bg-gray-500/20 text-gray-400', icon: '❓' }
@@ -168,7 +179,7 @@ export default function AuditPage() {
           </button>
         ))}
         <button
-          onClick={fetchActions}
+          onClick={refetch}
           className="ml-auto px-4 py-2 bg-bg-tertiary text-text-secondary rounded-sm hover:bg-bg-secondary transition-colors"
         >
           Refresh

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useTopics, Topic } from '@/lib/hooks/useTopics';
+import { useState } from 'react';
+import { useTopics } from '@/lib/hooks/useTopics';
 
 interface ChangeTopicModalProps {
   isOpen: boolean;
@@ -11,8 +11,13 @@ interface ChangeTopicModalProps {
   loading?: boolean;
 }
 
-export function ChangeTopicModal({
-  isOpen,
+// Mounting the form only while open (keyed by the topic) resets its state on each open
+export function ChangeTopicModal(props: ChangeTopicModalProps) {
+  if (!props.isOpen) return null;
+  return <ChangeTopicModalContent key={props.currentTopic || ''} {...props} />;
+}
+
+function ChangeTopicModalContent({
   onClose,
   onSubmit,
   currentTopic,
@@ -21,16 +26,6 @@ export function ChangeTopicModal({
   const { topics, loading: topicsLoading } = useTopics();
   const [selectedTopic, setSelectedTopic] = useState(currentTopic || '');
   const [reason, setReason] = useState('');
-
-  // Reset selected topic when modal opens with new currentTopic
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedTopic(currentTopic || '');
-      setReason('');
-    }
-  }, [isOpen, currentTopic]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

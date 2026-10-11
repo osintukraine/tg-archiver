@@ -64,36 +64,35 @@ export default function UsagePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchUsage = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/api-keys/usage/summary`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUsage(data);
-      } else if (res.status === 401) {
-        setError('Please log in to view usage.');
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        setError(errData.detail || 'Failed to load usage data.');
-      }
-    } catch (err) {
-      setError('Failed to load usage data.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Promise-chain form: every setState runs in a callback after the request resolves
+  const fetchUsage = useCallback(
+    () =>
+      fetch(`${API_URL}/api/api-keys/usage/summary`, { headers: getAuthHeaders() })
+        .then(async (res) => {
+          if (res.ok) {
+            setUsage(await res.json());
+          } else if (res.status === 401) {
+            setError('Please log in to view usage.');
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            setError(errData.detail || 'Failed to load usage data.');
+          }
+        })
+        .catch(() => setError('Failed to load usage data.'))
+        .finally(() => setLoading(false)),
+    []
+  );
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchUsage();
-    } else if (!authLoading) {
-      setLoading(false);
     }
-  }, [fetchUsage, isAuthenticated, authLoading]);
+  }, [fetchUsage, isAuthenticated]);
 
-  if (loading || authLoading) {
+  // Unauthenticated users have nothing to load
+  const isLoading = authLoading || (loading && isAuthenticated);
+
+  if (isLoading) {
     return (
       <div className="animate-pulse">
         <div className="h-8 bg-bg-secondary rounded-sm w-1/3 mb-4"></div>

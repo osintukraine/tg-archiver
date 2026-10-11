@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge, StatCard } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 import { useTopics } from '@/lib/hooks/useTopics';
@@ -86,33 +86,42 @@ export default function ExportPage() {
   const [hasMedia, setHasMedia] = useState<string>('');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
 
-  // Fetch initial data
-  const fetchData = useCallback(async () => {
+  // Bumped by handlers to force an immediate re-fetch
+  const [reloadKey, setReloadKey] = useState(0);
+  const refetch = () => {
     setLoading(true);
-    try {
-      const [profilesData, jobsData, statsData, channelsData] = await Promise.all([
-        adminApi.get('/api/admin/export/profiles'),
-        adminApi.get('/api/admin/export/jobs?page=1&page_size=20'),
-        adminApi.get('/api/admin/export/stats/summary'),
-        adminApi.get('/api/admin/channels?page=1&page_size=100'),
-      ]);
+    setReloadKey(k => k + 1);
+  };
 
-      setProfiles(profilesData.profiles || {});
-      setJobs(jobsData.jobs || []);
-      setStats(statsData);
-      setChannels(channelsData.channels || []);
-    } catch (err) {
-      console.error('Failed to fetch data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Fetch data on mount, after handler-triggered refetches, and every 15s
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [profilesData, jobsData, statsData, channelsData] = await Promise.all([
+          adminApi.get('/api/admin/export/profiles'),
+          adminApi.get('/api/admin/export/jobs?page=1&page_size=20'),
+          adminApi.get('/api/admin/export/stats/summary'),
+          adminApi.get('/api/admin/channels?page=1&page_size=100'),
+        ]);
+
+        setProfiles(profilesData.profiles || {});
+        setJobs(jobsData.jobs || []);
+        setStats(statsData);
+        setChannels(channelsData.channels || []);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchData();
-    const interval = setInterval(fetchData, 15000); // Refresh every 15s
+    const interval = setInterval(() => {
+      setLoading(true);
+      fetchData();
+    }, 15000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [reloadKey]);
 
   // Estimate export size
   const estimateExport = async () => {
@@ -156,7 +165,7 @@ export default function ExportPage() {
       });
 
       // Refresh jobs list
-      await fetchData();
+      refetch();
       // Reset form
       setLabel('');
       setEstimate(null);
@@ -174,7 +183,7 @@ export default function ExportPage() {
 
     try {
       await adminApi.delete(`/api/admin/export/${jobId}`);
-      await fetchData();
+      refetch();
     } catch (err) {
       console.error('Failed to delete job:', err);
     }
@@ -213,7 +222,7 @@ export default function ExportPage() {
           </p>
         </div>
         <button
-          onClick={fetchData}
+          onClick={refetch}
           className="px-4 py-2 bg-bg-secondary rounded-sm hover:bg-bg-tertiary transition-colors"
         >
           Refresh

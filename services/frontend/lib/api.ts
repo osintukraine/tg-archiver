@@ -11,6 +11,9 @@ import type {
   SearchParams,
   Channel,
   AdjacentMessages,
+  SocialGraphResponse,
+  EngagementTimelineResponse,
+  CommentThreadResponse,
 } from './types';
 
 /**
@@ -184,7 +187,7 @@ export function getMediaUrl(s3Key: string | null, forceExternal = false): string
 /**
  * Build query string from params
  */
-function buildQueryString(params: Record<string, any>): string {
+function buildQueryString(params: object): string {
   const query = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -203,7 +206,7 @@ function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
 
   // Access auth token from window (set by auth provider)
-  const token = (window as any).__AUTH_TOKEN__;
+  const token = (window as unknown as { __AUTH_TOKEN__?: string }).__AUTH_TOKEN__;
   return token || null;
 }
 
@@ -420,9 +423,9 @@ export async function getMessageSocialGraph(
     max_depth?: number;
     max_comments?: number;
   } = {}
-): Promise<any> {
+): Promise<SocialGraphResponse> {
   const queryString = buildQueryString(params);
-  return fetchApi<any>(`/api/social-graph/messages/${messageId}?${queryString}`);
+  return fetchApi<SocialGraphResponse>(`/api/social-graph/messages/${messageId}?${queryString}`);
 }
 
 /**
@@ -434,9 +437,9 @@ export async function getEngagementTimeline(
     granularity?: 'hour' | 'day' | 'week';
     time_range_hours?: number;
   } = {}
-): Promise<any> {
+): Promise<EngagementTimelineResponse> {
   const queryString = buildQueryString(params);
-  return fetchApi<any>(`/api/social-graph/messages/${messageId}/engagement-timeline?${queryString}`);
+  return fetchApi<EngagementTimelineResponse>(`/api/social-graph/messages/${messageId}/engagement-timeline?${queryString}`);
 }
 
 /**
@@ -450,9 +453,9 @@ export async function getMessageComments(
     sort?: 'asc' | 'desc';
     include_replies?: boolean;
   } = {}
-): Promise<any> {
+): Promise<CommentThreadResponse> {
   const queryString = buildQueryString(params);
-  return fetchApi<any>(`/api/social-graph/messages/${messageId}/comments?${queryString}`);
+  return fetchApi<CommentThreadResponse>(`/api/social-graph/messages/${messageId}/comments?${queryString}`);
 }
 
 /**

@@ -4,7 +4,6 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Hash, Radio, Calendar, Image as ImageIcon, Languages, Eye, Database, Archive, Network } from 'lucide-react';
-import { formatNumber } from '@/lib/utils';
 import type { Message } from '@/lib/types';
 
 interface MetadataTabProps {

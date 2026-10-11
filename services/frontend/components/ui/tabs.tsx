@@ -30,7 +30,7 @@ export function Tabs({ className, value: controlledValue, onValueChange, default
   );
 }
 
-interface TabsListProps extends React.HTMLAttributes<HTMLDivElement> {}
+type TabsListProps = React.HTMLAttributes<HTMLDivElement>;
 
 export function TabsList({ className, ...props }: TabsListProps) {
   return (

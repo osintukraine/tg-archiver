@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useSyncExternalStore, ReactNode, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   getContentWarningConfig,
@@ -27,44 +27,53 @@ export interface ContentWarningContextType {
 
 const ContentWarningContext = createContext<ContentWarningContextType | undefined>(undefined);
 
+// Consent lives in localStorage (external to React), so read it via useSyncExternalStore.
+const consentListeners = new Set<() => void>();
+let hasSessionConsent = false; // fallback when localStorage is unavailable
+
+const subscribeConsent = (listener: () => void) => {
+  consentListeners.add(listener);
+  return () => {
+    consentListeners.delete(listener);
+  };
+};
+const subscribeNoop = () => () => {};
+
+function readStoredConsent(): boolean {
+  if (hasSessionConsent) return true;
+  try {
+    const stored = localStorage.getItem(CONSENT_STORAGE_KEY);
+    if (!stored) return false;
+    const consent: ConsentData = JSON.parse(stored);
+    return Boolean(consent.accepted) && consent.expiresAt > Date.now();
+  } catch (err) {
+    // localStorage might be disabled or data corrupted
+    console.warn('[ContentWarning] Failed to read consent from localStorage:', err);
+    return false;
+  }
+}
+
 export function ContentWarningProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [hasConsent, setHasConsent] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
 
   // Get config (this runs on every render but is cheap)
   const config = getContentWarningConfig();
 
-  // Check localStorage for existing consent on mount
+  // false on the server and during hydration, true afterwards
+  const isChecking = useSyncExternalStore(subscribeNoop, () => false, () => true);
+  const storedConsent = useSyncExternalStore(subscribeConsent, readStoredConsent, () => false);
+  // Feature disabled = implicit consent
+  const hasConsent = !config.enabled || storedConsent;
+
+  // Clear expired or invalid consent from localStorage
   useEffect(() => {
-    if (!config.enabled) {
-      setIsChecking(false);
-      setHasConsent(true); // Feature disabled = implicit consent
-      return;
-    }
-
+    if (!config.enabled || storedConsent) return;
     try {
-      const stored = localStorage.getItem(CONSENT_STORAGE_KEY);
-      if (stored) {
-        const consent: ConsentData = JSON.parse(stored);
-        const now = Date.now();
-
-        if (consent.accepted && consent.expiresAt > now) {
-          setHasConsent(true);
-        } else {
-          // Expired or invalid - clear it
-          localStorage.removeItem(CONSENT_STORAGE_KEY);
-          setHasConsent(false);
-        }
-      }
-    } catch (err) {
-      // localStorage might be disabled or data corrupted
-      console.warn('[ContentWarning] Failed to read consent from localStorage:', err);
-      setHasConsent(false);
+      localStorage.removeItem(CONSENT_STORAGE_KEY);
+    } catch {
+      // ignore
     }
-
-    setIsChecking(false);
-  }, [config.enabled]);
+  }, [config.enabled, storedConsent]);
 
   const acceptWarning = useCallback(() => {
     const now = Date.now();
@@ -83,7 +92,8 @@ export function ContentWarningProvider({ children }: { children: ReactNode }) {
       console.warn('[ContentWarning] Failed to store consent in localStorage:', err);
     }
 
-    setHasConsent(true);
+    hasSessionConsent = true;
+    consentListeners.forEach((listener) => listener());
   }, [config.durationDays]);
 
   // Determine if modal should show

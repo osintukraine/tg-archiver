@@ -118,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs state from browser token storage on mount; SSR must start in the loading state
     refreshSession();
   }, [refreshSession]);
 

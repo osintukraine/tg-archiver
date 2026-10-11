@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 
@@ -58,22 +58,34 @@ export default function TopicsPage() {
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
   const [formData, setFormData] = useState<TopicFormData>(DEFAULT_FORM);
 
-  const fetchTopics = useCallback(async () => {
+  const [topicsReload, setTopicsReload] = useState(0);
+  const reloadTopics = () => {
     setLoading(true);
     setError(null);
-    try {
-      const data = await adminApi.get(`/api/admin/topics/?include_inactive=${showInactive}`);
-      setTopics(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load topics');
-    } finally {
-      setLoading(false);
-    }
-  }, [showInactive]);
+    setTopicsReload(k => k + 1);
+  };
+
+  // Show loading again while rendering when the filter changes (instead of in the effect)
+  const [prevShowInactive, setPrevShowInactive] = useState(showInactive);
+  if (prevShowInactive !== showInactive) {
+    setPrevShowInactive(showInactive);
+    setLoading(true);
+    setError(null);
+  }
 
   useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const data = await adminApi.get(`/api/admin/topics/?include_inactive=${showInactive}`);
+        setTopics(data || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load topics');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchTopics();
-  }, [fetchTopics]);
+  }, [showInactive, topicsReload]);
 
   const openCreateModal = () => {
     setEditingTopic(null);
@@ -112,7 +124,7 @@ export default function TopicsPage() {
         await adminApi.post('/api/admin/topics/', formData);
       }
       closeModal();
-      await fetchTopics();
+      reloadTopics();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save topic');
     } finally {
@@ -127,7 +139,7 @@ export default function TopicsPage() {
 
     try {
       await adminApi.delete(`/api/admin/topics/${topic.id}`);
-      await fetchTopics();
+      reloadTopics();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete topic');
     }
@@ -136,7 +148,7 @@ export default function TopicsPage() {
   const toggleActive = async (topic: Topic) => {
     try {
       await adminApi.put(`/api/admin/topics/${topic.id}`, { is_active: !topic.is_active });
-      await fetchTopics();
+      reloadTopics();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update topic');
     }
@@ -148,7 +160,7 @@ export default function TopicsPage() {
     try {
       const result = await adminApi.post('/api/admin/topics/seed');
       if (result.success) {
-        await fetchTopics();
+        reloadTopics();
       } else {
         setError(result.message);
       }
@@ -209,7 +221,7 @@ export default function TopicsPage() {
           <div className="p-8 text-center text-text-secondary">Loading topics...</div>
         ) : topics.length === 0 ? (
           <div className="p-8 text-center text-text-secondary">
-            No topics configured. Click "Seed Defaults" or "Add Topic" to get started.
+            No topics configured. Click &quot;Seed Defaults&quot; or &quot;Add Topic&quot; to get started.
           </div>
         ) : (
           <table className="w-full">

@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { SITE_NAME } from '@/lib/constants';
 
 // Use relative URLs when behind proxy, or NEXT_PUBLIC_API_URL for direct access
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+interface TurnstileWindow extends Window {
+  turnstile?: { getResponse: () => string | undefined };
+}
 
 // Cloudflare Turnstile site key
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
@@ -50,24 +53,19 @@ export default function SuggestChannelPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [submissionId, setSubmissionId] = useState<number | null>(null);
-  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
 
   // Validate channel link in real-time
   const channelLinkValidation = useMemo(() => validateChannelLink(channelLink), [channelLink]);
 
   // Load Cloudflare Turnstile script
   useEffect(() => {
-    // Check if already loaded
-    if ((window as any).turnstile) {
-      setTurnstileLoaded(true);
-      return;
-    }
+    // Already loaded (e.g. remount after client navigation)
+    if ((window as TurnstileWindow).turnstile) return;
 
     const script = document.createElement('script');
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
     script.async = true;
     script.defer = true;
-    script.onload = () => setTurnstileLoaded(true);
     document.head.appendChild(script);
 
     return () => {
@@ -92,9 +90,7 @@ export default function SuggestChannelPage() {
 
     try {
       // Get Turnstile token (empty string for dev mode, actual token for production)
-      const turnstileToken = turnstileLoaded
-        ? ((window as any).turnstile?.getResponse() || '')
-        : '';
+      const turnstileToken = (window as TurnstileWindow).turnstile?.getResponse() || '';
 
       const response = await fetch(`${API_URL}/api/channel-submissions`, {
         method: 'POST',
@@ -119,7 +115,7 @@ export default function SuggestChannelPage() {
           errorMessage = errorData.detail;
         } else if (Array.isArray(errorData.detail)) {
           // Pydantic validation errors: [{loc: [...], msg: "...", type: "..."}]
-          errorMessage = errorData.detail.map((e: any) => e.msg).join(', ');
+          errorMessage = errorData.detail.map((e: { msg: string }) => e.msg).join(', ');
         }
         throw new Error(errorMessage || `Error: ${response.status}`);
       }

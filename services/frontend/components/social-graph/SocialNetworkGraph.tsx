@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
+import type Sigma from 'sigma';
+import type Graph from 'graphology';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +13,14 @@ import {
 import { useSocialGraph } from '@/hooks/useSocialGraph';
 import { useTheme } from 'next-themes';
 import { translateComment, TranslateCommentResponse } from '@/lib/api';
+import type { SelectedGraphNode, SocialNetworkNode, SocialNetworkEdge } from '@/types/social-graph';
+
+// Stable fallbacks so effect deps don't change identity on every render
+const NO_NODES: SocialNetworkNode[] = [];
+const NO_EDGES: SocialNetworkEdge[] = [];
+const NO_REACTIONS: { emoji: string; count: number }[] = [];
+
+const subscribeNoop = () => () => {};
 
 interface SocialNetworkGraphProps {
   messageId: number;
@@ -42,7 +52,7 @@ function getNodeCategory(type: string): { category: string; color: string; icon:
 
 // Selected Node Panel Component - Rich details for each node type
 interface SelectedNodePanelProps {
-  node: any;
+  node: SelectedGraphNode;
   onClose: () => void;
   onTranslationUpdate?: (nodeId: string, translation: TranslateCommentResponse) => void;
 }
@@ -69,8 +79,8 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
       if (onTranslationUpdate) {
         onTranslationUpdate(node.id, result);
       }
-    } catch (err: any) {
-      setTranslationError(err.message || 'Translation failed');
+    } catch (err) {
+      setTranslationError(err instanceof Error && err.message ? err.message : 'Translation failed');
     } finally {
       setIsTranslating(false);
     }
@@ -416,7 +426,7 @@ function SelectedNodePanel({ node, onClose, onTranslationUpdate }: SelectedNodeP
 /**
  * Create a Sigma v4 renderer. Sigma touches WebGL/window, so it is imported lazily (client only).
  */
-async function createSigma(graph: any, container: HTMLElement, isDark: boolean) {
+async function createSigma(graph: Graph, container: HTMLElement, isDark: boolean) {
   const [{ default: Sigma }, { DEFAULT_PRIMITIVES, DEFAULT_EDGE_PRIMITIVES, DEFAULT_STYLES }, { extremityArrow }] =
     await Promise.all([import('sigma'), import('sigma/types'), import('sigma/rendering')]);
 
@@ -431,7 +441,7 @@ async function createSigma(graph: any, container: HTMLElement, isDark: boolean) 
         ...DEFAULT_STYLES.nodes,
         size: {
           whenState: 'isHovered',
-          then: (attrs: any) => (attrs.size ?? 10) * 1.3,
+          then: (attrs: { size?: number }) => (attrs.size ?? 10) * 1.3,
           else: { attribute: 'size', defaultValue: 10 },
         },
         labelSize: 12,
@@ -517,26 +527,22 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fullscreenContainerRef = useRef<HTMLDivElement>(null);
-  const sigmaRef = useRef<any>(null);
-  const graphRef = useRef<any>(null);
+  const sigmaRef = useRef<Sigma | null>(null);
+  const graphRef = useRef<Graph | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isBrowser, setIsBrowser] = useState(false);
-  const [selectedNode, setSelectedNode] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<SelectedGraphNode | null>(null);
+  // false on the server and during hydration, true afterwards
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  const isBrowser = mounted;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { resolvedTheme } = useTheme();
 
-  useEffect(() => {
-    setMounted(true);
-    setIsBrowser(true);
-  }, []);
-
   const isDark = mounted ? resolvedTheme === 'dark' : false;
 
-  const nodes = data?.nodes || [];
-  const edges = data?.edges || [];
+  const nodes = (data?.nodes as unknown as SocialNetworkNode[] | undefined) ?? NO_NODES;
+  const edges = (data?.edges as unknown as SocialNetworkEdge[] | undefined) ?? NO_EDGES;
   const metadata = data?.metadata || {};
-  const reactions = data?.reactions || [];
+  const reactions = data?.reactions ?? NO_REACTIONS;
 
   const hasAuthor = metadata.has_author;
   const isForward = metadata.is_forward;
@@ -551,24 +557,20 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
       return;
     }
 
-    if (isInitialized) {
-      return;
-    }
-
-    let mounted = true;
+    let isActive = true;
 
     const initSigma = async () => {
       try {
         const Graph = (await import('graphology')).default;
         const forceAtlas2 = (await import('graphology-layout-forceatlas2')).default;
 
-        if (!mounted || !containerRef.current) return;
+        if (!isActive || !containerRef.current) return;
 
         // Create graph
         const graph = new Graph();
 
         // Add nodes
-        nodes.forEach((node: any, index: number) => {
+        nodes.forEach((node, index) => {
           const angle = (2 * Math.PI * index) / nodes.length;
           const radius = 100;
 
@@ -584,7 +586,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
         });
 
         // Add edges
-        edges.forEach((edge: any) => {
+        edges.forEach((edge) => {
           if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {
             try {
               graph.addEdge(edge.source, edge.target, {
@@ -593,7 +595,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                 size: edge.type === 'reacted' ? 1 : 2,
                 edgeType: edge.type,  // Store our category in edgeType, not type (reserved by Sigma)
               });
-            } catch (e) {
+            } catch {
               // Edge might already exist
             }
           }
@@ -601,9 +603,9 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
 
         // Add reaction nodes (reactions come as separate array from API)
         // Find the message node to connect reactions to
-        const messageNode = nodes.find((n: any) => n.type === 'message');
+        const messageNode = nodes.find((n) => n.type === 'message');
         if (messageNode && reactions.length > 0) {
-          reactions.forEach((reaction: any, idx: number) => {
+          reactions.forEach((reaction, idx) => {
             const reactionId = `reaction-${reaction.emoji}-${idx}`;
             const angle = (2 * Math.PI * idx) / reactions.length + Math.PI; // Offset from other nodes
             const radius = 80;
@@ -627,7 +629,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                 size: 1,
                 edgeType: 'reacted',
               });
-            } catch (e) {
+            } catch {
               // Edge might already exist
             }
           });
@@ -675,7 +677,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
         graphRef.current = graph;
         sigmaRef.current = sigma;
 
-        if (mounted) {
+        if (isActive) {
           setIsInitialized(true);
         }
       } catch (err) {
@@ -686,7 +688,7 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
     initSigma();
 
     return () => {
-      mounted = false;
+      isActive = false;
       if (sigmaRef.current) {
         sigmaRef.current.kill();
         sigmaRef.current = null;
@@ -702,13 +704,13 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
       const graph = graphRef.current;
 
       // Update node colors - use nodeType (our custom attribute)
-      graph.forEachNode((node: string) => {
+      graph.forEachNode((node) => {
         const nodeType = graph.getNodeAttribute(node, 'nodeType');
         graph.setNodeAttribute(node, 'color', getNodeColor(nodeType, isDark));
       });
 
       // Update edge colors - use edgeType (our custom attribute)
-      graph.forEachEdge((edge: string) => {
+      graph.forEachEdge((edge) => {
         const edgeType = graph.getEdgeAttribute(edge, 'edgeType');
         graph.setEdgeAttribute(edge, 'color', getEdgeColor(edgeType, isDark));
       });
@@ -769,21 +771,21 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
   const handleZoomIn = useCallback(() => {
     if (sigmaRef.current) {
       const camera = sigmaRef.current.getCamera();
-      camera.animatedZoom({ duration: 300 });
+      camera.zoomIn({ duration: 300 });
     }
   }, []);
 
   const handleZoomOut = useCallback(() => {
     if (sigmaRef.current) {
       const camera = sigmaRef.current.getCamera();
-      camera.animatedUnzoom({ duration: 300 });
+      camera.zoomOut({ duration: 300 });
     }
   }, []);
 
   const handleReset = useCallback(() => {
     if (sigmaRef.current) {
       const camera = sigmaRef.current.getCamera();
-      camera.animatedReset({ duration: 300 });
+      camera.reset({ duration: 300 });
     }
   }, []);
 
@@ -952,9 +954,9 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                 </h4>
                 <div className="flex flex-wrap gap-2">
                   {reactions
-                    .filter((r: any) => !r.emoji.includes('ReactionPaid'))
-                    .sort((a: any, b: any) => b.count - a.count)
-                    .map((reaction: any, idx: number) => (
+                    .filter((r) => !r.emoji.includes('ReactionPaid'))
+                    .sort((a, b) => b.count - a.count)
+                    .map((reaction, idx) => (
                       <div
                         key={idx}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-full border border-muted shadow-xs"
@@ -965,11 +967,11 @@ export function SocialNetworkGraph({ messageId }: SocialNetworkGraphProps) {
                         </span>
                       </div>
                     ))}
-                  {reactions.some((r: any) => r.emoji.includes('ReactionPaid')) && (
+                  {reactions.some((r) => r.emoji.includes('ReactionPaid')) && (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/30 rounded-full border border-yellow-200 dark:border-yellow-800">
                       <span className="text-lg">⭐</span>
                       <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                        {reactions.find((r: any) => r.emoji.includes('ReactionPaid'))?.count || 0} Paid
+                        {reactions.find((r) => r.emoji.includes('ReactionPaid'))?.count || 0} Paid
                       </span>
                     </div>
                   )}

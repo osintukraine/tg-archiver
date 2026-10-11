@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge, StatCard, DataTable, Modal } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 
@@ -146,118 +146,153 @@ export default function ChannelsPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', color: 'gray', description: '' });
 
-  const fetchChannels = useCallback(async () => {
+  // Bumping a key re-runs the matching fetch effect (used by event handlers after mutations)
+  const [channelsReload, setChannelsReload] = useState(0);
+  const [categoriesReload, setCategoriesReload] = useState(0);
+  const [discoveredReload, setDiscoveredReload] = useState(0);
+  const [discoveredStatsReload, setDiscoveredStatsReload] = useState(0);
+
+  const reloadChannels = () => {
     setLoading(true);
     setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        page_size: '25',
-      });
-      if (search) params.append('search', search);
-      if (categoryId !== '') params.append('category_id', categoryId.toString());
-      if (folder) params.append('folder', folder);
-      if (rule) params.append('rule', rule);
-      if (activeOnly !== undefined) params.append('active', activeOnly.toString());
-
-      const data = await adminApi.get(`/api/admin/channels?${params}`);
-      setChannels(data.items);
-      setTotalPages(data.total_pages);
-      setTotal(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, categoryId, folder, rule, activeOnly]);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await adminApi.get('/api/admin/channels/stats');
-      setStats(data);
-    } catch (err) {
-      console.error('Failed to fetch channel stats:', err);
-    }
-  }, []);
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      const data = await adminApi.get('/api/admin/categories');
-      setCategories(data);
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
-    }
-  }, []);
-
-  const fetchFolders = useCallback(async () => {
-    try {
-      const data = await adminApi.get('/api/admin/channels/folders');
-      setFolders(data);
-    } catch (err) {
-      console.error('Failed to fetch folders:', err);
-    }
-  }, []);
-
-  const fetchDiscoveredChannels = useCallback(async () => {
+    setChannelsReload(k => k + 1);
+  };
+  const reloadCategories = () => setCategoriesReload(k => k + 1);
+  const reloadDiscovered = () => {
     setDiscoveredLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: discoveredPage.toString(),
-        page_size: '25',
-        sort_by: 'discovery_count',
-        sort_order: 'desc',
-      });
-      if (discoveredSearch) params.append('search', discoveredSearch);
-      if (discoveredStatusFilter) params.append('status', discoveredStatusFilter);
+    setDiscoveredReload(k => k + 1);
+  };
+  const reloadDiscoveredStats = () => setDiscoveredStatsReload(k => k + 1);
 
-      const data = await adminApi.get(`/api/admin/discovered?${params}`);
-      setDiscoveredChannels(data.items);
-      setDiscoveredTotalPages(data.total_pages);
-      setDiscoveredTotal(data.total);
-    } catch (err) {
-      console.error('Failed to fetch discovered channels:', err);
-    } finally {
-      setDiscoveredLoading(false);
-    }
-  }, [discoveredPage, discoveredSearch, discoveredStatusFilter]);
+  // Show loading again while rendering when the filters change (instead of in the effect)
+  const channelsQuery = JSON.stringify([page, search, categoryId, folder, rule, activeOnly]);
+  const [prevChannelsQuery, setPrevChannelsQuery] = useState(channelsQuery);
+  if (prevChannelsQuery !== channelsQuery) {
+    setPrevChannelsQuery(channelsQuery);
+    setLoading(true);
+    setError(null);
+  }
 
-  const fetchDiscoveredStats = useCallback(async () => {
-    try {
-      const data = await adminApi.get('/api/admin/discovered/stats');
-      setDiscoveredStats(data);
-    } catch (err) {
-      console.error('Failed to fetch discovered stats:', err);
-    }
+  const discoveredQuery = JSON.stringify([
+    activeTab === 'discovered',
+    discoveredPage,
+    discoveredSearch,
+    discoveredStatusFilter,
+  ]);
+  const [prevDiscoveredQuery, setPrevDiscoveredQuery] = useState(discoveredQuery);
+  if (prevDiscoveredQuery !== discoveredQuery) {
+    setPrevDiscoveredQuery(discoveredQuery);
+    if (activeTab === 'discovered') setDiscoveredLoading(true);
+  }
+
+  useEffect(() => {
+    const fetchChannels = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          page_size: '25',
+        });
+        if (search) params.append('search', search);
+        if (categoryId !== '') params.append('category_id', categoryId.toString());
+        if (folder) params.append('folder', folder);
+        if (rule) params.append('rule', rule);
+        if (activeOnly !== undefined) params.append('active', activeOnly.toString());
+
+        const data = await adminApi.get(`/api/admin/channels?${params}`);
+        setChannels(data.items);
+        setTotalPages(data.total_pages);
+        setTotal(data.total);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchChannels();
+  }, [page, search, categoryId, folder, rule, activeOnly, channelsReload]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/channels/stats');
+        setStats(data);
+      } catch (err) {
+        console.error('Failed to fetch channel stats:', err);
+      }
+    };
+    const fetchFolders = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/channels/folders');
+        setFolders(data);
+      } catch (err) {
+        console.error('Failed to fetch folders:', err);
+      }
+    };
+    fetchStats();
+    fetchFolders();
   }, []);
 
   useEffect(() => {
-    fetchChannels();
-  }, [fetchChannels]);
-
-  useEffect(() => {
-    if (activeTab === 'discovered') {
-      fetchDiscoveredChannels();
-      fetchDiscoveredStats();
-    }
-  }, [activeTab, fetchDiscoveredChannels, fetchDiscoveredStats]);
-
-  useEffect(() => {
-    fetchStats();
+    const fetchCategories = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/categories');
+        setCategories(data);
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+      }
+    };
     fetchCategories();
-    fetchFolders();
-  }, [fetchStats, fetchCategories, fetchFolders]);
+  }, [categoriesReload]);
 
-  // Set edit category when modal opens
   useEffect(() => {
-    if (selectedChannel) {
-      setEditCategoryId(selectedChannel.category?.id || 0);
-    }
-  }, [selectedChannel]);
+    if (activeTab !== 'discovered') return;
+    const fetchDiscoveredChannels = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: discoveredPage.toString(),
+          page_size: '25',
+          sort_by: 'discovery_count',
+          sort_order: 'desc',
+        });
+        if (discoveredSearch) params.append('search', discoveredSearch);
+        if (discoveredStatusFilter) params.append('status', discoveredStatusFilter);
+
+        const data = await adminApi.get(`/api/admin/discovered?${params}`);
+        setDiscoveredChannels(data.items);
+        setDiscoveredTotalPages(data.total_pages);
+        setDiscoveredTotal(data.total);
+      } catch (err) {
+        console.error('Failed to fetch discovered channels:', err);
+      } finally {
+        setDiscoveredLoading(false);
+      }
+    };
+    fetchDiscoveredChannels();
+  }, [activeTab, discoveredPage, discoveredSearch, discoveredStatusFilter, discoveredReload]);
+
+  useEffect(() => {
+    if (activeTab !== 'discovered') return;
+    const fetchDiscoveredStats = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/discovered/stats');
+        setDiscoveredStats(data);
+      } catch (err) {
+        console.error('Failed to fetch discovered stats:', err);
+      }
+    };
+    fetchDiscoveredStats();
+  }, [activeTab, discoveredStatsReload]);
+
+  // Open the edit modal, seeding the category selector from the channel
+  const openChannel = (channel: Channel) => {
+    setEditCategoryId(channel.category?.id || 0);
+    setSelectedChannel(channel);
+  };
 
   const handleUpdateChannel = async (channelId: number, updates: Record<string, unknown>) => {
     try {
       await adminApi.put(`/api/admin/channels/${channelId}`, updates);
-      fetchChannels();
+      reloadChannels();
       setSelectedChannel(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Update failed');
@@ -271,7 +306,7 @@ export default function ChannelsPage() {
       } else {
         await adminApi.post('/api/admin/categories', categoryForm);
       }
-      fetchCategories();
+      reloadCategories();
       setShowCategoryModal(false);
       setEditingCategory(null);
       setCategoryForm({ name: '', color: 'gray', description: '' });
@@ -284,7 +319,7 @@ export default function ChannelsPage() {
     if (!confirm('Delete this category? Channels will be uncategorized.')) return;
     try {
       await adminApi.delete(`/api/admin/categories/${categoryId}`);
-      fetchCategories();
+      reloadCategories();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete category');
     }
@@ -308,9 +343,9 @@ export default function ChannelsPage() {
       await adminApi.post(`/api/admin/discovered/${promoteChannel.id}/promote`, promoteForm);
       setPromoteChannel(null);
       setPromoteForm({ category_id: 0, folder: '', rule: 'archive_all' });
-      fetchDiscoveredChannels();
-      fetchDiscoveredStats();
-      fetchChannels(); // Refresh main channels list
+      reloadDiscovered();
+      reloadDiscoveredStats();
+      reloadChannels(); // Refresh main channels list
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to promote channel');
     }
@@ -320,8 +355,8 @@ export default function ChannelsPage() {
     if (!confirm('Mark this channel as ignored? It will not appear in suggestions.')) return;
     try {
       await adminApi.post(`/api/admin/discovered/${channelId}/ignore`, {});
-      fetchDiscoveredChannels();
-      fetchDiscoveredStats();
+      reloadDiscovered();
+      reloadDiscoveredStats();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to ignore channel');
     }
@@ -330,7 +365,7 @@ export default function ChannelsPage() {
   const handleRetryJoin = async (channelId: number) => {
     try {
       await adminApi.post(`/api/admin/discovered/${channelId}/retry`, {});
-      fetchDiscoveredChannels();
+      reloadDiscovered();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to retry join');
     }
@@ -424,7 +459,7 @@ export default function ChannelsPage() {
       label: '',
       render: (_: unknown, channel: Channel) => (
         <button
-          onClick={() => setSelectedChannel(channel)}
+          onClick={() => openChannel(channel)}
           className="text-blue-500 hover:text-blue-400 text-sm"
         >
           Edit

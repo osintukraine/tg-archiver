@@ -222,7 +222,7 @@ export function EngagementChart({ messageId }: EngagementChartProps) {
                         borderRadius: '0.5rem',
                       }}
                       labelFormatter={(value) => new Date(String(value)).toLocaleString()}
-                      formatter={(value: any) => `${value}%`}
+                      formatter={(value) => `${value}%`}
                     />
                     <Legend />
                     <Line

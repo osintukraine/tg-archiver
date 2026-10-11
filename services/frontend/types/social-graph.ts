@@ -8,7 +8,9 @@
 export type SocialNodeType = 'author' | 'channel' | 'message' | 'forward_source' | 'reply_to';
 
 // Edge types in social network
-export type SocialEdgeType = 'authored' | 'forwarded_from' | 'replied_to' | 'mentioned' | 'same_author';
+export type SocialEdgeType =
+  | 'authored' | 'forwarded_from' | 'forwarded_to' | 'replied_to' | 'reply_to'
+  | 'commented_on' | 'reacted' | 'mentioned' | 'same_author';
 
 export interface SocialNetworkNode {
   id: string;
@@ -32,9 +34,10 @@ export interface SocialNetworkNode {
     created_at?: string;
     views?: number;
     forwards?: number;
+    count?: number;
 
     // Common metadata
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -48,7 +51,7 @@ export interface SocialNetworkEdge {
   data?: {
     timestamp?: string;
     forward_count?: number;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -83,6 +86,20 @@ export interface Comment {
   reactions: number | null;
   depth: number;  // Nesting level for threaded display
   replies?: Comment[];  // Nested replies
+}
+
+// Comment as returned by /api/social-graph/messages/{id}/comments (fields used by CommentThread)
+export interface ThreadComment {
+  id: number;
+  content?: string | null;
+  translated_content?: string | null;
+  original_language?: string | null;
+  translation_method?: string | null;
+  author_user_id?: number | null;
+  created_at?: string | null;
+  reactions_count?: number;
+  is_reply?: boolean;
+  reply_to_comment_id?: number | null;
 }
 
 export interface CommentsResponse {
@@ -136,4 +153,45 @@ export interface CommentsParams {
 export interface EngagementParams {
   granularity?: 'hour' | 'day' | 'week';
   time_range_hours?: number;
+}
+
+/**
+ * Node selected in the graph UI: the clicked node's id/type/label plus its flat
+ * Sigma attributes (the node's `data` spread), as shown in the details panel.
+ */
+export interface SelectedGraphNode {
+  id: string;
+  type: string;
+  label?: string;
+  // message
+  views?: number;
+  forwards?: number;
+  comments_count?: number;
+  content?: string;
+  // author
+  user_id?: number | string;
+  // forward_source
+  username?: string;
+  verified?: boolean;
+  subscribers?: number;
+  original_views?: number;
+  original_forwards?: number;
+  original_comments?: number;
+  original_content?: string;
+  // forward_source / sibling_forward / outbound_forward
+  propagation_seconds?: number;
+  channel_username?: string;
+  channel_name?: string;
+  forward_date?: string;
+  message_id?: number;
+  // comment
+  user_name?: string;
+  text?: string;
+  date?: string;
+  comment_id?: number;
+  translated_content?: string | null;
+  original_language?: string | null;
+  // reaction
+  emoji?: string;
+  count?: number;
 }

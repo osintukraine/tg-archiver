@@ -56,23 +56,22 @@ export default function FeedTokensPage() {
   // Token API Functions
   // ============================================================================
 
-  const fetchTokens = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/feed-tokens`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTokens(data.tokens);
-      } else if (res.status === 401) {
-        setError('Please log in to manage feed tokens.');
-      }
-    } catch {
-      setError('Failed to load tokens.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Promise-chain form: every setState runs in a callback after the request resolves
+  const fetchTokens = useCallback(
+    () =>
+      fetch(`${API_URL}/api/feed-tokens`, { headers: getAuthHeaders() })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            setTokens(data.tokens);
+          } else if (res.status === 401) {
+            setError('Please log in to manage feed tokens.');
+          }
+        })
+        .catch(() => setError('Failed to load tokens.'))
+        .finally(() => setLoading(false)),
+    []
+  );
 
   useEffect(() => {
     fetchTokens();

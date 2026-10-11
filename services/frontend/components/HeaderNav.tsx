@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useImmersive } from '@/contexts/ImmersiveContext';
@@ -10,11 +10,31 @@ import { SITE_NAME, RSS_ENABLED } from '@/lib/constants';
 // Build-time flag for translation feature
 const TRANSLATION_ENABLED = process.env.NEXT_PUBLIC_TRANSLATION_ENABLED === 'true';
 
+const subscribeNoop = () => () => {};
+
+const subscribeToWindowEvent = (eventName: string) => (onChange: () => void) => {
+  window.addEventListener(eventName, onChange);
+  return () => window.removeEventListener(eventName, onChange);
+};
+const subscribeTranslationMode = subscribeToWindowEvent('translationModeChange');
+const subscribeTheme = subscribeToWindowEvent('themeChange');
+
 export function HeaderNav() {
   const pathname = usePathname();
-  const [translationMode, setTranslationMode] = useState<'original' | 'translation'>('original');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [mounted, setMounted] = useState(false);
+  // Preferences live in localStorage; server snapshots keep the first client render equal to the server HTML
+  const translationMode = useSyncExternalStore(
+    subscribeTranslationMode,
+    (): 'original' | 'translation' =>
+      localStorage.getItem('translationMode') === 'translation' ? 'translation' : 'original',
+    () => 'original'
+  );
+  const theme = useSyncExternalStore(
+    subscribeTheme,
+    (): 'light' | 'dark' => (localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'),
+    () => 'light'
+  );
+  // false on the server and during hydration, true afterwards (avoids hydration mismatch)
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -24,29 +44,11 @@ export function HeaderNav() {
   // Auth context for user menu
   const { user, isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
 
-  // Load preferences from localStorage on mount (client-side only)
+  // Apply saved theme to the document on mount
   useEffect(() => {
-    setMounted(true);
-
-    // Only access localStorage on client
-    if (typeof window !== 'undefined') {
-      // Load translation mode
-      const savedTranslation = localStorage.getItem('translationMode');
-      if (savedTranslation === 'translation' || savedTranslation === 'original') {
-        setTranslationMode(savedTranslation);
-      }
-
-      // Load theme mode
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme === 'dark' || savedTheme === 'light') {
-        setTheme(savedTheme);
-        // Apply theme to document
-        if (savedTheme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-      }
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     }
   }, []);
 
@@ -70,10 +72,12 @@ export function HeaderNav() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleImmersive, mobileMenuOpen]);
 
-  // Close mobile menu when route changes
-  useEffect(() => {
+  // Close mobile menu when route changes (store-previous-prop pattern)
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setMobileMenuOpen(false);
-  }, [pathname]);
+  }
 
   // Close mobile menu when clicking outside
   useEffect(() => {
@@ -100,8 +104,6 @@ export function HeaderNav() {
   // Save to localStorage and dispatch event when changed
   const toggleTranslationMode = () => {
     const newMode = translationMode === 'original' ? 'translation' : 'original';
-    setTranslationMode(newMode);
-
     if (typeof window !== 'undefined') {
       localStorage.setItem('translationMode', newMode);
       // Dispatch custom event so PostCard components can react
@@ -112,8 +114,6 @@ export function HeaderNav() {
   // Toggle theme between light and dark
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-
     if (typeof window !== 'undefined') {
       localStorage.setItem('theme', newTheme);
       // Apply theme to document

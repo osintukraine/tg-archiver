@@ -54,34 +54,34 @@ export default function ApiKeysPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  const fetchKeys = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/api-keys`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setKeys(data.keys);
-      } else if (res.status === 401) {
-        setError('Please log in to manage API keys.');
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        setError(errData.detail || 'Failed to load API keys.');
-      }
-    } catch {
-      setError('Failed to load API keys.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Promise-chain form: every setState runs in a callback after the request resolves
+  const fetchKeys = useCallback(
+    () =>
+      fetch(`${API_URL}/api/api-keys`, { headers: getAuthHeaders() })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            setKeys(data.keys);
+          } else if (res.status === 401) {
+            setError('Please log in to manage API keys.');
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            setError(errData.detail || 'Failed to load API keys.');
+          }
+        })
+        .catch(() => setError('Failed to load API keys.'))
+        .finally(() => setLoading(false)),
+    []
+  );
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchKeys();
-    } else if (!authLoading) {
-      setLoading(false);
     }
-  }, [fetchKeys, isAuthenticated, authLoading]);
+  }, [fetchKeys, isAuthenticated]);
+
+  // Unauthenticated users have nothing to load
+  const isLoading = authLoading || (loading && isAuthenticated);
 
   const createKey = async () => {
     if (!name.trim()) {
@@ -178,7 +178,7 @@ export default function ApiKeysPage() {
     });
   };
 
-  if (loading || authLoading) {
+  if (isLoading) {
     return (
       <div className="animate-pulse">
         <div className="h-8 bg-bg-secondary rounded-sm w-1/3 mb-4"></div>

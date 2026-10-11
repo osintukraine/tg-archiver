@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge, StatCard, DataTable, Modal } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
@@ -125,36 +125,59 @@ function FeedManagement() {
     is_active: true,
   });
 
-  const fetchFeeds = useCallback(async () => {
+  // Bumping a key re-runs the matching fetch effect (used by event handlers after mutations)
+  const [feedsReload, setFeedsReload] = useState(0);
+  const [statsReload, setStatsReload] = useState(0);
+  const reloadFeeds = () => {
     setLoading(true);
     setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        page_size: '25',
-      });
-      if (search) params.append('search', search);
-      if (category) params.append('category', category);
-      if (activeOnly !== undefined) params.append('is_active', activeOnly.toString());
+    setFeedsReload(k => k + 1);
+  };
+  const reloadStats = () => setStatsReload(k => k + 1);
 
-      const data = await adminApi.get(`/api/admin/feeds/rss?${params}`);
-      setFeeds(data.items || []);
-      setTotalPages(data.total_pages || 1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, category, activeOnly]);
+  // Show loading again while rendering when the filters change (instead of in the effect)
+  const feedsQuery = JSON.stringify([page, search, category, activeOnly]);
+  const [prevFeedsQuery, setPrevFeedsQuery] = useState(feedsQuery);
+  if (prevFeedsQuery !== feedsQuery) {
+    setPrevFeedsQuery(feedsQuery);
+    setLoading(true);
+    setError(null);
+  }
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await adminApi.get('/api/admin/feeds/rss/stats');
-      setStats(data);
-    } catch (err) {
-      console.error('Failed to fetch feed stats:', err);
-    }
-  }, []);
+  useEffect(() => {
+    const fetchFeeds = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          page_size: '25',
+        });
+        if (search) params.append('search', search);
+        if (category) params.append('category', category);
+        if (activeOnly !== undefined) params.append('is_active', activeOnly.toString());
+
+        const data = await adminApi.get(`/api/admin/feeds/rss?${params}`);
+        setFeeds(data.items || []);
+        setTotalPages(data.total_pages || 1);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFeeds();
+  }, [page, search, category, activeOnly, feedsReload]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/feeds/rss/stats');
+        setStats(data);
+      } catch (err) {
+        console.error('Failed to fetch feed stats:', err);
+      }
+    };
+    fetchStats();
+  }, [statsReload]);
 
   const handleCreate = async () => {
     try {
@@ -165,8 +188,8 @@ function FeedManagement() {
       }
       setShowCreateModal(false);
       resetForm();
-      fetchFeeds();
-      fetchStats();
+      reloadFeeds();
+      reloadStats();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Create failed');
     }
@@ -179,7 +202,7 @@ function FeedManagement() {
         alert(data.error);
         return;
       }
-      fetchFeeds();
+      reloadFeeds();
       setSelectedFeed(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Update failed');
@@ -196,8 +219,8 @@ function FeedManagement() {
         alert(data.error);
         return;
       }
-      fetchFeeds();
-      fetchStats();
+      reloadFeeds();
+      reloadStats();
       setSelectedFeed(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed');
@@ -225,19 +248,6 @@ function FeedManagement() {
     }
   };
 
-  const handleTriggerPoll = async (feedId: number) => {
-    try {
-      const data = await adminApi.post(`/api/admin/feeds/rss/${feedId}/poll`);
-      if (data.error) {
-        alert(data.error);
-      } else {
-        alert(data.message);
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Poll trigger failed');
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       name: '',
@@ -247,14 +257,6 @@ function FeedManagement() {
       is_active: true,
     });
   };
-
-  useEffect(() => {
-    fetchFeeds();
-  }, [fetchFeeds]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
 
   const columns = [
     {

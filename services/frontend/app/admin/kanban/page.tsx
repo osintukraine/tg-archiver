@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge, StatCard } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 import { getMediaUrl } from '@/lib/api';
@@ -53,32 +53,38 @@ export default function KanbanPage() {
   const [selectedItem, setSelectedItem] = useState<BoardItem | null>(null);
   const [visibleLaneFilter, setVisibleLaneFilter] = useState<Set<string>>(new Set(['Trending', 'Popular', 'Recent', 'Quiet']));
 
-  const fetchBoard = useCallback(async () => {
+  // Reset loading/error while rendering when the range changes (instead of in the effect)
+  const [prevDays, setPrevDays] = useState(days);
+  if (prevDays !== days) {
+    setPrevDays(days);
     setLoading(true);
     setError(null);
-    try {
-      const data = await adminApi.get(`/api/admin/kanban?days=${days}&limit_per_lane=20`);
-      setLanes(data.lanes || {});
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, [days]);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await adminApi.get(`/api/admin/kanban/stats?days=${days}`);
-      setStats(data);
-    } catch (err) {
-      console.error('Failed to fetch board stats:', err);
-    }
-  }, [days]);
+  }
 
   useEffect(() => {
+    const fetchBoard = async () => {
+      try {
+        const data = await adminApi.get(`/api/admin/kanban?days=${days}&limit_per_lane=20`);
+        setLanes(data.lanes || {});
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const fetchStats = async () => {
+      try {
+        const data = await adminApi.get(`/api/admin/kanban/stats?days=${days}`);
+        setStats(data);
+      } catch (err) {
+        console.error('Failed to fetch board stats:', err);
+      }
+    };
+
     fetchBoard();
     fetchStats();
-  }, [fetchBoard, fetchStats]);
+  }, [days]);
 
   const laneOrder = ['Trending', 'Popular', 'Recent', 'Quiet'];
 

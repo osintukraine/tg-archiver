@@ -58,12 +58,14 @@ export function VideoPlayer({
     }
   }, [isMuted]);
 
-  // Reset when message changes
-  useEffect(() => {
+  // Reset when message changes (store-previous-prop pattern)
+  const [prevMessageId, setPrevMessageId] = useState(message.id);
+  if (prevMessageId !== message.id) {
+    setPrevMessageId(message.id);
     setCurrentMediaIndex(0);
     setError(null);
     setIsLoading(true);
-  }, [message.id]);
+  }
 
   // Swipe handling for multi-media
   const handleSwipe = useCallback((direction: 'left' | 'right') => {

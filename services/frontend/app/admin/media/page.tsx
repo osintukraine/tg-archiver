@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge, StatCard } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 import { getMediaUrl } from '@/lib/api';
@@ -50,40 +50,48 @@ export default function MediaPage() {
   const [typeFilter, setTypeFilter] = useState<MediaType>('');
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
 
-  const fetchMedia = useCallback(async () => {
+  // Reset loading/error while rendering when the query changes (instead of in the effect)
+  const queryKey = `${page}|${typeFilter}`;
+  const [prevQueryKey, setPrevQueryKey] = useState(queryKey);
+  if (prevQueryKey !== queryKey) {
+    setPrevQueryKey(queryKey);
     setLoading(true);
     setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        page_size: '48',  // 6x8 grid
-      });
-      if (typeFilter) params.append('media_type', typeFilter);
-
-      const data = await adminApi.get(`/api/admin/media?${params}`);
-      setItems(data.items);
-      setTotalPages(data.total_pages);
-      setTotalItems(data.total);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, typeFilter]);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await adminApi.get('/api/admin/media/stats');
-      setStats(data);
-    } catch (err) {
-      console.error('Failed to fetch media stats:', err);
-    }
-  }, []);
+  }
 
   useEffect(() => {
+    const fetchMedia = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          page_size: '48',  // 6x8 grid
+        });
+        if (typeFilter) params.append('media_type', typeFilter);
+
+        const data = await adminApi.get(`/api/admin/media?${params}`);
+        setItems(data.items);
+        setTotalPages(data.total_pages);
+        setTotalItems(data.total);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchMedia();
+  }, [page, typeFilter]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await adminApi.get('/api/admin/media/stats');
+        setStats(data);
+      } catch (err) {
+        console.error('Failed to fetch media stats:', err);
+      }
+    };
     fetchStats();
-  }, [fetchMedia, fetchStats]);
+  }, []);
 
   const formatFileSize = (bytes: number | null): string => {
     if (!bytes) return '-';

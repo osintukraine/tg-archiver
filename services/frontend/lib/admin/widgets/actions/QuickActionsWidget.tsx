@@ -54,7 +54,7 @@ function QuickActionsWidget({ className }: WidgetProps) {
       router.refresh();
       await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for visual feedback
       setFeedback({ type: 'success', text: 'Dashboard refreshed' });
-    } catch (err) {
+    } catch {
       setFeedback({
         type: 'error',
         text: 'Failed to refresh dashboard'

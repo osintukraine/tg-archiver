@@ -31,35 +31,37 @@ export default function FeedTokensPage() {
   const [authRequired, setAuthRequired] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
 
-  const fetchTokens = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/feed-tokens`, {
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTokens(data.tokens);
-      } else if (res.status === 401) {
-        setError('Please log in to manage feed tokens.');
-      }
-    } catch (err) {
-      setError('Failed to load tokens.');
-    } finally {
-      setLoading(false);
-    }
-  }, [API_URL]);
+  // Promise-chain form: every setState runs in a callback after the request resolves
+  const fetchTokens = useCallback(
+    () =>
+      fetch(`${API_URL}/api/feed-tokens`, { headers: getAuthHeaders() })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            setTokens(data.tokens);
+          } else if (res.status === 401) {
+            setError('Please log in to manage feed tokens.');
+          }
+        })
+        .catch(() => setError('Failed to load tokens.'))
+        .finally(() => setLoading(false)),
+    []
+  );
 
-  const fetchAuthStatus = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/feed-tokens/auth-status`);
-      if (res.ok) {
-        const data = await res.json();
-        setAuthRequired(data.auth_required);
-      }
-    } catch (err) {
-      // Ignore
-    }
-  }, [API_URL]);
+  const fetchAuthStatus = useCallback(
+    () =>
+      fetch(`${API_URL}/api/feed-tokens/auth-status`)
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            setAuthRequired(data.auth_required);
+          }
+        })
+        .catch(() => {
+          // Ignore
+        }),
+    []
+  );
 
   useEffect(() => {
     fetchTokens();
@@ -90,7 +92,7 @@ export default function FeedTokensPage() {
         const errData = await res.json();
         setError(errData.detail || 'Failed to create token.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to create token.');
     } finally {
       setCreating(false);
@@ -114,7 +116,7 @@ export default function FeedTokensPage() {
         const errData = await res.json();
         setError(errData.detail || 'Failed to revoke token.');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to revoke token.');
     }
   };

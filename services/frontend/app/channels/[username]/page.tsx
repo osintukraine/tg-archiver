@@ -74,7 +74,7 @@ export default async function ChannelPage(props: ChannelPageProps) {
   let channel;
   try {
     channel = await getChannelByUsername(username);
-  } catch (error) {
+  } catch {
     notFound();
   }
 

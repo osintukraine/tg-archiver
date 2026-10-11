@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface AdminNoteModalProps {
   isOpen: boolean;
@@ -10,23 +10,19 @@ interface AdminNoteModalProps {
   loading?: boolean;
 }
 
-export function AdminNoteModal({
-  isOpen,
+// Mounting the form only while open (keyed by the note) resets its state on each open
+export function AdminNoteModal(props: AdminNoteModalProps) {
+  if (!props.isOpen) return null;
+  return <AdminNoteModalContent key={props.currentNote || ''} {...props} />;
+}
+
+function AdminNoteModalContent({
   onClose,
   onSubmit,
   currentNote,
   loading = false,
 }: AdminNoteModalProps) {
   const [note, setNote] = useState(currentNote || '');
-
-  // Reset form when modal opens with new data
-  useEffect(() => {
-    if (isOpen) {
-      setNote(currentNote || '');
-    }
-  }, [isOpen, currentNote]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 /**
  * DataTable Component
@@ -13,7 +13,8 @@ export interface Column<T> {
   key: keyof T | string;
   label: string;
   sortable?: boolean;
-  render?: (value: any, row: T) => React.ReactNode;
+  // `never` lets callers declare any concrete value type for their column
+  render?: (value: never, row: T) => React.ReactNode;
   width?: string;
 }
 
@@ -74,7 +75,7 @@ export function DataTable<T>({
   emptyState,
   emptyMessage = 'No data available',
 }: DataTableProps<T>) {
-  const allKeys = new Set(data.map(keyExtractor));
+  const allKeys = useMemo(() => new Set(data.map(keyExtractor)), [data, keyExtractor]);
   const allSelected = data.length > 0 && Array.from(allKeys).every((k) => selectedKeys.has(k));
   const someSelected = selectedKeys.size > 0 && !allSelected;
 
@@ -99,11 +100,13 @@ export function DataTable<T>({
     [selectedKeys, onSelectionChange]
   );
 
-  const getValue = (row: T, key: string | keyof T): any => {
+  const getValue = (row: T, key: string | keyof T): unknown => {
     if (typeof key === 'string' && key.includes('.')) {
-      return key.split('.').reduce((obj: any, k) => obj?.[k], row);
+      return key
+        .split('.')
+        .reduce<unknown>((obj, k) => (obj as Record<string, unknown> | null | undefined)?.[k], row);
     }
-    return (row as any)[key];
+    return (row as Record<string | keyof T, unknown>)[key];
   };
 
   if (error) {
@@ -243,7 +246,7 @@ export function DataTable<T>({
                             key={`${key}-${String(col.key)}`}
                             className="px-4 py-3 text-sm text-text-primary"
                           >
-                            {col.render ? col.render(value, row) : String(value ?? '')}
+                            {col.render ? col.render(value as never, row) : String(value ?? '')}
                           </td>
                         );
                       })}

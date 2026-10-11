@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { searchMessages, getChannels, getTopics, getCategories, getFolders } from '@/lib/api';
-import type { Message, SearchResult, Channel, MessageTopic, ChannelCategory, TelegramFolder } from '@/lib/types';
+import type { Message, SearchParams, SearchResult, Channel, MessageTopic, ChannelCategory, TelegramFolder } from '@/lib/types';
 
 /**
  * Search Page - Message Search with Advanced Filters
@@ -124,45 +124,47 @@ function SearchPageContent() {
     loadData();
   }, []);
 
-  const performSearch = useCallback(async () => {
-    if (!query.trim() && !channelUsername && !channelFolder && !topic && !categoryId) {
+  const hasSearchCriteria = Boolean(query.trim() || channelUsername || channelFolder || topic || categoryId);
+  const searchKey = JSON.stringify([query, channelUsername, channelFolder, topic, categoryId, language, hasMedia, mediaType, hasComments, days, sortBy, sortOrder]);
+
+  // Adjust state while rendering: a criteria change starts a new search
+  const [prevSearchKey, setPrevSearchKey] = useState<string | null>(null);
+  if (searchKey !== prevSearchKey) {
+    setPrevSearchKey(searchKey);
+    if (hasSearchCriteria) {
+      setLoading(true);
+      setError(null);
+    } else {
       setResults(null);
-      return;
     }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const params: Record<string, any> = {
-        page_size: 50,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-      };
-
-      if (query.trim()) params.q = query.trim();
-      if (channelUsername) params.channel_username = channelUsername;
-      if (channelFolder) params.channel_folder = channelFolder;
-      if (topic) params.topic = topic;
-      if (categoryId) params.category_id = parseInt(categoryId);
-      if (language) params.language = language;
-      if (hasMedia !== 'any') params.has_media = hasMedia === 'true';
-      if (mediaType) params.media_type = mediaType;
-      if (hasComments !== 'any') params.has_comments = hasComments === 'true';
-      if (days) params.days = parseInt(days);
-
-      const response = await searchMessages(params);
-      setResults(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setLoading(false);
-    }
-  }, [query, channelUsername, channelFolder, topic, categoryId, language, hasMedia, mediaType, hasComments, days, sortBy, sortOrder]);
+  }
 
   useEffect(() => {
-    performSearch();
-  }, [performSearch]);
+    if (!hasSearchCriteria) return;
+
+    const params: SearchParams = {
+      page_size: 50,
+      sort_by: sortBy,
+      sort_order: sortOrder as SearchParams['sort_order'],
+    };
+
+    if (query.trim()) params.q = query.trim();
+    if (channelUsername) params.channel_username = channelUsername;
+    if (channelFolder) params.channel_folder = channelFolder;
+    if (topic) params.topic = topic;
+    if (categoryId) params.category_id = parseInt(categoryId);
+    if (language) params.language = language;
+    if (hasMedia !== 'any') params.has_media = hasMedia === 'true';
+    if (mediaType) params.media_type = mediaType;
+    if (hasComments !== 'any') params.has_comments = hasComments === 'true';
+    if (days) params.days = parseInt(days);
+
+    // Promise-chain form: every setState runs in a callback after the request resolves
+    searchMessages(params)
+      .then(setResults)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Search failed'))
+      .finally(() => setLoading(false));
+  }, [query, channelUsername, channelFolder, topic, categoryId, language, hasMedia, mediaType, hasComments, days, sortBy, sortOrder, hasSearchCriteria]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

@@ -29,7 +29,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as aioredis
@@ -39,8 +39,14 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Password hashing context (bcrypt)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt only uses the first 72 bytes of a password; bcrypt>=5 raises on longer
+# input, so truncate explicitly to keep passlib-era behaviour and hashes valid.
+BCRYPT_MAX_PASSWORD_BYTES = 72
+BCRYPT_ROUNDS = 12
+
+
+def _bcrypt_password_bytes(password: str) -> bytes:
+    return password.encode("utf-8")[:BCRYPT_MAX_PASSWORD_BYTES]
 
 # =============================================================================
 # JWT Configuration (from environment variables)
@@ -220,7 +226,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(
+            _bcrypt_password_bytes(plain_password), hashed_password.encode("utf-8")
+        )
+    except ValueError:
+        # Malformed or non-bcrypt hash stored for this user
+        logger.warning("Stored password hash is not a valid bcrypt hash")
+        return False
 
 
 def get_password_hash(password: str) -> str:
@@ -233,7 +246,8 @@ def get_password_hash(password: str) -> str:
     Returns:
         Bcrypt hash
     """
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+    return bcrypt.hashpw(_bcrypt_password_bytes(password), salt).decode("utf-8")
 
 
 async def get_user_by_username(db: AsyncSession, username: str):
@@ -345,7 +359,7 @@ async def authenticate_user(db: AsyncSession, username: str, password: str):
 
     if not user:
         # Run password verification anyway to prevent timing attacks
-        pwd_context.hash("dummy")
+        get_password_hash("dummy")
         return None
 
     if not user.is_active:

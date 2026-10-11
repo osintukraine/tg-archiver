@@ -4,35 +4,28 @@
 # -r ../../shared/python/requirements.txt
 
 # Web framework
-# Updated 2025-12-27 for security patches
-fastapi==0.127.1
-uvicorn[standard]==0.40.0
+# Updated 2026-10-11
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
 
 # Authentication
 # PyJWT - actively maintained JWT library (replaced python-jose which was last updated 2020)
-PyJWT[crypto]==2.8.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.0.1  # Pin bcrypt for passlib compatibility
-python-multipart==0.0.6
-
-# CORS
-fastapi-cors==0.0.6
-
-# Rate limiting
-slowapi==0.1.9
+PyJWT[crypto]==2.15.1
+bcrypt==5.0.0
+python-multipart==0.0.32
 
 # RSS generation
 feedgen==1.0.0
 
 # Monitoring
-prometheus-client==0.19.0
-prometheus-fastapi-instrumentator==6.1.0
+prometheus-client==0.26.0
+prometheus-fastapi-instrumentator==8.1.0
 
 # Logging
-structlog==23.3.0
+structlog==26.1.0
 
 # Validation
-email-validator==2.1.0
+email-validator==2.3.0
 
 # HTTP client
 httpx==0.28.1

@@ -1,7 +1,7 @@
 # Telegram Listener Service Dockerfile
 # Handles real-time Telegram message ingestion
 
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.13
 
 FROM python:${PYTHON_VERSION}-slim as base
 

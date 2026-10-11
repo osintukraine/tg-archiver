@@ -8,7 +8,7 @@ Archive messages from Telegram channels with media storage, translation support,
 
 - **Real-time Archiving**: Monitor channels via Telegram folders - add channels by drag-and-drop
 - **Media Storage**: Photos, videos, documents with SHA-256 deduplication
-- **Translation**: Auto-translate non-English content (Google Translate free tier, optional DeepL)
+- **Translation**: Auto-translate non-English content (Google Translate free tier via deep-translator)
 - **Full-Text Search**: PostgreSQL tsvector-powered search across content and translations
 - **RSS Feeds**: Generate RSS/Atom/JSON feeds for archived channels
 - **Social Graph**: Track forwards, replies, comments, and engagement metrics
@@ -20,19 +20,18 @@ Archive messages from Telegram channels with media storage, translation support,
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────┐     ┌───────────┐     ┌──────────┐
+┌─────────────┐     ┌──────────┐     ┌───────────┐     ┌───────────┐
 │  Telegram   │────▶│ Listener │────▶│   Redis   │────▶│ Processor │
 │   Folders   │     │ Service  │     │  Streams  │     │  Service  │
-└─────────────┘     └─────────┘     └───────────┘     └──────────┘
-                                                            │
-                    ┌─────────┐     ┌───────────┐           │
-                    │ Frontend │◀───│    API    │◀──────────┤
-                    │ Next.js  │    │  FastAPI  │           │
-                    └─────────┘     └───────────┘           ▼
-                                                    ┌──────────────┐
-                                                    │  PostgreSQL  │
-                                                    │  SeaweedFS   │
-                                                    └──────────────┘
+└─────────────┘     └──────────┘     └───────────┘     └───────────┘
+                                                              │ writes
+                                                              ▼
+┌─────────┐   :80   ┌───────┐  /api   ┌───────────┐  reads ┌──────────────┐
+│ Browser │────────▶│ Caddy │────────▶│    API    │───────▶│  PostgreSQL  │
+└─────────┘         │       │  /      │  FastAPI  │        │  SeaweedFS   │
+                    │       │────────▶ Frontend (Next.js)  └──────────────┘
+                    │       │  /media ─────────────────────▶ SeaweedFS (read-only)
+                    └───────┘
 ```
 
 | Service | Purpose |
@@ -40,9 +39,10 @@ Archive messages from Telegram channels with media storage, translation support,
 | **Listener** | Connects to Telegram, monitors folder-based channels |
 | **Processor** | Processes messages, downloads media, stores to DB |
 | **API** | FastAPI REST API with search, RSS, and admin endpoints |
-| **Frontend** | Next.js web interface for browsing and search |
+| **Frontend** | Next.js 16 / React 19 web interface for browsing and search (built with Bun) |
+| **Caddy** | Reverse proxy and single entry point on port 80 (`/api` → api, `/media` → SeaweedFS, `/` → frontend) |
 | **PostgreSQL 18** | Message storage with full-text search |
-| **Redis** | Message queue using Redis Streams |
+| **Redis 8** | Message queue using Redis Streams |
 | **SeaweedFS** | S3-compatible media storage (replaced MinIO, whose community images were discontinued) |
 
 ---
@@ -52,13 +52,13 @@ Archive messages from Telegram channels with media storage, translation support,
 ### Prerequisites
 
 - **Docker** and **Docker Compose** (v2.0+)
-- **Python 3.11+** (for initial Telegram authentication only)
+- **Python 3.11+** (for initial Telegram authentication only; the services themselves run on Python 3.13 in Docker)
 - **Telegram API credentials** from [my.telegram.org/apps](https://my.telegram.org/apps)
 
 ### Step 1: Clone and Configure
 
 ```bash
-git clone https://github.com/yourusername/tg-archiver.git
+git clone https://github.com/osintukraine/tg-archiver.git
 cd tg-archiver
 
 # Copy example environment file
@@ -72,11 +72,16 @@ Edit `.env` with your Telegram credentials:
 TELEGRAM_API_ID=your_api_id_here
 TELEGRAM_API_HASH=your_api_hash_here
 
-# Change these in production!
+# Change these! If unset, docker-compose falls back to `change_me_in_production`,
+# which gives a working admin login with a publicly known password.
 POSTGRES_PASSWORD=your_secure_password
 JWT_SECRET_KEY=generate_a_64_char_secret_key
 JWT_ADMIN_PASSWORD=your_admin_password
 ```
+
+> **Note:** `docker-compose.yml` does not load `.env` into containers wholesale. Each
+> service only receives the variables listed under its `environment:` block (`.env` is
+> used to fill in those values). See [Configuration Reference](#configuration-reference).
 
 ### Step 2: Create Telegram Session
 
@@ -138,7 +143,7 @@ User ID: 123456789
 
 1. Open Telegram (mobile or desktop)
 2. Go to **Settings** → **Folders** → **Create New Folder**
-3. Name it exactly: `tg-archiver` (or match your `FOLDER_ARCHIVE_ALL_PATTERN` in `.env`)
+3. Name it exactly: `tg-archiver` (the value `.env.example` sets for `FOLDER_ARCHIVE_ALL_PATTERN`; if the variable is unset the default is `Archive`)
 4. Add channels you want to archive to this folder
 
 ### Step 4: Build and Start the Platform
@@ -154,28 +159,41 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-**Note:** The build step compiles the Python services and Next.js frontend. First build takes 3-5 minutes.
+**Note:** The build step installs the Python services and builds the Next.js frontend with Bun.
+
+**Fresh database only:** `infrastructure/postgres/init.sql` runs automatically on the first start
+(empty `postgres18_data` volume), but the migrations in `infrastructure/postgres/migrations/` are
+**not** applied automatically. Apply the forward-chain tables once Postgres is up:
+
+```bash
+docker-compose exec -T postgres psql -U archiver -d tg_archiver \
+  < infrastructure/postgres/migrations/003_discovered_channels.sql
+```
 
 ### Step 5: Access the Interface
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Frontend** | http://localhost:3000 | JWT_ADMIN_EMAIL / JWT_ADMIN_PASSWORD |
-| **API Docs** | http://localhost:8000/docs | - |
-| **S3 API (SeaweedFS)** | http://localhost:8333 (uncomment port) | MINIO_ACCESS_KEY / MINIO_SECRET_KEY |
+| **Frontend** | http://localhost | username `admin` (or JWT_ADMIN_EMAIL) / JWT_ADMIN_PASSWORD |
+| **API Docs** | http://localhost/docs | Log in as admin to see all endpoints (anonymous users see public ones only) |
+| **Health** | http://localhost/api/health | - |
+
+Only Caddy (port 80) is published. Direct access to the frontend (3000), API (8000),
+SeaweedFS S3 (8333), Postgres and Redis requires uncommenting their `ports:` in
+`docker-compose.yml`.
 
 ---
 
 ## Channel Management
 
-tg-archiver uses **Telegram's native folder feature** for channel management - no admin panel needed!
+tg-archiver uses **Telegram's native folder feature** as the primary way to manage channels. The admin panel adds bulk CSV import and review of discovered channels.
 
 ### Adding Channels (Folder Method)
 
 1. Find a channel in Telegram
 2. Long-press (mobile) or right-click (desktop) → **Add to Folder**
 3. Select your `tg-archiver` folder
-4. Done! The listener detects changes within 5 minutes
+4. Done! The listener detects changes within 5 minutes (sync interval is fixed at 300 seconds)
 
 ### Removing Channels
 
@@ -184,7 +202,7 @@ tg-archiver uses **Telegram's native folder feature** for channel management - n
 
 ### Folder Naming
 
-The default folder name is `tg-archiver`. You can customize it in `.env`:
+`.env.example` sets the folder name to `tg-archiver` (if `FOLDER_ARCHIVE_ALL_PATTERN` is unset, the default is `Archive`). Matching is exact and case-insensitive. You can customize it in `.env`:
 
 ```bash
 FOLDER_ARCHIVE_ALL_PATTERN=my-archive
@@ -210,18 +228,18 @@ For importing many channels at once, use the CSV import feature in the admin pan
 ### CSV Format
 
 ```csv
-channel_id,channel_username,target_folder,notes
--1001234567890,channelname,tg-archiver,Optional notes
-,anotherchannel,tg-archiver,Username only (ID will be resolved)
--1009876543210,,tg-archiver,ID only
+channel,name,folder
+https://t.me/channelname,Channel Name,tg-archiver
+@anotherchannel,,tg-archiver
 ```
 
-| Column | Required | Description |
+| Column (accepted header names) | Required | Description |
 |--------|----------|-------------|
-| `channel_id` | One of ID or username | Telegram channel ID (negative number) |
-| `channel_username` | One of ID or username | Channel username (without @) |
-| `target_folder` | Yes | Target Telegram folder name |
-| `notes` | No | Optional notes for reference |
+| `channel` / `url` / `channel_url` / `link` / `telegram` | Yes | `https://t.me/name`, `telegram.me/name`, `@name` or plain `name`. If no header matches, the first column is used |
+| `name` / `channel_name` / `title` | No | Display name |
+| `folder` / `category` / `group` / `target_folder` | No | Target Telegram folder |
+
+Only public usernames are supported. Numeric channel IDs and private invite links are rejected, and rows with an empty channel cell are skipped.
 
 ### Import Process
 
@@ -232,16 +250,21 @@ channel_id,channel_username,target_folder,notes
 
 ### Import Status
 
+**Job status:** `uploading` → `validating` → `ready` → `processing` → `completed` (or `failed` / `cancelled`).
+
+**Per-channel status:**
+
 | Status | Meaning |
 |--------|---------|
-| `pending` | Waiting to be processed |
+| `pending` | Waiting to be validated |
 | `validating` | Checking channel accessibility |
-| `valid` | Ready to import |
-| `invalid` | Cannot be imported (see error) |
-| `importing` | Being added to folder |
-| `completed` | Successfully imported |
-| `failed` | Import failed (see error) |
-| `skipped` | Skipped (already monitored or deselected) |
+| `validated` | Ready to import |
+| `validation_failed` | Cannot be imported (see error) |
+| `already_member` | Account already in the channel |
+| `joined` | Successfully joined and added |
+| `join_failed` | Join failed (see error) |
+
+Skipped channels are reported as a count on the job.
 
 ---
 
@@ -260,6 +283,9 @@ Your Monitored Channel          Discovered Channel (auto-joined)
 │ - propagation time   │        │ - Comments fetched           │
 └──────────────────────┘        └──────────────────────────────┘
 ```
+
+> These tables come from `infrastructure/postgres/migrations/003_discovered_channels.sql`,
+> which must be applied manually on a fresh database (see Quick Start, Step 4).
 
 When a forwarded message arrives in your monitored channels:
 
@@ -297,6 +323,10 @@ Navigate to **Admin** → **Channels** → **Discovered** tab to:
 
 Social data fetching uses the existing `SOCIAL_FETCH_*` settings.
 
+> **Note:** none of the `CHANNEL_JOIN_*` or `SOCIAL_FETCH_*` variables are passed by
+> `docker-compose.yml`, so the defaults above always apply. To override them, add the
+> variables under `listener.environment` in `docker-compose.yml`.
+
 ### Database Tables
 
 | Table | Purpose |
@@ -310,17 +340,23 @@ Social data fetching uses the existing `SOCIAL_FETCH_*` settings.
 ### API Endpoints
 
 ```
-GET  /api/admin/discovered           # List discovered channels
+GET  /api/admin/discovered/          # List discovered channels
 GET  /api/admin/discovered/stats     # Statistics
 GET  /api/admin/discovered/{id}      # Channel details + recent forwards
 POST /api/admin/discovered/{id}/promote  # Promote to full archiving
 POST /api/admin/discovered/{id}/ignore   # Mark as ignored
 POST /api/admin/discovered/{id}/retry    # Retry failed join
+DELETE /api/admin/discovered/{id}        # Remove a discovered channel
 ```
 
 ---
 
 ## Configuration Reference
+
+`docker-compose.yml` has no `env_file`: each container only receives the variables listed
+under its `environment:` block, with `.env` supplying the values. A variable that is in `.env`
+but not referenced in `docker-compose.yml` has no effect. Defaults below are the
+docker-compose defaults unless noted.
 
 ### Required Settings
 
@@ -337,16 +373,16 @@ POST /api/admin/discovered/{id}/retry    # Retry failed join
 | `POSTGRES_PORT` | `5432` | PostgreSQL port |
 | `POSTGRES_DB` | `tg_archiver` | Database name |
 | `POSTGRES_USER` | `archiver` | Database user |
-| `POSTGRES_PASSWORD` | - | Database password (**change in production**) |
+| `POSTGRES_PASSWORD` | `change_me_in_production` | Database password (**must change**) |
 
 ### Authentication
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_PROVIDER` | `jwt` | `jwt` for local auth, `none` to disable |
-| `JWT_SECRET_KEY` | - | Secret for JWT signing (**change in production**) |
-| `JWT_ADMIN_EMAIL` | `admin@tg-archiver.local` | Admin login email |
-| `JWT_ADMIN_PASSWORD` | - | Admin login password |
+| `AUTH_PROVIDER` | `jwt` | `jwt` for local auth, `none` to disable (code default without compose: `none`) |
+| `JWT_SECRET_KEY` | `change_me_in_production` | Secret for JWT signing (**must change**) |
+| `JWT_ADMIN_EMAIL` | `admin@tg-archiver.local` | Admin email (the admin username is `admin`; either works for login) |
+| `JWT_ADMIN_PASSWORD` | `change_me_in_production` | Admin login password (**must change**) |
 | `JWT_EXPIRATION_MINUTES` | `60` | Token expiration time |
 
 ### Storage (SeaweedFS, S3-compatible)
@@ -361,22 +397,23 @@ deletes and listings require the access key.
 | `MINIO_ENDPOINT` | `seaweedfs:8333` | S3 endpoint (set by docker-compose) |
 | `MINIO_ACCESS_KEY` | `minioadmin` | S3 access key |
 | `MINIO_SECRET_KEY` | `minioadmin` | S3 secret key (**change in production**) |
-| `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files |
+| `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files. Caddy hardcodes `/tg-archive-media` and the listener doesn't receive this variable, so keep the default |
+| `MINIO_PUBLIC_URL` | `http://localhost:9000` | Browser-reachable S3 base URL, used for RSS enclosures and the media-redirect fallback. The default is a MinIO leftover that nothing listens on; set it to a reachable S3 endpoint (e.g. `http://localhost:8333` with the port published) if you need those links |
 
 ### Translation
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRANSLATION_ENABLED` | `true` | Enable auto-translation |
-| `DEEPL_API_KEY` | - | DeepL API key (uses Google Translate if not set) |
+| `TRANSLATION_ENABLED` | `false` (`.env.example` sets `true`) | Enable auto-translation (also sets the frontend's `NEXT_PUBLIC_TRANSLATION_ENABLED`) |
+| `DEEPL_API_KEY` | - | Currently ignored: the processor creates the translator without a key, so only Google Translate is used |
 
 ### Backfill
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BACKFILL_ENABLED` | `true` | Enable historical message backfill |
+| `BACKFILL_ENABLED` | `false` (`.env.example` sets `true`) | Enable historical message backfill |
 | `BACKFILL_START_DATE` | `2024-01-01` | How far back to fetch |
-| `BACKFILL_MODE` | `on_discovery` | `manual`, `on_discovery`, or `scheduled` |
+| `BACKFILL_MODE` | `manual` (`.env.example` sets `on_discovery`) | `manual` or `on_discovery` (`scheduled` is not implemented) |
 | `BACKFILL_BATCH_SIZE` | `100` | Messages per batch |
 | `BACKFILL_DELAY_MS` | `1000` | Delay between batches (rate limiting) |
 
@@ -385,6 +422,11 @@ deletes and listings require the access key.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NEXT_PUBLIC_API_URL` | `` (empty) | API URL for browser requests. Empty = relative URLs (use when behind proxy) |
+| `NEXT_PUBLIC_MINIO_URL` | `` (empty) | Base URL prefixed to media keys. Keep empty behind Caddy; for direct S3 access include the bucket, e.g. `http://localhost:8333/tg-archive-media` |
+| `NEXT_PUBLIC_RSS_ENABLED` | `false` | Show RSS features in the UI |
+| `API_URL` | `http://api:8000` | API URL for server-side rendering (not passed by compose; the default works inside Docker) |
+
+`NEXT_PUBLIC_*` values are baked into the frontend at build time: run `docker-compose build frontend` after changing them.
 
 ---
 
@@ -503,9 +545,13 @@ tg-archiver/
 │   └── frontend/       # Next.js frontend
 ├── shared/python/      # Shared Python modules (models, utils)
 ├── infrastructure/
-│   └── postgres/       # Database schema (init.sql)
+│   ├── caddy/          # Caddyfile (local) and Caddyfile.production (HTTPS)
+│   ├── postgres/       # init.sql + migrations/ (applied manually)
+│   └── seaweedfs/      # entrypoint.sh (renders S3 identities from MINIO_* vars)
 ├── scripts/
-│   └── telegram_auth.py  # Telegram authentication script
+│   ├── telegram_auth.py              # Telegram authentication script
+│   └── backfill_discovered_channels.sql
+├── docs/plans/         # Design notes
 ├── sessions/           # Telegram session files (gitignored)
 ├── docker-compose.yml
 ├── .env.example
@@ -514,25 +560,40 @@ tg-archiver/
 
 ### Running Services Locally
 
+Uncomment the `ports:` of postgres, redis and seaweedfs in `docker-compose.yml` first.
+
 ```bash
 # Start infrastructure only
 docker-compose up -d postgres redis seaweedfs
 
-# Install Python dependencies
-cd services/listener
-pip install -r requirements.txt
+# Install Python dependencies (shared + service)
+cd services/listener   # or processor, api
+pip install -r ../../shared/python/requirements.txt -r requirements.txt
 
-# Run listener locally (for debugging)
-POSTGRES_HOST=localhost python -m src.main
+# Run locally (for debugging). These settings have no defaults and must be set:
+# POSTGRES_PASSWORD, REDIS_PASSWORD, MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, JWT_SECRET_KEY
+PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:8333 \
+  python -m src.main
+# The API runs with uvicorn instead: PYTHONPATH=../../shared/python uvicorn src.main:app
 ```
+
+Python services have no automated tests yet.
 
 ### Running Frontend Locally
 
+The frontend uses [Bun](https://bun.sh) (`bun.lock`):
+
 ```bash
 cd services/frontend
-npm install
-npm run dev
+bun install
+bun run dev          # http://localhost:3000
+bun run lint         # ESLint (flat config in eslint.config.mjs)
+bun run type-check   # TypeScript
+bun run test:run     # Vitest (single run; `bun run test` watches)
 ```
+
+Outside Docker, server-side rendering calls `http://api:8000` unless you set `API_URL`
+(e.g. `API_URL=http://localhost:8000`, with the API port published).
 
 ---
 
@@ -560,32 +621,44 @@ openssl rand -base64 24
 Create or update your `.env` file:
 
 ```bash
-# Environment mode
-ENVIRONMENT=production
-
 # Strong passwords (use generated values above)
 POSTGRES_PASSWORD=your_generated_postgres_password
 JWT_SECRET_KEY=your_generated_64_char_jwt_secret
 JWT_ADMIN_PASSWORD=your_strong_admin_password
 REDIS_PASSWORD=your_generated_redis_password
 MINIO_SECRET_KEY=your_s3_secret_at_least_32_chars
+```
 
-# Security features
-CSRF_ENABLED=true
-TOKEN_BLACKLIST_FAIL_MODE=closed
+`ENVIRONMENT`, `CSRF_ENABLED` and `TOKEN_BLACKLIST_FAIL_MODE` are **not** passed to the API
+container by default, so it runs with `ENVIRONMENT=development` (no `Secure` cookie flag),
+CSRF on and `TOKEN_BLACKLIST_FAIL_MODE=open`. For production, add them to `api.environment`
+in `docker-compose.yml`:
+
+```yaml
+  api:
+    environment:
+      - ENVIRONMENT=production
+      - CSRF_ENABLED=true
+      - TOKEN_BLACKLIST_FAIL_MODE=closed
 ```
 
 #### 3. Enable HTTPS
 
-Use the production Caddyfile with automatic HTTPS:
+`infrastructure/caddy/Caddyfile.production` provides automatic HTTPS, but the default
+compose `caddy` service is set up for local HTTP only. To use it, change the `caddy`
+service in `docker-compose.yml`:
 
-```bash
-# Set your domain
-export DOMAIN=archive.yourdomain.com
-export ACME_EMAIL=admin@yourdomain.com
-
-# Use production Caddy config
-cp infrastructure/caddy/Caddyfile.production infrastructure/caddy/Caddyfile
+```yaml
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}            # e.g. archive.yourdomain.com
+      - ACME_EMAIL=${ACME_EMAIL}
+    volumes:
+      - ./infrastructure/caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data             # persist certificates (add caddy_data to volumes:)
 ```
 
 #### 4. Deploy
@@ -607,11 +680,12 @@ docker-compose ps
 |---------|-------------|-----------------|
 | **HTTPS** | TLS 1.2+ with automatic Let's Encrypt | Caddyfile.production |
 | **Rate Limiting** | 5 login attempts per minute | Built-in |
-| **CSRF Protection** | Double-submit cookie pattern | `CSRF_ENABLED=true` |
-| **Token Invalidation** | Logout blacklists JWT tokens | Built-in |
-| **Secure Cookies** | HttpOnly, SameSite=Strict, Secure | `ENVIRONMENT=production` |
+| **CSRF Protection** | Double-submit cookie pattern (`csrf_token` cookie is readable by JS by design) | On by default |
+| **Token Invalidation** | `POST /api/auth/logout` blacklists JWT tokens (the web UI's logout doesn't call it yet) | Built-in |
+| **Secure Cookies** | `access_token`: HttpOnly, SameSite=Strict, plus Secure in production | `ENVIRONMENT=production` (see above) |
 | **Password Policy** | Minimum 8 characters | Built-in |
-| **Non-root Containers** | All services run as non-root | Built-in |
+| **Non-root Containers** | All application services run as non-root | Built-in |
+| **Media access** | Anonymous read-only on the media bucket; writes, deletes and listings need the S3 key; Caddy strips auth headers before `/media/*` | Built-in |
 | **Redis Auth** | Password-protected Redis | `REDIS_PASSWORD` |
 
 ### Production Architecture
@@ -619,7 +693,7 @@ docker-compose ps
 ```
 Internet → Caddy (HTTPS:443) → Internal Docker Network
                 │
-                ├── /api/*     → api:8000
+                ├── /api/*, /docs, /redoc, /openapi.json → api:8000
                 ├── /media/*   → seaweedfs:8333
                 └── /*         → frontend:3000
 ```
@@ -629,13 +703,37 @@ Only Caddy is exposed to the internet. All other services communicate internally
 ### Backup Recommendations
 
 ```bash
-# Database backup
-docker-compose exec postgres pg_dump -U archiver tg_archiver > backup.sql
+# Database backup (-T avoids TTY line-ending corruption in the dump)
+docker-compose exec -T postgres pg_dump -U archiver tg_archiver > backup.sql
 
-# Media backup (SeaweedFS data; stop the seaweedfs service first for a consistent copy)
+# Media backup (SeaweedFS data; stop the seaweedfs service first for a consistent copy).
+# The volume name is prefixed with the compose project name (the directory name by default).
 docker run --rm -v tg-archiver_seaweedfs_data:/data -v $(pwd):/backup \
   alpine tar czf /backup/seaweedfs-backup.tar.gz /data
 ```
+
+---
+
+## Known Issues
+
+These are current gaps in the code, documented here so they don't surprise you:
+
+- **Schema drift on a fresh database:** the `top_forwarded_messages` view used by the social-graph
+  virality endpoint is not defined in any SQL file, and `export_jobs` in `init.sql` is missing
+  columns the model uses (`label`, `format`, `profile`, …). Exports and top-forwarded views fail
+  until the schema is fixed.
+- **CSRF in some pages:** `profile/api-keys`, `profile/feeds`, `settings/feed-tokens` and
+  `suggest-channel` call `fetch` directly without the `X-CSRF-Token` header, so their
+  state-changing actions are rejected. `suggest-channel` also posts to `/api/channel-submissions`,
+  which has no API route.
+- **Health check path:** the API image's built-in healthcheck and Caddy's `/health` route point at
+  `/health`; the real endpoint is `/api/health` (compose overrides the container healthcheck).
+- **Media URLs from the API:** the `media_url` field in API responses and RSS enclosures use
+  `MINIO_PUBLIC_URL` (see Storage); the web UI builds its own `/media/...` URLs and is unaffected.
+  OpenGraph images use a `/minio-storage/...` path that has no Caddy route.
+- **Trailing-slash redirects** (e.g. `/api/channels` → `/api/channels/`) drop non-default ports,
+  which only matters when serving on a port other than 80/443.
+- **React hydration warnings (#418)** appear in the browser console on the home and message pages.
 
 ---
 

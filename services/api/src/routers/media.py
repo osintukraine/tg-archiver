@@ -36,7 +36,9 @@ STORAGE_BASE_URL = os.environ.get("HETZNER_STORAGE_URL", "")
 # MINIO_PUBLIC_URL is browser-accessible (for redirects)
 # MINIO_URL is Docker-internal (for server-to-server communication)
 MINIO_PUBLIC_URL = os.environ.get("MINIO_PUBLIC_URL", "http://localhost:9000")
-MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "tg-media")
+MINIO_BUCKET = (
+    os.environ.get("MINIO_BUCKET_NAME") or os.environ.get("MINIO_BUCKET") or "tg-archive-media"
+)
 
 # Redis connection pool for media routing (shared across workers)
 redis_pool: Optional[redis.ConnectionPool] = None
@@ -180,7 +182,7 @@ async def route_media_request(
 
     # Construct redirect URL to storage
     # Production: Route to storage box's MinIO endpoint
-    # Development: Single MinIO (minio:9000)
+    # Development: single S3 store (seaweedfs:8333)
 
     # Get storage endpoint from database for multi-box routing
     box_result = await db.execute(

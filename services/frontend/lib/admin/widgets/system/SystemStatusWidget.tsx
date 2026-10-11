@@ -17,7 +17,7 @@ function SystemStatusWidget({ className }: WidgetProps) {
     { name: 'API Server', status: 'unknown', icon: <ServerIcon /> },
     { name: 'PostgreSQL', status: 'unknown', icon: <DatabaseIcon /> },
     { name: 'Redis', status: 'unknown', icon: <RedisIcon /> },
-    { name: 'MinIO Storage', status: 'unknown', icon: <StorageIcon /> },
+    { name: 'SeaweedFS Storage', status: 'unknown', icon: <StorageIcon /> },
   ]);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +29,7 @@ function SystemStatusWidget({ className }: WidgetProps) {
           { name: 'API Server', status: 'healthy', icon: <ServerIcon /> },
           { name: 'PostgreSQL', status: 'healthy', icon: <DatabaseIcon /> },
           { name: 'Redis', status: 'healthy', icon: <RedisIcon /> },
-          { name: 'MinIO Storage', status: 'healthy', icon: <StorageIcon /> },
+          { name: 'SeaweedFS Storage', status: 'healthy', icon: <StorageIcon /> },
         ]);
       } catch {
         setServices(s => s.map(svc => ({ ...svc, status: 'unknown' })));

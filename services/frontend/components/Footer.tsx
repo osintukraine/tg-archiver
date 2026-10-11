@@ -117,7 +117,7 @@ export function Footer() {
               <span className="text-gray-300 dark:text-gray-700">•</span>
               <span>Redis</span>
               <span className="text-gray-300 dark:text-gray-700">•</span>
-              <span>MinIO</span>
+              <span>SeaweedFS</span>
             </div>
           </div>
         </div>

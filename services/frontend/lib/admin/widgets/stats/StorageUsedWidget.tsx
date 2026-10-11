@@ -38,7 +38,7 @@ function StorageUsedWidget({ className }: WidgetProps) {
           <div className="text-2xl font-bold text-text-primary">
             {loading ? <span className="inline-block w-16 h-7 bg-bg-secondary animate-pulse rounded" /> : gb !== null ? `${gb.toFixed(1)} GB` : '—'}
           </div>
-          <div className="text-xs text-text-tertiary">MinIO object storage</div>
+          <div className="text-xs text-text-tertiary">SeaweedFS object storage</div>
         </div>
       </div>
     </div>
@@ -48,7 +48,7 @@ function StorageUsedWidget({ className }: WidgetProps) {
 registerWidget({
   id: 'storage-used',
   title: 'Storage Used',
-  description: 'MinIO storage consumption in GB',
+  description: 'SeaweedFS storage consumption in GB',
   component: StorageUsedWidget,
   defaultSize: 'small',
   category: 'stats',

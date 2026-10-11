@@ -315,8 +315,8 @@ async def _check_http_health(
 
 # Core Infrastructure
 async def check_minio_health() -> Dict[str, Any]:
-    """Check MinIO object storage health."""
-    return await _check_http_health("minio", "http://minio:9000/minio/health/live")
+    """Check S3 object storage (SeaweedFS) health."""
+    return await _check_http_health("seaweedfs", "http://seaweedfs:8333/healthz")
 
 
 # Application Services

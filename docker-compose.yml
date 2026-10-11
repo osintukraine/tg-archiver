@@ -7,14 +7,15 @@ services:
   # ==========================================================================
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18.6-alpine
     container_name: tg-archiver-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-archiver}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
       POSTGRES_DB: ${POSTGRES_DB:-tg_archiver}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 18+ images keep data under /var/lib/postgresql/<major>/docker
+      - postgres18_data:/var/lib/postgresql
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     # ports:
     #   - "5432:5432"  # Uncomment for local development only
@@ -40,42 +41,28 @@ services:
       retries: 5
     restart: unless-stopped
 
-  minio:
-    image: minio/minio:latest
-    container_name: tg-archiver-minio
-    command: server /data --console-address ":9001"
+  # S3-compatible object storage (SeaweedFS replaces the archived MinIO).
+  # Credentials and bucket come from the MINIO_* variables the services use.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    container_name: tg-archiver-seaweedfs
+    entrypoint: ["/bin/sh", "/etc/seaweedfs/entrypoint.sh"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      S3_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      S3_PUBLIC_BUCKET: ${MINIO_BUCKET:-tg-archive-media}
     volumes:
-      - minio_data:/data
+      - seaweedfs_data:/data
+      - ./infrastructure/seaweedfs/entrypoint.sh:/etc/seaweedfs/entrypoint.sh:ro
     # ports:
-    #   - "9000:9000"      # Uncomment for local development only
-    #   - "9001:9001"      # MinIO Console - Uncomment for local development only
+    #   - "8333:8333"      # S3 API - Uncomment for local development only
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:8333/healthz"]
       interval: 30s
-      timeout: 20s
+      timeout: 10s
       retries: 3
+      start_period: 60s
     restart: unless-stopped
-
-  # Initialize MinIO bucket
-  # NOTE: For production, remove anonymous access and use presigned URLs instead.
-  # The API provides GET /api/media/{media_id}/url for generating presigned URLs.
-  minio-init:
-    image: minio/mc:latest
-    container_name: tg-archiver-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set minio http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin};
-      mc mb minio/${MINIO_BUCKET:-tg-archive-media} --ignore-existing;
-      mc anonymous set download minio/${MINIO_BUCKET:-tg-archive-media};
-      echo 'MinIO bucket initialized with anonymous download access';
-      exit 0;
-      "
 
   # ==========================================================================
   # APPLICATION SERVICES
@@ -99,7 +86,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
-      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ENDPOINT=seaweedfs:8333
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_SECURE=false
@@ -141,7 +128,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
-      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ENDPOINT=seaweedfs:8333
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
@@ -158,10 +145,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+      seaweedfs:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
       listener:
         condition: service_started
     restart: unless-stopped
@@ -179,7 +164,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
-      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ENDPOINT=seaweedfs:8333
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
@@ -215,7 +200,7 @@ services:
       dockerfile: services/frontend/Dockerfile
       args:
         # When using Caddy, all routes go through localhost:80
-        # API: /api/* -> api:8000, Media: /media/* -> minio, Frontend: /* -> frontend
+        # API: /api/* -> api:8000, Media: /media/* -> seaweedfs, Frontend: /* -> frontend
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-}
         NEXT_PUBLIC_TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
@@ -237,7 +222,7 @@ services:
   # REVERSE PROXY - Caddy
   # ==========================================================================
   # Single entry point: http://localhost
-  # Routes: /api/* -> api, /media/* -> minio, /* -> frontend
+  # Routes: /api/* -> api, /media/* -> seaweedfs, /* -> frontend
 
   caddy:
     image: caddy:2-alpine
@@ -249,13 +234,13 @@ services:
     depends_on:
       - api
       - frontend
-      - minio
+      - seaweedfs
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres18_data:
   redis_data:
-  minio_data:
+  seaweedfs_data:
 
 # To run:
 # 1. Copy .env.example to .env and fill in Telegram credentials
@@ -263,4 +248,4 @@ volumes:
 # 3. Access frontend at http://localhost wit Caddy
 # 4. Access frontend at http://localhost:3000
 # 5. Access API at http://localhost:8000
-# 6. Access MinIO console at http://localhost:9001
+# 6. S3 API at http://localhost:8333 (uncomment the seaweedfs port first)

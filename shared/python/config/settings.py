@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = Field(..., description="MinIO access key")
     MINIO_SECRET_KEY: str = Field(..., description="MinIO secret key")
     MINIO_BUCKET_NAME: str = Field(
-        default="tg-media", description="MinIO bucket name"
+        default="tg-archive-media", description="S3 bucket name"
     )
     MINIO_SECURE: bool = Field(default=False, description="Use HTTPS for MinIO")
     MINIO_PUBLIC_URL: str = Field(

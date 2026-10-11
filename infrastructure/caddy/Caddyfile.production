@@ -66,12 +66,15 @@ https://{$DOMAIN} {
     }
 
     # ========================================================================
-    # Media Files - MinIO S3 Storage
+    # Media Files - SeaweedFS S3 Storage
     # ========================================================================
     handle /media/* {
         rewrite * /tg-archive-media{uri}
-        reverse_proxy minio:9000 {
-            header_up Host minio:9000
+        reverse_proxy seaweedfs:8333 {
+            header_up Host seaweedfs:8333
+            # Never forward app credentials (JWT) to storage; media is public-read
+            header_up -Authorization
+            header_up -Cookie
         }
     }
 

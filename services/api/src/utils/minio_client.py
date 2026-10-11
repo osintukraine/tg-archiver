@@ -21,16 +21,21 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ============================================================================
 
-# MinIO connection (internal Docker network)
-MINIO_ENDPOINT = os.environ.get("MINIO_URL", "minio:9000").replace("http://", "").replace("https://", "")
+# S3 connection (internal Docker network; SeaweedFS S3 gateway by default).
+# Same env vars as shared settings; MINIO_URL/MINIO_BUCKET kept as legacy fallbacks.
+MINIO_ENDPOINT = (
+    os.environ.get("MINIO_ENDPOINT") or os.environ.get("MINIO_URL") or "seaweedfs:8333"
+).replace("http://", "").replace("https://", "")
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
-MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "tg-media")
+MINIO_BUCKET = (
+    os.environ.get("MINIO_BUCKET_NAME") or os.environ.get("MINIO_BUCKET") or "tg-archive-media"
+)
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "false").lower() == "true"
 
 # Public URL for browser access (through Caddy proxy or direct)
-# In production: https://yourdomain.com (Caddy proxies /media/* to MinIO)
-# In development: http://localhost:9000 (direct MinIO access)
+# In production: https://yourdomain.com (Caddy proxies /media/* to SeaweedFS)
+# In development: http://localhost:9000 (set MINIO_PUBLIC_URL for direct S3 access)
 MINIO_PUBLIC_URL = os.environ.get("MINIO_PUBLIC_URL", "http://localhost:9000")
 
 # Pre-signed URL settings

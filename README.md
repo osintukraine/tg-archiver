@@ -31,7 +31,7 @@ Archive messages from Telegram channels with media storage, translation support,
                     └─────────┘     └───────────┘           ▼
                                                     ┌──────────────┐
                                                     │  PostgreSQL  │
-                                                    │    MinIO     │
+                                                    │  SeaweedFS   │
                                                     └──────────────┘
 ```
 
@@ -41,9 +41,9 @@ Archive messages from Telegram channels with media storage, translation support,
 | **Processor** | Processes messages, downloads media, stores to DB |
 | **API** | FastAPI REST API with search, RSS, and admin endpoints |
 | **Frontend** | Next.js web interface for browsing and search |
-| **PostgreSQL** | Message storage with full-text search |
+| **PostgreSQL 18** | Message storage with full-text search |
 | **Redis** | Message queue using Redis Streams |
-| **MinIO** | S3-compatible media storage |
+| **SeaweedFS** | S3-compatible media storage (replaced MinIO, whose community images were discontinued) |
 
 ---
 
@@ -162,7 +162,7 @@ docker-compose logs -f
 |---------|-----|-------------|
 | **Frontend** | http://localhost:3000 | JWT_ADMIN_EMAIL / JWT_ADMIN_PASSWORD |
 | **API Docs** | http://localhost:8000/docs | - |
-| **MinIO Console** | http://localhost:9001 | MINIO_ACCESS_KEY / MINIO_SECRET_KEY |
+| **S3 API (SeaweedFS)** | http://localhost:8333 (uncomment port) | MINIO_ACCESS_KEY / MINIO_SECRET_KEY |
 
 ---
 
@@ -349,14 +349,19 @@ POST /api/admin/discovered/{id}/retry    # Retry failed join
 | `JWT_ADMIN_PASSWORD` | - | Admin login password |
 | `JWT_EXPIRATION_MINUTES` | `60` | Token expiration time |
 
-### Storage (MinIO)
+### Storage (SeaweedFS, S3-compatible)
+
+The `MINIO_*` variable names are kept for compatibility; they configure the
+SeaweedFS S3 gateway and the services that talk to it. Anonymous clients get
+read-only access to the media bucket (served by Caddy at `/media/*`); writes,
+deletes and listings require the access key.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MINIO_ENDPOINT` | `minio:9000` | MinIO server address |
-| `MINIO_ACCESS_KEY` | `minioadmin` | MinIO access key |
-| `MINIO_SECRET_KEY` | `minioadmin` | MinIO secret key (**change in production**) |
-| `MINIO_BUCKET_NAME` | `tg-archive-media` | Bucket for media files |
+| `MINIO_ENDPOINT` | `seaweedfs:8333` | S3 endpoint (set by docker-compose) |
+| `MINIO_ACCESS_KEY` | `minioadmin` | S3 access key |
+| `MINIO_SECRET_KEY` | `minioadmin` | S3 secret key (**change in production**) |
+| `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files |
 
 ### Translation
 
@@ -511,7 +516,7 @@ tg-archiver/
 
 ```bash
 # Start infrastructure only
-docker-compose up -d postgres redis minio minio-init
+docker-compose up -d postgres redis seaweedfs
 
 # Install Python dependencies
 cd services/listener
@@ -563,7 +568,7 @@ POSTGRES_PASSWORD=your_generated_postgres_password
 JWT_SECRET_KEY=your_generated_64_char_jwt_secret
 JWT_ADMIN_PASSWORD=your_strong_admin_password
 REDIS_PASSWORD=your_generated_redis_password
-MINIO_SECRET_KEY=your_minio_secret_at_least_32_chars
+MINIO_SECRET_KEY=your_s3_secret_at_least_32_chars
 
 # Security features
 CSRF_ENABLED=true
@@ -615,7 +620,7 @@ docker-compose ps
 Internet → Caddy (HTTPS:443) → Internal Docker Network
                 │
                 ├── /api/*     → api:8000
-                ├── /media/*   → minio:9000
+                ├── /media/*   → seaweedfs:8333
                 └── /*         → frontend:3000
 ```
 
@@ -627,9 +632,9 @@ Only Caddy is exposed to the internet. All other services communicate internally
 # Database backup
 docker-compose exec postgres pg_dump -U archiver tg_archiver > backup.sql
 
-# Media backup (MinIO data)
-docker run --rm -v tg-archiver_minio_data:/data -v $(pwd):/backup \
-  alpine tar czf /backup/minio-backup.tar.gz /data
+# Media backup (SeaweedFS data; stop the seaweedfs service first for a consistent copy)
+docker run --rm -v tg-archiver_seaweedfs_data:/data -v $(pwd):/backup \
+  alpine tar czf /backup/seaweedfs-backup.tar.gz /data
 ```
 
 ---

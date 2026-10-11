@@ -41,17 +41,20 @@
     }
 
     # ========================================================================
-    # Media Files - MinIO S3 Storage
+    # Media Files - SeaweedFS S3 Storage
     # ========================================================================
     # S3 keys are stored as "media/xx/yy/hash.jpg"
-    # Route: /media/xx/yy/hash.jpg → minio:9000/tg-archive-media/media/xx/yy/hash.jpg
+    # Route: /media/xx/yy/hash.jpg → seaweedfs:8333/tg-archive-media/media/xx/yy/hash.jpg
 
     handle /media/* {
         # Rewrite to include bucket name before proxying
         # /media/ab/cd/hash.jpg → /tg-archive-media/media/ab/cd/hash.jpg
         rewrite * /tg-archive-media{uri}
-        reverse_proxy minio:9000 {
-            header_up Host minio:9000
+        reverse_proxy seaweedfs:8333 {
+            header_up Host seaweedfs:8333
+            # Never forward app credentials (JWT) to storage; media is public-read
+            header_up -Authorization
+            header_up -Cookie
         }
     }
 

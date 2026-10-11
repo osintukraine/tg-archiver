@@ -83,8 +83,8 @@ SERVICE_DEFINITIONS = [
      "up_metric": "pg_up", "conn_metric": "pg_stat_activity_count"},
     {"name": "redis", "display": "Redis", "category": "infrastructure",
      "up_metric": "redis_up", "mem_metric": "redis_memory_used_bytes"},
-    {"name": "minio", "display": "MinIO Storage", "category": "infrastructure",
-     "up_metric": "minio_cluster_health_status"},
+    {"name": "seaweedfs", "display": "SeaweedFS Storage", "category": "infrastructure",
+     "up_metric": "up{job='seaweedfs'}"},
 
     # Enrichment
     {"name": "enrichment", "display": "Enrichment Workers", "category": "enrichment",

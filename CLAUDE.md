@@ -9,14 +9,14 @@ tg-archiver is a self-hosted Telegram channel archiver. It monitors Telegram fol
 ## Architecture
 
 ```
-Telegram Folders → Listener → Redis Streams → Processor → PostgreSQL/MinIO
+Telegram Folders → Listener → Redis Streams → Processor → PostgreSQL/SeaweedFS (S3)
                                                               ↓
                                             Frontend ← API (FastAPI)
 ```
 
 **Services** (all in `services/`):
 - **listener**: Telethon-based Telegram client, monitors folders via `GetDialogFiltersRequest`, publishes to Redis Streams
-- **processor**: Consumes from Redis, downloads media to MinIO, persists to PostgreSQL
+- **processor**: Consumes from Redis, downloads media to SeaweedFS (S3), persists to PostgreSQL
 - **api**: FastAPI REST API with JWT auth, full-text search, RSS generation
 - **frontend**: Next.js 14 with App Router, Tailwind CSS, shadcn/ui components
 
@@ -35,7 +35,7 @@ docker-compose up -d                    # Start all services
 docker-compose logs -f listener         # Watch specific service
 
 # Infrastructure only (for local dev)
-docker-compose up -d postgres redis minio minio-init
+docker-compose up -d postgres redis seaweedfs
 
 # Frontend development
 cd services/frontend
@@ -63,7 +63,7 @@ python3 scripts/telegram_auth.py
 2. Serializes to JSON, publishes to Redis Stream `telegram:messages`
 3. `processor/src/redis_consumer.py` consumes in consumer group
 4. `processor/src/message_processor.py` orchestrates: entity extraction → media download → DB persist
-5. `processor/src/media_archiver.py` downloads to MinIO with SHA-256 deduplication
+5. `processor/src/media_archiver.py` downloads to S3 (SeaweedFS) with SHA-256 deduplication
 
 ### Channel Discovery
 - `listener/src/channel_discovery.py` reads Telegram folders via `GetDialogFiltersRequest`
@@ -95,7 +95,7 @@ Key variables in `.env` (see `.env.example` for full list):
 - `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`: From my.telegram.org
 - `FOLDER_ARCHIVE_ALL_PATTERN`: Telegram folder name to monitor (default: `tg-archiver`)
 - `POSTGRES_*`: Database connection
-- `MINIO_*`: Object storage
+- `MINIO_*`: Object storage (names kept from MinIO; they configure the SeaweedFS S3 gateway)
 - `JWT_SECRET_KEY`, `JWT_ADMIN_EMAIL`, `JWT_ADMIN_PASSWORD`: Auth config
 - `NEXT_PUBLIC_API_URL`: Empty for proxied setup, `http://localhost:8000` for direct
 

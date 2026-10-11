@@ -132,7 +132,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 function getMediaBaseUrl(): string {
   // IMPORTANT: Always return browser-accessible URLs
   // Even during SSR, media URLs get embedded in HTML that browsers will render.
-  // Docker-internal URLs (minio:9000) are NOT accessible from browsers.
+  // Docker-internal URLs (seaweedfs:8333) are NOT accessible from browsers.
   //
   // For tg-archiver (simple setup without Caddy):
   // - NEXT_PUBLIC_MINIO_URL points directly to MinIO: http://localhost:9000/tg-archive-media

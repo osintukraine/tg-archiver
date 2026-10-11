@@ -92,9 +92,9 @@ npm run type-check  # Fix errors, then rebuild
 ```
 
 ### Images not loading
-Check that MinIO is running and accessible:
+Check that SeaweedFS (S3 storage) is running and accessible:
 ```bash
-curl http://localhost:9000/health/live
+docker-compose exec seaweedfs curl -f http://localhost:8333/healthz
 ```
 
 ## Development
@@ -223,7 +223,7 @@ Note: Some features require server-side rendering and won't work with static exp
 ## Troubleshooting
 
 ### Media not displaying
-1. Check MinIO is running: `docker-compose ps minio`
+1. Check SeaweedFS is running: `docker-compose ps seaweedfs`
 2. Verify media URL format in API responses
 3. Check browser console for CORS errors
 4. Ensure `NEXT_PUBLIC_API_URL` is correct

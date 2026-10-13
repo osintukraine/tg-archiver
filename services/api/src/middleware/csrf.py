@@ -10,9 +10,9 @@ import os
 import secrets
 from typing import Optional, Set
 
-from fastapi import Request, HTTPException, status
+from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,17 @@ CSRF_EXEMPT_PATHS: Set[str] = {
 
 # Enable/disable CSRF protection via environment
 CSRF_ENABLED = os.getenv("CSRF_ENABLED", "true").lower() == "true"
+
+
+def _forbidden(detail: str) -> JSONResponse:
+    """
+    403 response for a CSRF failure.
+
+    Middleware must return a response rather than raise HTTPException: inside a
+    BaseHTTPMiddleware the exception bypasses FastAPI's handlers, surfaces as a
+    500 and resets the connection (the proxy then 502s the next request).
+    """
+    return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": detail})
 
 
 def generate_csrf_token() -> str:
@@ -84,20 +95,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                         f"CSRF token missing for {request.method} {path}",
                         extra={"path": path, "method": request.method}
                     )
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="CSRF token missing. Include X-CSRF-Token header.",
-                    )
+                    return _forbidden("CSRF token missing. Include X-CSRF-Token header.")
 
                 if not secrets.compare_digest(csrf_header, csrf_cookie):
                     logger.warning(
                         f"CSRF token mismatch for {request.method} {path}",
                         extra={"path": path, "method": request.method}
                     )
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="CSRF token invalid.",
-                    )
+                    return _forbidden("CSRF token invalid.")
 
         # Process request
         response = await call_next(request)

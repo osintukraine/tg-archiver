@@ -33,7 +33,3 @@ ignore = [
 # SQLAlchemy relationship("Name") / Mapped["Name"] forward references are string annotations
 # resolved at mapper configuration time; pyflakes cannot see the imports.
 "shared/python/models/*.py" = ["F821"]
-# Followups: real findings worth fixing, not baselined by pattern but by location.
-"services/api/src/routers/metrics/services.py" = ["B023"]  # closure over loop variable `results`; verify
-"services/api/src/routers/admin/feeds.py" = ["S314"]  # xml.etree on fetched feed; switch to defusedxml
-"services/api/src/routers/admin/message_actions.py" = ["E722"]  # bare except

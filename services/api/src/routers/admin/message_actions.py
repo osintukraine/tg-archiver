@@ -245,7 +245,7 @@ async def get_audit_actions(
             if isinstance(details, str):
                 try:
                     details = json.loads(details)
-                except:
+                except json.JSONDecodeError:
                     details = {}
 
             actions.append({

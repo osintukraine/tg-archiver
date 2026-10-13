@@ -26,6 +26,25 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # One-shot: applies pending infrastructure/postgres/migrations/*.sql (init.sql
+  # only runs on an empty volume). Services wait for it to finish successfully.
+  db-migrate:
+    image: postgres:18.6-alpine
+    container_name: tg-archiver-db-migrate
+    entrypoint: ["/bin/sh", "/migrate.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-archiver}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      PGDATABASE: ${POSTGRES_DB:-tg_archiver}
+    volumes:
+      - ./infrastructure/postgres/migrate.sh:/migrate.sh:ro
+      - ./infrastructure/postgres/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   redis:
     image: redis:8-alpine
     container_name: tg-archiver-redis
@@ -123,6 +142,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -160,6 +181,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       seaweedfs:
@@ -194,6 +217,10 @@ services:
       - JWT_ADMIN_EMAIL=${JWT_ADMIN_EMAIL:-admin@tg-archiver.local}
       - JWT_ADMIN_PASSWORD=${JWT_ADMIN_PASSWORD:-change_me_in_production}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      # Security (read by auth router, CSRF middleware and token blacklist)
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - CSRF_ENABLED=${CSRF_ENABLED:-true}
+      - TOKEN_BLACKLIST_FAIL_MODE=${TOKEN_BLACKLIST_FAIL_MODE:-open}
       # Backfill (for API to know if it's enabled)
       - BACKFILL_ENABLED=${BACKFILL_ENABLED:-false}
       - BACKFILL_START_DATE=${BACKFILL_START_DATE:-2024-01-01}
@@ -205,6 +232,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:

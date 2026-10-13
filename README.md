@@ -161,16 +161,12 @@ docker-compose logs -f
 
 **Note:** The build step installs the Python services and builds the Next.js frontend with Bun.
 
-**Fresh database only:** `infrastructure/postgres/init.sql` runs automatically on the first start
-(empty `postgres18_data` volume), but the migrations in `infrastructure/postgres/migrations/` are
-**not** applied automatically. Apply them in order once Postgres is up (both are safe to re-run):
-
-```bash
-docker-compose exec -T postgres psql -U archiver -d tg_archiver \
-  < infrastructure/postgres/migrations/003_discovered_channels.sql
-docker-compose exec -T postgres psql -U archiver -d tg_archiver \
-  < infrastructure/postgres/migrations/004_discovered_channel_approval.sql
-```
+**Database schema is automatic.** `infrastructure/postgres/init.sql` creates the base schema on an
+empty volume, and on every `docker-compose up` a one-shot `db-migrate` service applies any pending
+`infrastructure/postgres/migrations/NNN_*.sql` (tracked in `schema_migrations`) before the listener,
+processor and API start. Existing deployments pick up new migrations the same way; no manual `psql`
+step is needed. If a migration fails, `db-migrate` exits non-zero and the services don't start
+(`docker-compose logs db-migrate`).
 
 ### Step 5: Access the Interface
 
@@ -286,9 +282,8 @@ Your Monitored Channel          Discovered Channel (auto-joined)
 └──────────────────────┘        └──────────────────────────────┘
 ```
 
-> These tables come from `infrastructure/postgres/migrations/003_discovered_channels.sql` and
-> `004_discovered_channel_approval.sql`, which must be applied manually on a fresh database
-> (see Quick Start, Step 4).
+> These tables come from migrations `003_discovered_channels.sql` and
+> `004_discovered_channel_approval.sql`, applied automatically by `db-migrate`.
 
 When a forwarded message arrives in your monitored channels:
 
@@ -596,7 +591,9 @@ tg-archiver/
 
 ### Running Services Locally
 
-Uncomment the `ports:` of postgres, redis and seaweedfs in `docker-compose.yml` first.
+Uncomment the `ports:` of postgres, redis and seaweedfs in `docker-compose.yml` first (or, for Postgres
+only, use `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`, which publishes it on
+`127.0.0.1:5432`).
 
 ```bash
 # Start infrastructure only
@@ -622,12 +619,14 @@ docker network create tgtest
 docker run -d --name tgtest-redis --network tgtest redis:8-alpine
 docker run -d --name tgtest-pg --network tgtest -e POSTGRES_USER=archiver \
   -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=tg_archiver postgres:18.6-alpine
-# schema for listener/api tests: init.sql, then migrations 003 and 004
-for f in init.sql migrations/003_discovered_channels.sql migrations/004_discovered_channel_approval.sql; do
-  docker exec -i tgtest-pg psql -q -U archiver -d tg_archiver < infrastructure/postgres/$f; done
+# schema for listener/api tests: init.sql, then the same migration runner db-migrate uses
+docker exec -i tgtest-pg psql -q -U archiver -d tg_archiver < infrastructure/postgres/init.sql
+docker run --rm --network tgtest -e PGHOST=tgtest-pg -e PGUSER=archiver -e PGPASSWORD=testpw \
+  -e PGDATABASE=tg_archiver -v $PWD/infrastructure/postgres/migrate.sh:/migrate.sh:ro \
+  -v $PWD/infrastructure/postgres/migrations:/migrations:ro --entrypoint /bin/sh postgres:18.6-alpine /migrate.sh
 
 # Settings without defaults must be set (dummy values are fine for tests)
-ENV="-e POSTGRES_HOST=tgtest-pg -e POSTGRES_PASSWORD=testpw -e REDIS_PASSWORD=x -e MINIO_ENDPOINT=x:1 \
+ENV="-e POSTGRES_HOST=tgtest-pg -e POSTGRES_USER=archiver -e POSTGRES_PASSWORD=testpw -e REDIS_PASSWORD=x -e MINIO_ENDPOINT=x:1 \
   -e MINIO_ACCESS_KEY=x -e MINIO_SECRET_KEY=x -e JWT_SECRET_KEY=x -e TELEGRAM_API_ID=1 -e TELEGRAM_API_HASH=x"
 
 # processor (Redis Streams retry / dead-letter)
@@ -649,6 +648,36 @@ docker rm -f tgtest-redis tgtest-pg && docker network rm tgtest
 ```
 
 Image names follow the compose project name (`tg-archiver-*` when the checkout directory is `tg-archiver`).
+
+Database tests: `sh infrastructure/postgres/tests/test_migrate.sh` checks the migration runner (fresh
+database, re-run, existing deployment, failing migration) against throwaway Postgres 18 containers.
+`infrastructure/postgres/tests/test_schema_drift.py` compares every ORM model with a live schema
+(`DRIFT_DB_URL=postgresql://user:pw@host:5432/db`).
+
+### Linting and CI
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main`/`develop` and on pull requests: ruff and
+gitleaks, the Python test suites (against real Redis 8 / Postgres 18, schema applied with
+`migrate.sh`), the migration runner test, frontend lint/type-check/vitest, and a Docker build of all
+four services. Dependabot (`.github/dependabot.yml`) opens weekly grouped update PRs.
+
+Run the same checks locally:
+
+```bash
+pip install pre-commit ruff
+ruff check .               # config + documented baseline of ignored rules in pyproject.toml
+pre-commit install         # gitleaks, ruff, hygiene hooks, eslint on changed frontend files
+pre-commit run --all-files
+```
+
+### AI-assisted development
+
+`.claude/settings.json` denies Claude Code access to `.env*`, Telegram session files and keys
+(`.claudeignore` is not a Claude Code feature). `.mcp.json` gives Claude read-only schema access
+through a Postgres MCP server: set `CLAUDE_READONLY_PASSWORD` (alphanumeric), start Postgres with
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres`, run
+`scripts/create_readonly_db_role.sh`, then start Claude Code from that shell (requires `uv`).
+`AGENTS.md` points other coding agents to the same conventions.
 
 ### Running Frontend Locally
 
@@ -700,17 +729,14 @@ REDIS_PASSWORD=your_generated_redis_password
 MINIO_SECRET_KEY=your_s3_secret_at_least_32_chars
 ```
 
-`ENVIRONMENT`, `CSRF_ENABLED` and `TOKEN_BLACKLIST_FAIL_MODE` are **not** passed to the API
-container by default, so it runs with `ENVIRONMENT=development` (no `Secure` cookie flag),
-CSRF on and `TOKEN_BLACKLIST_FAIL_MODE=open`. For production, add them to `api.environment`
-in `docker-compose.yml`:
+For production also set these in `.env` (they are passed to the API by `docker-compose.yml`):
 
-```yaml
-  api:
-    environment:
-      - ENVIRONMENT=production
-      - CSRF_ENABLED=true
-      - TOKEN_BLACKLIST_FAIL_MODE=closed
+```bash
+ENVIRONMENT=production            # adds the Secure flag to the login and CSRF cookies
+CSRF_ENABLED=true                 # default
+TOKEN_BLACKLIST_FAIL_MODE=closed  # deny requests if Redis (token blacklist) is unavailable
+TURNSTILE_SECRET_KEY=...          # optional: real captcha on the public suggest-channel form
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=... # its site key (build-time: rebuild the frontend)
 ```
 
 #### 3. Enable HTTPS
@@ -750,9 +776,11 @@ docker-compose ps
 | Feature | Description | Config Variable |
 |---------|-------------|-----------------|
 | **HTTPS** | TLS 1.2+ with automatic Let's Encrypt | Caddyfile.production |
-| **Rate Limiting** | 5 login attempts per minute | Built-in |
+| **Rate Limiting** | 5 login attempts per minute per client IP (Caddy forwards the real IP); suggest-channel submissions 3 per minute | Built-in |
 | **CSRF Protection** | Double-submit cookie pattern (`csrf_token` cookie is readable by JS by design) | On by default |
 | **Token Invalidation** | `POST /api/auth/logout` blacklists JWT tokens (the web UI's logout doesn't call it yet) | Built-in |
+| **Token transport** | JWTs only via `Authorization: Bearer` header (or the `access_token` cookie for /docs), never URL query parameters | Built-in |
+| **Captcha** | Cloudflare Turnstile on the public suggest-channel form | `TURNSTILE_SECRET_KEY` |
 | **Secure Cookies** | `access_token`: HttpOnly, SameSite=Strict, plus Secure in production | `ENVIRONMENT=production` (see above) |
 | **Password Policy** | Minimum 8 characters | Built-in |
 | **Non-root Containers** | All application services run as non-root | Built-in |
@@ -789,21 +817,14 @@ docker run --rm -v tg-archiver_seaweedfs_data:/data -v $(pwd):/backup \
 
 These are current gaps in the code, documented here so they don't surprise you:
 
-- **Schema drift on a fresh database:** the `top_forwarded_messages` view used by the social-graph
-  virality endpoint is not defined in any SQL file, and `export_jobs` in `init.sql` is missing
-  columns the model uses (`label`, `format`, `profile`, …). Exports and top-forwarded views fail
-  until the schema is fixed.
-- **CSRF in some pages:** `profile/api-keys`, `profile/feeds`, `settings/feed-tokens` and
-  `suggest-channel` call `fetch` directly without the `X-CSRF-Token` header, so their
-  state-changing actions are rejected. `suggest-channel` also posts to `/api/channel-submissions`,
-  which has no API route.
-- **Health check path:** the API image's built-in healthcheck and Caddy's `/health` route point at
-  `/health`; the real endpoint is `/api/health` (compose overrides the container healthcheck).
+- **Suggest-channel review:** submissions are stored and listable by admins
+  (`GET /api/admin/channel-submissions`), but there is no admin UI or accept/reject workflow yet.
+- **Unpopulated tables:** `message_engagement_timeline` and `message_replies` are queried but
+  nothing writes them (endpoints return empty results), and the media-status check in
+  `/api/system` reads a `messages.media_archived` column that nothing sets.
 - **Media URLs from the API:** the `media_url` field in API responses and RSS enclosures use
   `MINIO_PUBLIC_URL` (see Storage); the web UI builds its own `/media/...` URLs and is unaffected.
   OpenGraph images use a `/minio-storage/...` path that has no Caddy route.
-- **Trailing-slash redirects** (e.g. `/api/channels` → `/api/channels/`) drop non-default ports,
-  which only matters when serving on a port other than 80/443.
 - **React hydration warnings (#418)** appear in the browser console on the home and message pages.
 
 ---

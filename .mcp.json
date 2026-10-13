@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "uvx",
+      "args": [
+        "--with", "mcp<2",
+        "postgres-mcp@0.3.0",
+        "--access-mode=restricted"
+      ],
+      "env": {
+        "DATABASE_URI": "postgresql://claude_readonly:${CLAUDE_READONLY_PASSWORD}@127.0.0.1:${CLAUDE_PG_PORT:-5432}/${POSTGRES_DB:-tg_archiver}"
+      }
+    }
+  }
+}

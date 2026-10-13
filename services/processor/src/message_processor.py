@@ -588,8 +588,15 @@ class MessageProcessor:
             # Check if this channel is already in our monitored channels
             from models.channel import Channel
 
+            # forward_from_channel_id is the raw Telegram id; channels.telegram_id
+            # stores the marked form (-100<raw>), so match both.
+            marked_forward_id = -(1000000000000 + message.forward_from_channel_id)
             monitored_check = await session.execute(
-                select(Channel.id).where(Channel.telegram_id == message.forward_from_channel_id)
+                select(Channel.id).where(
+                    Channel.telegram_id.in_(
+                        [message.forward_from_channel_id, marked_forward_id]
+                    )
+                ).limit(1)
             )
             is_monitored = monitored_check.scalar_one_or_none() is not None
 

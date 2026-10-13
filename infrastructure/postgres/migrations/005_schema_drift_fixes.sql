@@ -15,13 +15,21 @@
 -- ORM model needs a UUID id and a different column set, and nothing else
 -- reads the old columns. Rebuild it only while it still has the old shape
 -- (id is not uuid); a table already in the new shape (and its rows) is kept.
+-- If an old-shape table somehow holds rows, stop instead of dropping data.
 DO $$
+DECLARE
+    old_rows BIGINT;
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'export_jobs'
           AND column_name = 'id' AND data_type <> 'uuid'
     ) THEN
+        SELECT count(*) INTO old_rows FROM export_jobs;
+        IF old_rows > 0 THEN
+            RAISE EXCEPTION 'export_jobs has % row(s) in the legacy format; back them up, '
+                'drop the table (DROP TABLE export_jobs), then restart to re-run migrations', old_rows;
+        END IF;
         DROP TABLE export_jobs;
     END IF;
 END $$;

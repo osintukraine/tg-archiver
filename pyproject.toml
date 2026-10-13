@@ -1,0 +1,39 @@
+[tool.ruff]
+target-version = "py313"
+# Existing code goes up to ~177 cols (33 lines > 120, 225 > 100); 120 fits nearly all. E501 is not selected.
+line-length = 120
+extend-exclude = ["services/frontend"]
+
+[tool.ruff.lint]
+# F pyflakes, E4/E7/E9 import/statement/syntax errors, B bugbear, S bandit
+select = ["E4", "E7", "E9", "F", "B", "S"]
+
+# Baseline for the tree as of adoption: repo passes `ruff check .` without source edits.
+# Each entry is a burn-down item; remove the ignore once the violations are fixed.
+ignore = [
+    "F401",  # 80 unused imports (autofixable: `ruff check --select F401 --fix`)
+    "F541",  # 18 f-strings without placeholders (autofixable)
+    "F841",  # 8 unused local variables
+    "E402",  # 22 imports after sys.path/env setup (scripts/telegram_auth.py, api main.py, schemas.py ...)
+    "E711",  # 2 `== None` comparisons (SQLAlchemy column expressions; need `.is_(None)`)
+    "E712",  # 31 `== True/False` (SQLAlchemy column expressions; need `.is_(True)`)
+    "B008",  # 161 FastAPI `Depends()`/`Query()` in argument defaults: idiomatic, false positive
+    "B904",  # 28 `raise X` inside `except` without `from`
+    "B007",  # 3 unused loop control variables
+    "S104",  # 2 bind 0.0.0.0: intentional inside containers
+    "S105",  # 3 "hardcoded password" false positives (token_type="bearer", Redis key prefix)
+    "S106",  # 2 same false positive as S105
+    "S110",  # 5 try/except/pass
+    "S311",  # 1 random.* used for jitter, not crypto
+    "S608",  # 13 SQL built with f-strings: needs manual review of each for injection (follow-up)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101"]  # pytest asserts
+# SQLAlchemy relationship("Name") / Mapped["Name"] forward references are string annotations
+# resolved at mapper configuration time; pyflakes cannot see the imports.
+"shared/python/models/*.py" = ["F821"]
+# Followups: real findings worth fixing, not baselined by pattern but by location.
+"services/api/src/routers/metrics/services.py" = ["B023"]  # closure over loop variable `results`; verify
+"services/api/src/routers/admin/feeds.py" = ["S314"]  # xml.etree on fetched feed; switch to defusedxml
+"services/api/src/routers/admin/message_actions.py" = ["E722"]  # bare except

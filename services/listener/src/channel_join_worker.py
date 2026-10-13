@@ -8,7 +8,10 @@ Background service that:
 4. Updates status to 'joined', 'private', or 'failed'
 
 Configuration (from settings):
-- CHANNEL_JOIN_ENABLED: Enable/disable auto-joining
+- CHANNEL_JOIN_MODE: approval (default, admin-approved rows only) | auto | off
+- CHANNEL_JOIN_ENABLED: Deprecated; false is treated as mode "off"
+- CHANNEL_JOIN_DAILY_CAP: Max successful joins per rolling 24 hours
+- CHANNEL_JOIN_LIMIT_PAUSE_HOURS: Pause after Telegram's "too many channels" error
 - CHANNEL_JOIN_INTERVAL_SECONDS: Interval between join cycles
 - CHANNEL_JOIN_BATCH_SIZE: Max channels per cycle
 - CHANNEL_JOIN_MAX_RETRIES: Max retries before permanent failure
@@ -41,6 +44,9 @@ from models.base import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
+STUCK_JOINING_MINUTES = 15
+MAX_FLOOD_WAIT_SECONDS = 3600
+
 
 class ChannelJoinWorker:
     """
@@ -63,18 +69,27 @@ class ChannelJoinWorker:
         self.client = client
         self.running = False
         self._join_task: Optional[asyncio.Task] = None
+        self._paused_until: Optional[datetime] = None  # in-memory; resets on restart
 
     async def start(self) -> None:
         """Start the background join loop."""
+        mode = settings.effective_channel_join_mode
         if not settings.CHANNEL_JOIN_ENABLED:
-            logger.info("Channel join worker disabled (CHANNEL_JOIN_ENABLED=false)")
+            logger.warning(
+                "CHANNEL_JOIN_ENABLED is deprecated; use CHANNEL_JOIN_MODE=off "
+                "(CHANNEL_JOIN_ENABLED=false is treated as off)"
+            )
+        if mode == "off":
+            logger.info("Channel join worker disabled (CHANNEL_JOIN_MODE=off)")
             return
 
         self.running = True
         self._join_task = asyncio.create_task(self._join_loop())
         logger.info(
-            f"Channel join worker started (interval={settings.CHANNEL_JOIN_INTERVAL_SECONDS}s, "
-            f"batch={settings.CHANNEL_JOIN_BATCH_SIZE})"
+            f"Channel join worker started (mode={mode}, "
+            f"interval={settings.CHANNEL_JOIN_INTERVAL_SECONDS}s, "
+            f"batch={settings.CHANNEL_JOIN_BATCH_SIZE}, "
+            f"daily_cap={settings.CHANNEL_JOIN_DAILY_CAP})"
         )
 
     async def stop(self) -> None:
@@ -104,18 +119,31 @@ class ChannelJoinWorker:
 
     async def _join_cycle(self) -> None:
         """
-        Single join cycle - process batch of pending channels.
+        Single join cycle - process batch of eligible channels.
 
-        1. Get pending channels (respecting retry delays)
-        2. Attempt to join each
-        3. Fetch metadata for successful joins
+        1. Recover stuck 'joining' rows
+        2. Respect the "too many channels" pause and the daily cap
+        3. Attempt to join each eligible channel
         """
-        channels = await self._get_pending_channels()
-        if not channels:
-            logger.debug("No pending channels to join")
+        await self._reset_stuck_joining()
+
+        if self._is_paused():
+            logger.debug("Channel joining paused (channel limit reached)")
             return
 
-        logger.info(f"Processing {len(channels)} pending discovered channels")
+        remaining = settings.CHANNEL_JOIN_DAILY_CAP - await self._count_recent_joins()
+        if remaining <= 0:
+            logger.info(
+                f"Daily join cap reached ({settings.CHANNEL_JOIN_DAILY_CAP} per 24h), skipping cycle"
+            )
+            return
+
+        channels = await self._get_pending_channels(limit=remaining)
+        if not channels:
+            logger.debug("No eligible channels to join")
+            return
+
+        logger.info(f"Processing {len(channels)} discovered channels to join")
 
         joined = 0
         failed = 0
@@ -127,15 +155,20 @@ class ChannelJoinWorker:
                 else:
                     failed += 1
             except FloodWaitError as e:
-                logger.warning(f"FloodWait: sleeping {e.seconds}s")
-                await asyncio.sleep(e.seconds)
-                failed += 1
+                # Row was already returned to 'pending' by _join_channel
+                wait = min(e.seconds, MAX_FLOOD_WAIT_SECONDS)
+                logger.warning(f"FloodWait: sleeping {wait}s (requested {e.seconds}s), ending cycle")
+                await asyncio.sleep(wait)
+                break
             except Exception as e:
                 logger.error(
                     f"Unexpected error joining channel {channel_data['telegram_id']}: {e}",
                     exc_info=True
                 )
                 failed += 1
+
+            if self._is_paused():
+                break
 
             # Delay between join attempts to avoid rate limits
             await asyncio.sleep(2)
@@ -144,18 +177,69 @@ class ChannelJoinWorker:
             f"Channel join cycle complete: {joined} joined, {failed} failed"
         )
 
-    async def _get_pending_channels(self) -> List[Dict[str, Any]]:
+    def _is_paused(self) -> bool:
+        """True while joining is paused after ChannelsTooMuchError."""
+        return self._paused_until is not None and datetime.now(timezone.utc) < self._paused_until
+
+    def _pause_joining(self) -> None:
+        """Pause joining for CHANNEL_JOIN_LIMIT_PAUSE_HOURS (logged once per pause)."""
+        self._paused_until = datetime.now(timezone.utc) + timedelta(
+            hours=settings.CHANNEL_JOIN_LIMIT_PAUSE_HOURS
+        )
+        logger.error(
+            f"Telegram channel limit reached; pausing joins until {self._paused_until.isoformat()}. "
+            "Leave some channels with this account to resume sooner (restart the listener)."
+        )
+
+    async def _count_recent_joins(self) -> int:
+        """Count successful joins in the last 24 hours."""
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM discovered_channels
+                WHERE joined_at > :since
+            """), {'since': datetime.now(timezone.utc) - timedelta(hours=24)})
+            return result.scalar() or 0
+
+    async def _reset_stuck_joining(self) -> None:
+        """Return rows left in 'joining' (crash/restart) to 'pending'."""
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=STUCK_JOINING_MINUTES)
+        async with AsyncSessionLocal() as session:
+            try:
+                result = await session.execute(text("""
+                    UPDATE discovered_channels
+                    SET join_status = 'pending', updated_at = NOW()
+                    WHERE join_status = 'joining'
+                      AND COALESCE(join_attempted_at, updated_at) < :cutoff
+                """), {'cutoff': cutoff})
+                await session.commit()
+                if result.rowcount:
+                    logger.warning(f"Reset {result.rowcount} stuck 'joining' channel(s) to pending")
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Failed to reset stuck joining channels: {e}")
+
+    async def _get_pending_channels(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get discovered channels that need joining.
 
         Returns channels where:
         - join_status = 'pending' OR
         - join_status = 'failed' AND join_retry_after < NOW() AND retry_count < max
+        - never ignored/promoted (admin_action IS NULL)
+        - in approval mode, only rows an admin approved (join_approved_at IS NOT NULL)
         """
         now = datetime.now(timezone.utc)
+        approval_clause = (
+            "AND join_approved_at IS NOT NULL"
+            if settings.effective_channel_join_mode == "approval"
+            else ""
+        )
+        batch_size = settings.CHANNEL_JOIN_BATCH_SIZE
+        if limit is not None:
+            batch_size = min(batch_size, limit)
 
         async with AsyncSessionLocal() as session:
-            query = text("""
+            query = text(f"""
                 SELECT
                     id,
                     telegram_id,
@@ -174,6 +258,7 @@ class ChannelJoinWorker:
                     )
                 )
                 AND admin_action IS NULL  -- Not ignored or promoted
+                {approval_clause}
                 ORDER BY discovery_count DESC, discovered_at ASC
                 LIMIT :batch_size
             """)
@@ -181,7 +266,7 @@ class ChannelJoinWorker:
             result = await session.execute(query, {
                 'now': now,
                 'max_retries': settings.CHANNEL_JOIN_MAX_RETRIES,
-                'batch_size': settings.CHANNEL_JOIN_BATCH_SIZE,
+                'batch_size': batch_size,
             })
 
             return [dict(row._mapping) for row in result]
@@ -272,9 +357,15 @@ class ChannelJoinWorker:
             return False
 
         except ChannelsTooMuchError:
-            logger.error("Joined too many channels! Need to leave some channels.")
-            await self._update_status(db_id, 'pending')  # Will retry later
+            # Back to pending without a retry bump; pause all joining
+            await self._update_status(db_id, 'pending')
+            self._pause_joining()
             return False
+
+        except FloodWaitError:
+            # Back to pending without a retry bump; the cycle sleeps and ends
+            await self._update_status(db_id, 'pending')
+            raise
 
         except Exception as e:
             logger.warning(f"Failed to join channel {channel_id}: {e}")

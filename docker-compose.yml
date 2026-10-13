@@ -102,6 +102,21 @@ services:
       # Gap detection
       - GAP_DETECTION_ENABLED=${GAP_DETECTION_ENABLED:-false}
       - GAP_LOOKBACK_HOURS=${GAP_LOOKBACK_HOURS:-24}
+      # Discovered-channel joining (approval = admin must approve each channel)
+      - CHANNEL_JOIN_MODE=${CHANNEL_JOIN_MODE:-approval}
+      - CHANNEL_JOIN_ENABLED=${CHANNEL_JOIN_ENABLED:-true}
+      - CHANNEL_JOIN_INTERVAL_SECONDS=${CHANNEL_JOIN_INTERVAL_SECONDS:-60}
+      - CHANNEL_JOIN_BATCH_SIZE=${CHANNEL_JOIN_BATCH_SIZE:-5}
+      - CHANNEL_JOIN_MAX_RETRIES=${CHANNEL_JOIN_MAX_RETRIES:-3}
+      - CHANNEL_JOIN_RETRY_DELAY_HOURS=${CHANNEL_JOIN_RETRY_DELAY_HOURS:-24}
+      - CHANNEL_JOIN_DAILY_CAP=${CHANNEL_JOIN_DAILY_CAP:-20}
+      - CHANNEL_JOIN_LIMIT_PAUSE_HOURS=${CHANNEL_JOIN_LIMIT_PAUSE_HOURS:-24}
+      # Social data fetching
+      - SOCIAL_FETCH_ENABLED=${SOCIAL_FETCH_ENABLED:-true}
+      - SOCIAL_FETCH_PERIOD_DAYS=${SOCIAL_FETCH_PERIOD_DAYS:-7}
+      - SOCIAL_FETCH_INTERVAL_SECONDS=${SOCIAL_FETCH_INTERVAL_SECONDS:-300}
+      - SOCIAL_FETCH_BATCH_SIZE=${SOCIAL_FETCH_BATCH_SIZE:-50}
+      - SOCIAL_REACTION_POLL_INTERVAL=${SOCIAL_REACTION_POLL_INTERVAL:-30}
     volumes:
       - ./sessions:/data/sessions
       - ${MEDIA_BUFFER_PATH:-./data/media-buffer}:/var/cache/media-buffer
@@ -180,6 +195,9 @@ services:
       # Backfill (for API to know if it's enabled)
       - BACKFILL_ENABLED=${BACKFILL_ENABLED:-false}
       - BACKFILL_START_DATE=${BACKFILL_START_DATE:-2024-01-01}
+      # Reported in the admin Discovered tab
+      - CHANNEL_JOIN_MODE=${CHANNEL_JOIN_MODE:-approval}
+      - CHANNEL_JOIN_ENABLED=${CHANNEL_JOIN_ENABLED:-true}
     # ports:
     #   - "8000:8000"  # Uncomment for local development only
     depends_on:

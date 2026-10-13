@@ -53,6 +53,8 @@ class DiscoveredChannelItem(BaseModel):
     discovered_at: datetime
     joined_at: Optional[datetime]
     admin_action: Optional[str]
+    join_approved_at: Optional[datetime]
+    awaiting_approval: bool
     promoted_to_channel_id: Optional[int]
     forward_count: int
     social_messages_fetched: int
@@ -82,6 +84,8 @@ class DiscoveredStatsResponse(BaseModel):
     ignored: int
     total_forwards_tracked: int
     avg_discovery_count: float
+    join_mode: str  # approval | auto | off
+    awaiting_approval: int
 
 
 class PromoteRequest(BaseModel):
@@ -94,6 +98,21 @@ class PromoteRequest(BaseModel):
 class IgnoreRequest(BaseModel):
     """Request to ignore a discovered channel."""
     reason: Optional[str] = None
+
+
+def _is_awaiting_approval(
+    join_status: str,
+    admin_action: Optional[str],
+    join_approved_at: Optional[datetime],
+    join_mode: str,
+) -> bool:
+    """True if the join worker is waiting for an admin to approve this row."""
+    return (
+        join_mode == "approval"
+        and join_status in ("pending", "failed")
+        and admin_action is None
+        and join_approved_at is None
+    )
 
 
 @router.get("/", response_model=DiscoveredChannelListResponse)
@@ -138,7 +157,8 @@ async def list_discovered_channels(
             dc.admin_action,
             dc.promoted_to_channel_id,
             COALESCE(fc.forward_count, 0) as forward_count,
-            dc.social_messages_fetched
+            dc.social_messages_fetched,
+            dc.join_approved_at
         FROM discovered_channels dc
         LEFT JOIN (
             SELECT discovered_channel_id, COUNT(*) as forward_count
@@ -221,6 +241,10 @@ async def list_discovered_channels(
             promoted_to_channel_id=row[17],
             forward_count=row[18] or 0,
             social_messages_fetched=row[19] or 0,
+            join_approved_at=row[20],
+            awaiting_approval=_is_awaiting_approval(
+                row[10], row[16], row[20], settings.effective_channel_join_mode
+            ),
         ))
 
     return DiscoveredChannelListResponse(
@@ -265,6 +289,15 @@ async def get_discovered_stats(
     """))
     ignored = ignored_result.scalar() or 0
 
+    # Pending rows an admin has not approved yet
+    awaiting_result = await db.execute(text("""
+        SELECT COUNT(*) FROM discovered_channels
+        WHERE join_status = 'pending'
+          AND admin_action IS NULL
+          AND join_approved_at IS NULL
+    """))
+    awaiting_approval = awaiting_result.scalar() or 0
+
     # Total forwards tracked
     forwards_result = await db.execute(
         text("SELECT COUNT(*) FROM message_forwards")
@@ -288,6 +321,8 @@ async def get_discovered_stats(
         ignored=ignored,
         total_forwards_tracked=total_forwards,
         avg_discovery_count=round(avg_discovery, 2),
+        join_mode=settings.effective_channel_join_mode,
+        awaiting_approval=awaiting_approval,
     )
 
 
@@ -314,6 +349,11 @@ async def get_discovered_channel(
         raise HTTPException(status_code=404, detail="Discovered channel not found")
 
     data = dict(row._mapping)
+    data["join_mode"] = settings.effective_channel_join_mode
+    data["awaiting_approval"] = _is_awaiting_approval(
+        data["join_status"], data["admin_action"], data["join_approved_at"],
+        data["join_mode"],
+    )
 
     # Get recent forwards from this channel
     forwards_result = await db.execute(text("""
@@ -511,6 +551,81 @@ async def ignore_channel(
     await db.commit()
 
     return {"success": True, "message": "Channel marked as ignored"}
+
+
+@router.post("/{channel_id}/approve")
+async def approve_join(
+    channel_id: int,
+    admin: AdminUser,
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Approve a discovered channel for joining.
+
+    In CHANNEL_JOIN_MODE=approval the listener only joins approved channels.
+    A failed channel is reset to pending so it becomes eligible again.
+    """
+    result = await db.execute(text("""
+        UPDATE discovered_channels
+        SET join_approved_at = NOW(),
+            join_approved_by = :admin_id,
+            join_status = 'pending',
+            join_error = NULL,
+            join_retry_count = 0,
+            join_retry_after = NULL,
+            updated_at = NOW()
+        WHERE id = :id
+          AND join_status IN ('pending', 'failed')
+          AND admin_action IS NULL
+        RETURNING id
+    """), {"id": channel_id, "admin_id": admin.user_id})
+
+    if result.rowcount == 0:
+        await _raise_not_found_or_conflict(db, channel_id, "approved")
+
+    await db.commit()
+
+    return {"success": True, "message": "Channel approved for joining"}
+
+
+@router.post("/{channel_id}/unapprove")
+async def unapprove_join(
+    channel_id: int,
+    admin: AdminUser,
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """Revoke join approval for a channel that has not been joined yet."""
+    result = await db.execute(text("""
+        UPDATE discovered_channels
+        SET join_approved_at = NULL,
+            join_approved_by = NULL,
+            updated_at = NOW()
+        WHERE id = :id
+          AND join_status IN ('pending', 'failed')
+        RETURNING id
+    """), {"id": channel_id})
+
+    if result.rowcount == 0:
+        await _raise_not_found_or_conflict(db, channel_id, "unapproved")
+
+    await db.commit()
+
+    return {"success": True, "message": "Join approval revoked"}
+
+
+async def _raise_not_found_or_conflict(
+    db: AsyncSession, channel_id: int, action: str
+) -> None:
+    """Raise 404 if the row is missing, otherwise 400 (wrong state)."""
+    exists = await db.execute(
+        text("SELECT 1 FROM discovered_channels WHERE id = :id"), {"id": channel_id}
+    )
+    if exists.fetchone() is None:
+        raise HTTPException(status_code=404, detail="Discovered channel not found")
+    raise HTTPException(
+        status_code=400,
+        detail=f"Channel cannot be {action} in its current state",
+    )
 
 
 @router.post("/{channel_id}/retry")

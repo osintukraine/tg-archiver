@@ -58,7 +58,7 @@ pip install telethon python-dotenv
 python3 scripts/telegram_auth.py
 ```
 
-Only Caddy is published (`http://localhost`, port 80). Ports for frontend (3000), API (8000), SeaweedFS (8333), Postgres and Redis are commented out in `docker-compose.yml`; uncomment them for direct access.
+Only Caddy is published (`http://localhost`, port 80). Ports for frontend (3000), API (8000), SeaweedFS (8333), Postgres and Redis are commented out in `docker-compose.yml`. For local development, `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d` publishes Postgres on `127.0.0.1:5432` (used by the read-only Postgres MCP, see Database Queries).
 
 Running a Python service outside Docker needs the shared code on the path and the required settings set (no defaults: `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `JWT_SECRET_KEY`):
 ```bash
@@ -84,11 +84,13 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - Forwarded broadcast-channel posts record their source in `discovered_channels` (processor `_track_forward_chain`). `listener/src/channel_join_worker.py` joins them according to `CHANNEL_JOIN_MODE`: `approval` (default; only rows with `join_approved_at` set via `POST /api/admin/discovered/{id}/approve`), `auto`, or `off`. Daily cap, FloodWait and channel-limit pauses apply in every mode
 
 ### API Structure
-- Routers in `services/api/src/routers/` (e.g. messages, channels, rss, social_graph, auth, media, admin/*; full list in `services/api/src/main.py`)
+- Routers in `services/api/src/routers/` (e.g. messages, channels, rss, social_graph, auth, media, channel_submissions, admin/*; full list in `services/api/src/main.py`)
+- Public `POST /api/channel-submissions` (suggest-a-channel form) is CSRF-protected, limited to 3/min per IP, and verifies Cloudflare Turnstile when `TURNSTILE_SECRET_KEY` is set; admins list submissions at `GET /api/admin/channel-submissions`
 - Schemas in `services/api/src/schemas.py` (Pydantic models)
 - Auth middleware in `services/api/src/middleware/auth_unified.py`
 - Dependencies: `CurrentUser`, `AuthenticatedUser`, `AdminUser` from `services/api/src/dependencies/`
-- Health: `/api/health`. API docs at `http://localhost/docs` (role-filtered; FastAPI's built-in docs are disabled)
+- Health: `/api/health` (also `/health`). API docs at `http://localhost/docs` (role-filtered; FastAPI's built-in docs are disabled)
+- JWTs are accepted only from the `Authorization: Bearer` header (and the `access_token` cookie used by /docs), never from query parameters
 
 ### Frontend Structure
 - App Router pages in `services/frontend/app/`
@@ -99,16 +101,14 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - `NEXT_PUBLIC_*` values are baked in at build time; rebuild the frontend image after changing them
 
 ### Database
-- Schema in `infrastructure/postgres/init.sql`, which only runs on an empty `postgres18_data` volume
-- Migrations in `infrastructure/postgres/migrations/` are **not** applied automatically (no Alembic). Apply them manually on a fresh database:
-  ```bash
-  docker-compose exec -T postgres psql -U archiver -d tg_archiver < infrastructure/postgres/migrations/003_discovered_channels.sql
-  docker-compose exec -T postgres psql -U archiver -d tg_archiver < infrastructure/postgres/migrations/004_discovered_channel_approval.sql
-  ```
+- Base schema in `infrastructure/postgres/init.sql` (runs only on an empty `postgres18_data` volume) plus ordered, idempotent `infrastructure/postgres/migrations/NNN_*.sql`
+- The one-shot `db-migrate` compose service (`infrastructure/postgres/migrate.sh`) applies pending migrations on every `docker-compose up`, before listener/processor/api start; each file runs in one transaction with its `schema_migrations` record, and any error stops startup
+- To change the schema, add the next numbered migration; never edit an applied one (checksums are recorded but not verified). Migrations must be idempotent, and new ones must not contain their own `BEGIN`/`COMMIT` (the runner wraps each file)
 - SQLAlchemy models in `shared/python/models/`
 - Key tables: `messages`, `channels`, `media_files`, `message_media` (junction), `users`
 - Full-text search via PostgreSQL tsvector on `messages.search_vector`
-- Known schema drift: the `top_forwarded_messages` view (used by `social_graph.py`) is not defined in any SQL file, and `export_jobs` in `init.sql` lacks columns the model uses (`label`, `format`, `profile`, …), so export and top-forwarded endpoints fail on a fresh database
+- `top_forwarded_messages`, `channel_interactions` and `channel_influence_network` are plain views over `messages` (migration 005)
+- `infrastructure/postgres/tests/test_schema_drift.py` compares every ORM model with the live schema
 
 ## Environment Configuration
 
@@ -120,7 +120,7 @@ Key variables in `.env` (see `.env.example` for full list):
 - `JWT_SECRET_KEY`, `JWT_ADMIN_EMAIL`, `JWT_ADMIN_PASSWORD`: Auth config (compose defaults to `change_me_in_production`; always set them)
 - `NEXT_PUBLIC_API_URL`: Empty for the proxied setup, `http://localhost:8000` for direct access
 
-**`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block. Setting e.g. `CSRF_ENABLED`, `ENVIRONMENT` or `TOKEN_BLACKLIST_FAIL_MODE` in `.env` has no effect until you add them to the relevant service. (`CHANNEL_JOIN_*`, `SOCIAL_FETCH_*` and `PROCESSOR_RETRY_IDLE_MS` are passed through.)
+**`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block; a new setting must be added there to take effect. Passed through today include `ENVIRONMENT` (`production` enables `Secure` cookies), `CSRF_ENABLED`, `TOKEN_BLACKLIST_FAIL_MODE`, `TURNSTILE_SECRET_KEY` (api), `CHANNEL_JOIN_*`, `SOCIAL_FETCH_*` (listener) and `PROCESSOR_RETRY_IDLE_MS` (processor).
 
 ## Session Files
 
@@ -136,16 +136,26 @@ bun run test:run components/__tests__/ErrorBoundary.test.tsx
 
 Python tests (pytest) live in `services/processor/tests`, `services/listener/tests` and `services/api/tests`. They run inside the service Docker images against a real Redis 8 / Postgres 18 (not fakes); see README → Development for the exact commands. Don't create a shared `services/api/tests/conftest.py`: each API test file keeps its own fixtures.
 
+Database: `infrastructure/postgres/tests/test_migrate.sh` (migration runner, needs Docker) and `infrastructure/postgres/tests/test_schema_drift.py` (model vs schema, set `DRIFT_DB_URL`).
+
+Browser testing: the UI shows an 18+ content-warning modal on every non-exempt route (including `/admin`) until accepted, and it blocks clicks. Accept it first (tick the checkbox, then "Enter Site"), or pre-seed `localStorage['tg-archiver-content-warning-consent'] = JSON.stringify({accepted: true, expiresAt: Date.now() + 30*86400000})` and reload. Consent is per origin.
+
+### Lint / CI
+- CI (`.github/workflows/ci.yml`) runs on pushes to main/develop and on PRs: ruff + gitleaks, the Python suites, frontend lint/type-check/vitest, and a Docker build of all four services
+- `ruff check .` must pass (config and documented baseline of ignored rules in `pyproject.toml`; the ignores are burn-down items, don't add new ones without a reason)
+- gitleaks runs in CI and pre-commit (`.pre-commit-config.yaml`); allowlist false positives narrowly in `.gitleaks.toml`
+
 ## Critical Instructions for Claude Code
 
 ### CSRF Protection (MANDATORY)
 
 **All API interactions involving authentication or state changes MUST account for CSRF protection.**
 
-- CSRF is always on in Docker: the code default is `true` and compose does not pass `CSRF_ENABLED`, so the `.env` value (`.env.example` says `false`) is ignored
+- CSRF is on by default (`CSRF_ENABLED=true`); rejections return 403 JSON
 - State-changing requests (POST, PUT, PATCH, DELETE) require the `X-CSRF-Token` header; login and `/api/auth/info` are exempt
 - The token is read from the `csrf_token` cookie set by the API (not HttpOnly, by design)
-- Frontend clients (`lib/api.ts`, `lib/admin-api.ts`) handle this automatically. Pages that call `fetch` directly (`app/profile/api-keys`, `app/profile/feeds`, `app/settings/feed-tokens`, `app/suggest-channel`) do **not** send the header yet
+- Frontend clients (`lib/api.ts`, `lib/admin-api.ts`) handle this automatically. Code that calls `fetch` directly must use `getAuthHeaders()` from `lib/auth-utils.ts`, which adds both `Authorization` and `X-CSRF-Token`
+- Middleware must return a response (e.g. `JSONResponse(status_code=403, …)`), never raise `HTTPException`: inside `BaseHTTPMiddleware` that becomes a 500 and resets the proxy connection
 - When adding new API endpoints or frontend API calls, always include CSRF token handling
 
 ### Building Services (MANDATORY)
@@ -168,36 +178,38 @@ Never run `bun run build` or Python directly for production testing. Always use 
 
 ### Database Queries (MANDATORY)
 
-**Before running ANY psql command, ALWAYS list the database schema first.**
+**Never guess table or column names. Inspect the live schema before writing any query.**
 
+Prefer the `postgres` MCP server (`.mcp.json`; read-only role `claude_readonly`, restricted mode): use `list_objects` / `get_object_details` first. One-time setup per dev machine (the user does this, with an alphanumeric password):
 ```bash
-# List all tables
-docker-compose exec postgres psql -U archiver -d tg_archiver -c "\dt"
+export CLAUDE_READONLY_PASSWORD='...'
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+scripts/create_readonly_db_role.sh
+# then start Claude Code from the same shell (needs uv for uvx)
+```
 
-# Describe a specific table
+Without the MCP, list the schema with psql first:
+```bash
+docker-compose exec postgres psql -U archiver -d tg_archiver -c "\dt"
 docker-compose exec postgres psql -U archiver -d tg_archiver -c "\d table_name"
 ```
 
-**NEVER guess table names or column names.** Always verify schema before querying.
+Schema changes go through numbered migration files, never ad-hoc DDL.
 
 ### API Testing (MANDATORY)
 
-**When testing API endpoints, use JWT authentication with credentials from `.env`.**
+**Never read `.env` or other secret files** (see Secrets). To authenticate as admin:
 
-1. Read credentials from `.env`:
+1. Get a token by logging in from inside the api container, which already holds `JWT_ADMIN_PASSWORD`:
    ```bash
-   grep -E "^JWT_ADMIN" .env
+   # The api container already has JWT_ADMIN_PASSWORD; log in from inside it so the
+   # password never appears in your context. Use the username `admin`.
+   TOKEN=$(docker-compose exec -T api python -c "import os, httpx; print(httpx.post('http://localhost:8000/api/auth/login', json={'username': 'admin', 'password': os.environ['JWT_ADMIN_PASSWORD']}).json()['access_token'])")
    ```
 
-2. Use the `username` field for login (the admin user is `admin`; the email address is also accepted):
-   ```bash
-   # Get token - use "admin" as username, password from JWT_ADMIN_PASSWORD
-   docker-compose exec api curl -s -X POST http://localhost:8000/api/auth/login \
-     -H 'Content-Type: application/json' \
-     -d '{"username":"admin","password":"<PASSWORD_FROM_ENV>"}'
-   ```
+2. Never print or echo the password. If the login response shape changes, read `services/api/src/routers/auth.py` (`TokenResponse`) instead of guessing.
 
-3. Use token for authenticated requests:
+3. Use the token for authenticated requests:
    ```bash
    docker-compose exec api curl -s http://localhost:8000/api/admin/endpoint \
      -H "Authorization: Bearer <TOKEN>"
@@ -208,4 +220,10 @@ docker-compose exec postgres psql -U archiver -d tg_archiver -c "\d table_name"
 - Database table names or column names
 - API endpoint paths
 
-Always read from `.env`, schema, or source code first.
+Always read from the schema or source code first.
+
+### Secrets (MANDATORY)
+
+- `.env*` (except `.env.example`), `sessions/` and `*.session` (Telethon sessions are full Telegram account credentials), `*.pem`, `*.key` are denied to Claude in `.claude/settings.json` (`permissions.deny`). `.claudeignore` is **not** a Claude Code feature and would do nothing
+- Deny rules cover Claude's file tools and Bash commands that name the file (`cat`, `head`, `sed`, redirections), not `grep -r`, scripts or subprocesses: don't work around them
+- Don't run `docker compose config`, `env` or `printenv`; they print resolved secrets

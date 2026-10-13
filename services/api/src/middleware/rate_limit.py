@@ -6,8 +6,10 @@ Uses Redis sliding window algorithm to prevent brute force attacks on login.
 
 import time
 from typing import Optional
-from fastapi import Request, HTTPException, status
+import uuid
+from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 import redis.asyncio as redis
 
 from observability import get_logger
@@ -89,8 +91,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             pipe = r.pipeline()
             # Remove old entries outside window
             pipe.zremrangebyscore(key, 0, window_start)
-            # Add current request
-            pipe.zadd(key, {str(now): now})
+            # Add current request. The member must be unique per request: keyed by
+            # the second alone, every attempt within the same second collapsed into
+            # one entry, so bursts were never limited.
+            pipe.zadd(key, {f"{now}:{uuid.uuid4().hex}": now})
             # Count requests in window
             pipe.zcard(key)
             # Set expiry to clean up old keys
@@ -137,9 +141,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 f"Rate limit exceeded for {path} from {client_ip}",
                 extra={"path": path, "client_ip": client_ip}
             )
-            raise HTTPException(
+            # Return (not raise): an HTTPException raised inside BaseHTTPMiddleware
+            # bypasses FastAPI's handlers and becomes a 500 + connection reset.
+            return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many requests. Try again in {retry_after} seconds.",
+                content={"detail": f"Too many requests. Try again in {retry_after} seconds."},
                 headers={
                     "Retry-After": str(retry_after),
                     "X-RateLimit-Limit": str(max_requests),

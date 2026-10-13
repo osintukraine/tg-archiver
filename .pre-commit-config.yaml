@@ -1,0 +1,34 @@
+# Install: pip install pre-commit && pre-commit install
+# Run on everything: pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: [--config=.gitleaks.toml]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check # check only; config in pyproject.toml (formatter not enforced yet)
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+      - id: check-yaml
+        exclude: ^services/frontend/
+      - id: check-toml
+
+  - repo: local
+    hooks:
+      - id: frontend-eslint
+        name: eslint (changed frontend files)
+        language: system
+        files: ^services/frontend/.*\.(ts|tsx|js|jsx|mjs)$
+        exclude: ^services/frontend/(node_modules|\.next)/
+        # requires `bun install` in services/frontend
+        entry: bash -c 'cd services/frontend && exec bunx eslint "${@#services/frontend/}"' --

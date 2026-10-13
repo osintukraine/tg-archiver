@@ -422,14 +422,8 @@ async def main() -> NoReturn:
         logger.info("Promotion worker started (listening for promotion requests)")
 
         # 9d. Start channel join worker (auto-joins discovered channels)
-        if settings.CHANNEL_JOIN_ENABLED:
-            logger.info("Starting channel join worker...")
-            channel_join_worker = await start_channel_join_worker(telegram_client)
-            logger.info(
-                f"Channel join worker started (interval={settings.CHANNEL_JOIN_INTERVAL_SECONDS}s)"
-            )
-        else:
-            logger.info("Channel join worker disabled (CHANNEL_JOIN_ENABLED=false)")
+        # Worker decides from CHANNEL_JOIN_MODE whether to run (logs when off)
+        channel_join_worker = await start_channel_join_worker(telegram_client)
 
         # 10. Initialize TelegramListener (share the existing telegram_client to avoid session lock)
         logger.info("Initializing Telegram Listener...")

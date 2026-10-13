@@ -25,7 +25,7 @@ class DiscoveredChannel(Base):
     Workflow:
     1. Message forwarded from Channel X arrives in monitored channel
     2. Channel X is inserted into discovered_channels (status: pending)
-    3. ChannelJoinWorker attempts to join Channel X
+    3. ChannelJoinWorker joins Channel X (after admin approval unless CHANNEL_JOIN_MODE=auto)
     4. If joined, SocialFetcher can fetch reactions/comments from originals
     5. Admin can promote to full archiving or mark as ignored
     """
@@ -86,6 +86,12 @@ class DiscoveredChannel(Base):
     )
     promoted_to_channel_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("channels.id"), nullable=True
+    )
+
+    # Join approval (CHANNEL_JOIN_MODE=approval: worker only joins approved rows)
+    join_approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    join_approved_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
     )
 
     # Timestamps

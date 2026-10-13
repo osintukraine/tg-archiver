@@ -9,7 +9,7 @@ All services load settings from environment variables defined in .env file.
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -179,8 +179,12 @@ class Settings(BaseSettings):
     # =============================================================================
     # DISCOVERED CHANNEL JOIN WORKER
     # =============================================================================
+    CHANNEL_JOIN_MODE: Literal["approval", "auto", "off"] = Field(
+        default="approval",
+        description="approval: join only admin-approved channels; auto: join every discovered channel; off: never join",
+    )
     CHANNEL_JOIN_ENABLED: bool = Field(
-        default=True, description="Enable auto-joining discovered channels for social data"
+        default=True, description="Deprecated: use CHANNEL_JOIN_MODE. false is treated as CHANNEL_JOIN_MODE=off"
     )
     CHANNEL_JOIN_INTERVAL_SECONDS: int = Field(
         default=60, description="Interval between channel join cycles"
@@ -193,6 +197,12 @@ class Settings(BaseSettings):
     )
     CHANNEL_JOIN_RETRY_DELAY_HOURS: int = Field(
         default=24, description="Hours to wait before retrying a failed join"
+    )
+    CHANNEL_JOIN_DAILY_CAP: int = Field(
+        default=20, description="Max successful joins per rolling 24 hours"
+    )
+    CHANNEL_JOIN_LIMIT_PAUSE_HOURS: int = Field(
+        default=24, description="Hours to pause joining after Telegram reports too many channels"
     )
 
     # =============================================================================
@@ -584,6 +594,11 @@ class Settings(BaseSettings):
             if creds:
                 accounts[account_name] = creds
         return accounts
+
+    @property
+    def effective_channel_join_mode(self) -> str:
+        """Join mode after applying the deprecated CHANNEL_JOIN_ENABLED=false override."""
+        return "off" if not self.CHANNEL_JOIN_ENABLED else self.CHANNEL_JOIN_MODE
 
     def model_post_init(self, __context) -> None:
         """Post-initialization: Create directories if they don't exist."""

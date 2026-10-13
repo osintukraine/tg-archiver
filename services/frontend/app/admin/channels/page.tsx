@@ -29,6 +29,8 @@ interface DiscoveredChannel {
   discovered_at: string;
   joined_at: string | null;
   admin_action: string | null;
+  join_approved_at: string | null;
+  awaiting_approval: boolean;
   promoted_to_channel_id: number | null;
   forward_count: number;
   social_messages_fetched: number;
@@ -45,7 +47,15 @@ interface DiscoveredStats {
   ignored: number;
   total_forwards_tracked: number;
   avg_discovery_count: number;
+  join_mode: 'approval' | 'auto' | 'off';
+  awaiting_approval: number;
 }
+
+const JOIN_MODE_DESCRIPTIONS: Record<DiscoveredStats['join_mode'], string> = {
+  approval: 'Approval required: the listener only joins channels you approve.',
+  auto: 'Auto-join: the listener joins every discovered channel.',
+  off: 'Joining disabled: the listener never joins discovered channels.',
+};
 
 interface Category {
   id: number;
@@ -359,6 +369,26 @@ export default function ChannelsPage() {
       reloadDiscoveredStats();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to ignore channel');
+    }
+  };
+
+  const handleApproveJoin = async (channelId: number) => {
+    try {
+      await adminApi.post(`/api/admin/discovered/${channelId}/approve`, {});
+      reloadDiscovered();
+      reloadDiscoveredStats();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to approve channel');
+    }
+  };
+
+  const handleUnapproveJoin = async (channelId: number) => {
+    try {
+      await adminApi.post(`/api/admin/discovered/${channelId}/unapprove`, {});
+      reloadDiscovered();
+      reloadDiscoveredStats();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to revoke approval');
     }
   };
 
@@ -733,6 +763,20 @@ export default function ChannelsPage() {
             </div>
           )}
 
+          {discoveredStats && (
+            <div className="glass p-3 text-sm text-text-secondary flex items-center gap-2">
+              <Badge variant={discoveredStats.join_mode === 'auto' ? 'warning' : 'info'} size="sm">
+                join mode: {discoveredStats.join_mode}
+              </Badge>
+              <span>{JOIN_MODE_DESCRIPTIONS[discoveredStats.join_mode]}</span>
+              {discoveredStats.join_mode === 'approval' && discoveredStats.awaiting_approval > 0 && (
+                <span className="ml-auto font-medium text-text-primary">
+                  {discoveredStats.awaiting_approval} awaiting approval
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Filters */}
           <div className="glass p-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -795,6 +839,12 @@ export default function ChannelsPage() {
                     <Badge variant={getStatusBadgeVariant(ch.join_status)} size="sm">
                       {ch.join_status}
                     </Badge>
+                    {ch.awaiting_approval && (
+                      <Badge variant="warning" size="sm">awaiting approval</Badge>
+                    )}
+                    {ch.join_approved_at && ch.join_status !== 'joined' && (
+                      <Badge variant="success" size="sm">approved</Badge>
+                    )}
                     {ch.admin_action && (
                       <Badge variant={ch.admin_action === 'promoted' ? 'success' : 'default'} size="sm">
                         {ch.admin_action}
@@ -835,6 +885,22 @@ export default function ChannelsPage() {
                         className="text-green-500 hover:text-green-400 text-sm"
                       >
                         Promote
+                      </button>
+                    )}
+                    {!ch.admin_action && !ch.join_approved_at && ['pending', 'failed'].includes(ch.join_status) && (
+                      <button
+                        onClick={() => handleApproveJoin(ch.id)}
+                        className="text-green-500 hover:text-green-400 text-sm"
+                      >
+                        Approve
+                      </button>
+                    )}
+                    {!ch.admin_action && ch.join_approved_at && ['pending', 'failed'].includes(ch.join_status) && (
+                      <button
+                        onClick={() => handleUnapproveJoin(ch.id)}
+                        className="text-yellow-500 hover:text-yellow-400 text-sm"
+                      >
+                        Unapprove
                       </button>
                     )}
                     {(ch.join_status === 'failed' || ch.join_status === 'ignored') && (

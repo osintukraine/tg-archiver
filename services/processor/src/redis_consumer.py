@@ -8,12 +8,12 @@ Architecture:
 - Stream: telegram:messages
 - Consumer Group: processor-workers
 - Consumer Name: worker-{hostname}-{pid}
-- Auto-claim: Reclaim messages from dead workers after 5 minutes
+- Auto-claim: Redeliver unacked (failed/crashed) messages after PROCESSOR_RETRY_IDLE_MS (5 min)
 - Block time: 5000ms (5 seconds)
 
 Features:
-- Automatic acknowledgment after successful processing
-- Dead letter queue for failed messages (after 3 retries)
+- Acknowledgment only after successful processing; failures are retried
+- Dead letter queue (full payload) after 3 failed deliveries
 - Graceful shutdown (stop consuming, finish current message)
 - Message parsing from Redis Stream format
 """
@@ -35,6 +35,12 @@ from .dead_letter_queue import DeadLetterQueue
 logger = logging.getLogger(__name__)
 
 
+def _id_key(stream_id: str) -> tuple[int, int]:
+    """Sort key for Redis Stream IDs ("ms-seq")."""
+    ms, _, seq = stream_id.partition("-")
+    return int(ms), int(seq or 0)
+
+
 class ProcessedMessage:
     """
     Parsed message from Redis Stream.
@@ -42,15 +48,19 @@ class ProcessedMessage:
     Contains all fields needed for processing.
     """
 
-    def __init__(self, stream_id: str, data: dict):
+    def __init__(self, stream_id: str, data: dict, source_stream: Optional[str] = None):
         """
         Initialize processed message.
 
         Args:
             stream_id: Redis Stream message ID
             data: Message data from stream
+            source_stream: Name of the stream the message was read from
         """
         self.stream_id = stream_id
+        self.source_stream = source_stream
+        # Verbatim stream fields, kept so a failed message can be dead-lettered and replayed
+        self.raw_fields = dict(data)
         self.message_id = int(data.get("message_id", 0))
         self.channel_id = int(data.get("channel_id", 0))
         self.content = data.get("content", "")
@@ -189,6 +199,11 @@ class RedisConsumer:
         self.messages_consumed = 0
         self.messages_acknowledged = 0
         self.messages_failed = 0
+        self.messages_retried = 0
+        self.messages_dead_lettered = 0
+
+        # Idle time before an unacked (failed or crashed) message is redelivered
+        self.auto_claim_min_idle_ms = settings.PROCESSOR_RETRY_IDLE_MS
 
     async def connect(self):
         """
@@ -256,10 +271,11 @@ class RedisConsumer:
 
     async def _cleanup_stale_consumers(self, max_idle_ms: int = 300000):
         """
-        Remove consumers that have been idle for too long from all streams.
+        Remove idle consumers that own no pending messages.
 
-        This prevents buildup of stale consumers from container restarts.
-        Default threshold: 5 minutes (300000ms)
+        Consumers that still own pending entries are never deleted: XGROUP
+        DELCONSUMER would drop those entries from the PEL (message loss).
+        XAUTOCLAIM moves them to a live consumer once they are idle long enough.
 
         Args:
             max_idle_ms: Maximum idle time in milliseconds before removal
@@ -268,7 +284,6 @@ class RedisConsumer:
 
         for stream_name in self.PRIORITY_STREAMS:
             try:
-                # Get all consumers in the group for this stream
                 consumers = await self.client.xinfo_consumers(
                     name=stream_name,
                     groupname=self.CONSUMER_GROUP
@@ -276,42 +291,28 @@ class RedisConsumer:
 
                 for consumer in consumers:
                     consumer_name = consumer.get("name", "")
-                    idle_time = consumer.get("idle", 0)
-                    pending = consumer.get("pending", 0)
 
-                    # Skip self
                     if consumer_name == self.consumer_name:
                         continue
+                    if consumer.get("pending", 0) > 0:
+                        continue
+                    if consumer.get("idle", 0) <= max_idle_ms:
+                        continue
 
-                    # Remove if idle > threshold AND no pending messages
-                    # (or if idle > 10x threshold even with pending - they're dead)
-                    if idle_time > max_idle_ms and pending == 0:
-                        await self.client.xgroup_delconsumer(
-                            name=stream_name,
-                            groupname=self.CONSUMER_GROUP,
-                            consumername=consumer_name
-                        )
-                        total_removed += 1
-                        logger.debug(f"Removed stale consumer from {stream_name}: {consumer_name}")
-                    elif idle_time > max_idle_ms * 10:  # 50 minutes
-                        # Force remove very stale consumers even with pending
-                        released = await self.client.xgroup_delconsumer(
-                            name=stream_name,
-                            groupname=self.CONSUMER_GROUP,
-                            consumername=consumer_name
-                        )
-                        total_removed += 1
-                        logger.info(
-                            f"Force-removed dead consumer from {stream_name}: {consumer_name} "
-                            f"(idle: {idle_time}ms, released {released} pending)"
-                        )
+                    await self.client.xgroup_delconsumer(
+                        name=stream_name,
+                        groupname=self.CONSUMER_GROUP,
+                        consumername=consumer_name
+                    )
+                    total_removed += 1
+                    logger.debug(f"Removed stale consumer from {stream_name}: {consumer_name}")
 
             except RedisError as e:
                 # Non-fatal - log and continue to next stream
                 logger.warning(f"Failed to cleanup stale consumers from {stream_name}: {e}")
 
         if total_removed > 0:
-            logger.info(f"Cleaned up {total_removed} stale consumers from all streams")
+            logger.info(f"Cleaned up {total_removed} idle consumers with no pending messages")
 
     async def consume_messages(self) -> AsyncGenerator[ProcessedMessage, None]:
         """
@@ -341,52 +342,24 @@ class RedisConsumer:
 
         while not self._shutdown:
             try:
-                # First, try to auto-claim messages from dead workers (all streams)
-                claimed_messages = await self._auto_claim_pending()
+                # First, try to auto-claim unacked messages (failed or from dead workers)
+                batch = await self._auto_claim_pending()
 
-                if claimed_messages:
-                    for stream_id, data in claimed_messages:
-                        self.messages_consumed += 1
-                        yield ProcessedMessage(stream_id, data)
-                    continue  # Loop back to check realtime after processing
+                if not batch:
+                    # Priority 1: REALTIME (short block); 2: LEGACY (drain migration);
+                    # 3: BACKFILL (1 message, then check realtime again)
+                    for stream_name, block_ms, count in (
+                        (self.STREAM_REALTIME, self.BLOCK_TIME_REALTIME_MS, self.batch_size),
+                        (self.STREAM_LEGACY, self.BLOCK_TIME_LEGACY_MS, self.batch_size),
+                        (self.STREAM_BACKFILL, self.BLOCK_TIME_LEGACY_MS, 1),
+                    ):
+                        batch = await self._read_from_stream(stream_name, block_ms, count)
+                        if batch:
+                            break
 
-                # Priority 1: Check REALTIME stream (with short block)
-                messages = await self._read_from_stream(
-                    self.STREAM_REALTIME,
-                    block_ms=self.BLOCK_TIME_REALTIME_MS,
-                    count=self.batch_size
-                )
-                if messages:
-                    for stream_id, data in messages:
-                        self.messages_consumed += 1
-                        yield ProcessedMessage(stream_id, data)
-                    continue  # Loop back to check realtime
-
-                # Priority 2: Check LEGACY stream (no block, drain migration)
-                messages = await self._read_from_stream(
-                    self.STREAM_LEGACY,
-                    block_ms=self.BLOCK_TIME_LEGACY_MS,
-                    count=self.batch_size
-                )
-                if messages:
-                    for stream_id, data in messages:
-                        self.messages_consumed += 1
-                        yield ProcessedMessage(stream_id, data)
-                    continue  # Loop back to check realtime
-
-                # Priority 3: Check BACKFILL stream (no block, 1 message at a time)
-                messages = await self._read_from_stream(
-                    self.STREAM_BACKFILL,
-                    block_ms=self.BLOCK_TIME_LEGACY_MS,
-                    count=1  # Only 1 backfill message, then check realtime again
-                )
-                if messages:
-                    for stream_id, data in messages:
-                        self.messages_consumed += 1
-                        yield ProcessedMessage(stream_id, data)
-                    continue  # Loop back to check realtime
-
-                # All queues empty - no messages available
+                for stream_name, stream_id, data in batch:
+                    self.messages_consumed += 1
+                    yield ProcessedMessage(stream_id, data, source_stream=stream_name)
 
             except asyncio.CancelledError:
                 logger.info("Message consumption cancelled")
@@ -405,7 +378,7 @@ class RedisConsumer:
         stream_name: str,
         block_ms: int = 0,
         count: int = 10
-    ) -> list[tuple[str, dict]]:
+    ) -> list[tuple[str, str, dict]]:
         """
         Read messages from a specific stream.
 
@@ -415,7 +388,7 @@ class RedisConsumer:
             count: Maximum messages to read
 
         Returns:
-            List of (stream_id, data) tuples
+            List of (stream_name, stream_id, data) tuples
         """
         try:
             messages = await self.client.xreadgroup(
@@ -433,7 +406,7 @@ class RedisConsumer:
             result = []
             for _, stream_messages in messages:
                 for stream_id, data in stream_messages:
-                    result.append((stream_id, data))
+                    result.append((stream_name, stream_id, data))
 
             return result
 
@@ -441,21 +414,23 @@ class RedisConsumer:
             logger.warning(f"Error reading from {stream_name}: {e}")
             return []
 
-    async def _auto_claim_pending(self) -> list[tuple[str, dict]]:
+    async def _auto_claim_pending(self) -> list[tuple[str, str, dict]]:
         """
-        Auto-claim pending messages from dead workers across all priority streams.
+        Auto-claim unacked messages across all priority streams.
 
-        Reclaims messages that have been pending for more than 5 minutes.
-        Checks streams in priority order: realtime > legacy > backfill.
+        This is the retry path: a message that failed (reject() leaves it
+        pending) or whose worker died is reclaimed once idle for
+        auto_claim_min_idle_ms. Messages already delivered more than
+        MAX_RETRIES times crashed/hung the worker without ever being rejected;
+        they are dead-lettered and acked here instead of being yielded.
 
         Returns:
-            List of (stream_id, data) tuples for claimed messages
+            List of (stream_name, stream_id, data) tuples to process
         """
         all_claimed = []
 
         for stream_name in self.PRIORITY_STREAMS:
             try:
-                # Get pending messages for this stream
                 pending = await self.client.xpending(
                     name=stream_name,
                     groupname=self.CONSUMER_GROUP,
@@ -464,26 +439,34 @@ class RedisConsumer:
                 if not pending or pending.get("pending", 0) == 0:
                     continue
 
-                # Auto-claim messages idle for more than 5 minutes
                 result = await self.client.xautoclaim(
                     name=stream_name,
                     groupname=self.CONSUMER_GROUP,
                     consumername=self.consumer_name,
-                    min_idle_time=self.AUTO_CLAIM_MIN_IDLE_MS,
+                    min_idle_time=self.auto_claim_min_idle_ms,
                     start_id="0-0",
                     count=10,  # Claim up to 10 at a time
                 )
 
                 # Result format: (next_start_id, claimed_messages, deleted_ids)
-                if len(result) >= 2:
-                    claimed_messages = result[1]
+                claimed = [(i, d) for i, d in result[1] if d is not None] if len(result) >= 2 else []
+                if not claimed:
+                    continue
 
-                    if claimed_messages:
-                        logger.info(
-                            f"Auto-claimed {len(claimed_messages)} pending messages "
-                            f"from {stream_name}"
+                counts = await self._get_delivery_counts(stream_name, [i for i, _ in claimed])
+                for stream_id, data in claimed:
+                    deliveries = counts.get(stream_id, 1)
+                    if deliveries > self.MAX_RETRIES:
+                        await self._dead_letter(
+                            stream_name, stream_id, data,
+                            f"Exceeded {self.MAX_RETRIES} deliveries without being rejected "
+                            f"(worker crash or hang suspected)",
+                            deliveries,
                         )
-                        all_claimed.extend(claimed_messages)
+                    else:
+                        all_claimed.append((stream_name, stream_id, data))
+
+                logger.info(f"Auto-claimed {len(claimed)} pending messages from {stream_name}")
 
             except RedisError as e:
                 logger.warning(f"Error auto-claiming from {stream_name}: {e}")
@@ -491,112 +474,115 @@ class RedisConsumer:
 
         return all_claimed
 
-    async def acknowledge(self, stream_id: str):
+    async def _get_delivery_counts(self, stream_name: str, stream_ids: list[str]) -> dict[str, int]:
+        """Delivery counts (XPENDING) for the given ids of one stream."""
+        details = await self.client.xpending_range(
+            name=stream_name,
+            groupname=self.CONSUMER_GROUP,
+            min=min(stream_ids, key=_id_key),
+            max=max(stream_ids, key=_id_key),
+            count=len(stream_ids) + 1000,  # the id range may also contain other pending ids
+        )
+        wanted = set(stream_ids)
+        return {d["message_id"]: d["times_delivered"] for d in details if d["message_id"] in wanted}
+
+    async def _dead_letter(
+        self, stream_name: str, stream_id: str, fields: dict, error: str, retry_count: int
+    ) -> bool:
+        """
+        Write a message to the DLQ and, only if that succeeded, XACK it.
+
+        If the DLQ write fails the message stays pending (nothing is lost).
+        """
+        if not await self.dlq.send_to_dlq(
+            stream_id=stream_id,
+            fields=fields,
+            error=error,
+            retry_count=retry_count,
+            original_stream=stream_name,
+        ):
+            return False
+        await self._xack(stream_id, stream_name)
+        self.messages_dead_lettered += 1
+        return True
+
+    async def _xack(self, stream_id: str, stream_name: Optional[str] = None) -> int:
+        """XACK on the known stream, or (tolerant fallback) on every stream."""
+        for name in [stream_name] if stream_name else self.PRIORITY_STREAMS:
+            if await self.client.xack(name, self.CONSUMER_GROUP, stream_id) > 0:
+                return 1
+        return 0
+
+    async def acknowledge(self, stream_id: str, stream_name: Optional[str] = None):
         """
         Acknowledge message as successfully processed.
 
-        Tries all priority streams since we don't track source stream.
-        XACK is idempotent and returns 0 if message isn't in that stream.
-
         Args:
             stream_id: Redis Stream message ID
+            stream_name: Source stream (if unknown, all streams are tried)
         """
         if not self.client:
             raise RedisError("Redis client not connected")
 
         try:
-            # Try all streams - message only exists in one
-            for stream_name in self.PRIORITY_STREAMS:
-                result = await self.client.xack(
-                    stream_name,
-                    self.CONSUMER_GROUP,
-                    stream_id,
-                )
-                if result > 0:
-                    # Found and acknowledged
-                    break
-
+            await self._xack(stream_id, stream_name)
             self.messages_acknowledged += 1
-
             logger.debug(f"Acknowledged message: {stream_id}")
 
         except RedisError as e:
             logger.error(f"Failed to acknowledge message {stream_id}: {e}")
             raise
 
-    async def reject(self, stream_id: str, error: str, message: ProcessedMessage = None):
+    async def reject(self, stream_id: str, error: str, message: Optional[ProcessedMessage] = None):
         """
         Reject message (failed processing).
 
-        Sends message to Dead Letter Queue if retry limit exceeded.
+        Below MAX_RETRIES deliveries the message is left pending so XAUTOCLAIM
+        redelivers it after the idle time. Once it has been delivered
+        MAX_RETRIES times it is dead-lettered (full payload) and acked.
 
         Args:
             stream_id: Redis Stream message ID
             error: Error description
-            message: ProcessedMessage instance (optional, for DLQ)
+            message: ProcessedMessage instance (needed to dead-letter)
         """
         self.messages_failed += 1
+        stream_name = message.source_stream if message else None
+        retry_count = await self._get_delivery_count(stream_id, stream_name)
 
-        logger.error(
-            f"Message rejected: {stream_id} - {error}"
-        )
-
-        # Get delivery count from XPENDING to determine retry count
-        retry_count = await self._get_delivery_count(stream_id)
-
-        # Send to DLQ if we have the message and retry limit exceeded
-        if self.dlq and message and retry_count >= self.MAX_RETRIES:
-            # Convert ProcessedMessage to dict for DLQ storage
-            message_data = {
-                "message_id": message.message_id,
-                "channel_id": message.channel_id,
-                "content": message.content,
-                "media_type": message.media_type,
-                "media_url": message.media_url,
-                "telegram_date": message.telegram_date,
-                "trace_id": message.trace_id,
-            }
-
-            await self.dlq.send_to_dlq(
-                stream_id=stream_id,
-                message_data=message_data,
-                error=error,
-                retry_count=retry_count,
+        if retry_count < self.MAX_RETRIES:
+            self.messages_retried += 1
+            logger.error(
+                f"Message failed (delivery {retry_count}/{self.MAX_RETRIES}), "
+                f"will retry: {stream_id} - {error}"
             )
+            return
 
-        # Acknowledge to remove from pending list
-        await self.acknowledge(stream_id)
+        if not (self.dlq and message and stream_name):
+            # Cannot dead-letter without the payload and stream; keep it pending
+            logger.error(f"Message failed, cannot dead-letter, left pending: {stream_id} - {error}")
+            return
 
-    async def _get_delivery_count(self, stream_id: str) -> int:
+        logger.error(f"Message failed {retry_count} times, dead-lettering: {stream_id} - {error}")
+        await self._dead_letter(stream_name, stream_id, message.raw_fields, error, retry_count)
+
+    async def _get_delivery_count(self, stream_id: str, stream_name: Optional[str] = None) -> int:
         """
         Get delivery count for a message from XPENDING.
 
-        Checks all priority streams since we don't track source stream.
-
         Args:
             stream_id: Redis Stream message ID
+            stream_name: Source stream (if unknown, all streams are searched)
 
         Returns:
             Number of times message has been delivered (1 = first attempt)
         """
         try:
-            # Check all streams - message only exists in one
-            for stream_name in self.PRIORITY_STREAMS:
-                pending_details = await self.client.xpending_range(
-                    name=stream_name,
-                    groupname=self.CONSUMER_GROUP,
-                    min=stream_id,
-                    max=stream_id,
-                    count=1,
-                )
-
-                if pending_details and len(pending_details) > 0:
-                    # xpending_range returns: [(msg_id, consumer, idle_ms, times_delivered), ...]
-                    # times_delivered is at index 3
-                    return pending_details[0][3]
-
-            # If not in any pending list, assume first attempt
-            return 1
+            for name in [stream_name] if stream_name else self.PRIORITY_STREAMS:
+                counts = await self._get_delivery_counts(name, [stream_id])
+                if stream_id in counts:
+                    return counts[stream_id]
+            return 1  # Not pending: assume first attempt
 
         except RedisError as e:
             logger.error(f"Failed to get delivery count for {stream_id}: {e}")
@@ -670,6 +656,8 @@ class RedisConsumer:
             "messages_consumed": self.messages_consumed,
             "messages_acknowledged": self.messages_acknowledged,
             "messages_failed": self.messages_failed,
+            "messages_retried": self.messages_retried,
+            "messages_dead_lettered": self.messages_dead_lettered,
             "success_rate": success_rate,
         }
 

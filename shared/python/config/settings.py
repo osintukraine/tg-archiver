@@ -330,6 +330,10 @@ class Settings(BaseSettings):
     WORKER_BATCH_SIZE: int = Field(default=50, description="Messages per batch")
     WORKER_TIMEOUT: int = Field(default=300, description="Worker timeout (seconds)")
     PROCESSOR_BATCH_SIZE: int = Field(default=10, description="Messages per XREADGROUP call")
+    PROCESSOR_RETRY_IDLE_MS: int = Field(
+        default=300000,
+        description="Idle time (ms) before a failed/unacked message is redelivered (XAUTOCLAIM)",
+    )
     ENTITY_EXTRACTION_ENABLED: bool = Field(default=True, description="Enable entity extraction")
 
     # =============================================================================

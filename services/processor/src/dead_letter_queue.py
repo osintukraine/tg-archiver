@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from redis.asyncio import Redis
@@ -22,7 +22,7 @@ class DeadLetterQueue:
     async def send_to_dlq(
         self,
         stream_id: str,
-        message_data: Dict[str, Any],
+        fields: Dict[str, Any],
         error: str,
         retry_count: int,
         original_stream: str = "telegram:messages",
@@ -32,7 +32,7 @@ class DeadLetterQueue:
 
         Args:
             stream_id: Original stream entry ID
-            message_data: The message data that failed processing
+            fields: Original stream fields, stored verbatim so the entry can be replayed
             error: Error message describing the failure
             retry_count: Number of retries attempted
             original_stream: Source stream name
@@ -44,10 +44,10 @@ class DeadLetterQueue:
             dlq_entry = {
                 "original_stream_id": stream_id,
                 "original_stream": original_stream,
-                "message_data": json.dumps(message_data),
+                "fields": json.dumps(fields),
                 "error": error,
                 "retry_count": str(retry_count),
-                "failed_at": datetime.utcnow().isoformat(),
+                "failed_at": datetime.now(timezone.utc).isoformat(),
             }
 
             await self.redis.xadd(
@@ -98,18 +98,20 @@ class DeadLetterQueue:
         for msg_id, data in messages:
             entry = {
                 "dlq_id": msg_id,
+                "original_stream": data.get("original_stream"),
                 "original_stream_id": data.get("original_stream_id"),
                 "error": data.get("error"),
                 "retry_count": int(data.get("retry_count", 0)),
                 "failed_at": data.get("failed_at"),
             }
 
-            # Parse message_data JSON
-            if "message_data" in data:
-                try:
-                    entry["message_data"] = json.loads(data["message_data"])
-                except json.JSONDecodeError:
-                    entry["message_data"] = data["message_data"]
+            # "fields" = new format (replayable); "message_data" = old partial format
+            for key in ("fields", "message_data"):
+                if key in data:
+                    try:
+                        entry[key] = json.loads(data[key])
+                    except json.JSONDecodeError:
+                        entry[key] = data[key]
 
             result.append(entry)
 

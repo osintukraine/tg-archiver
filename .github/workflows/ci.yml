@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Settings without defaults must be set; dummy values are fine for tests.
+  TEST_ENV_ARGS: >-
+    -e POSTGRES_HOST=tgci-pg -e POSTGRES_USER=archiver -e POSTGRES_PASSWORD=testpw -e REDIS_PASSWORD=x
+    -e MINIO_ENDPOINT=x:1 -e MINIO_ACCESS_KEY=x -e MINIO_SECRET_KEY=x -e JWT_SECRET_KEY=x
+    -e TELEGRAM_API_ID=1 -e TELEGRAM_API_HASH=x
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks scans full history
+      - uses: astral-sh/ruff-action@v4
+        with:
+          version: 0.17.0
+          args: check --output-format=github
+      - name: Gitleaks (working tree and history)
+        run: |
+          GL="docker run --rm -v $PWD:/repo zricethezav/gitleaks:v8.30.1"
+          $GL dir /repo -c /repo/.gitleaks.toml --no-banner
+          $GL git /repo -c /repo/.gitleaks.toml --no-banner
+
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build service images
+        run: |
+          for s in processor listener api; do
+            docker buildx build --load -t tgci-$s -f services/$s/Dockerfile \
+              --cache-from type=gha,scope=$s --cache-to type=gha,scope=$s,mode=max .
+          done
+      - name: Start Redis and Postgres
+        run: |
+          docker network create tgci
+          docker run -d --name tgci-redis --network tgci redis:8-alpine
+          docker run -d --name tgci-pg --network tgci -e POSTGRES_USER=archiver \
+            -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=tg_archiver postgres:18.6-alpine
+          # The entrypoint starts a temporary server for init, then restarts: wait for the final one.
+          sleep 5
+          for _ in $(seq 60); do
+            docker exec tgci-pg pg_isready -U archiver -d tg_archiver && exit 0
+            sleep 1
+          done
+          exit 1
+      - name: Apply schema (init.sql, then migrations in filename order)
+        run: |
+          for f in infrastructure/postgres/init.sql infrastructure/postgres/migrations/*.sql; do
+            echo "applying $f"
+            docker exec -i tgci-pg psql -q -v ON_ERROR_STOP=1 -U archiver -d tg_archiver < "$f"
+          done
+      - name: Processor tests
+        run: |
+          # shellcheck disable=SC2086 # TEST_ENV_ARGS is intentionally word-split
+          docker run --rm -u root --network tgci $TEST_ENV_ARGS -e TEST_REDIS_URL=redis://tgci-redis:6379/15 \
+            -v "$PWD/services/processor/tests:/app/tests:ro" \
+            -v "$PWD/services/processor/requirements-dev.txt:/tmp/rd.txt:ro" \
+            tgci-processor sh -c "pip install -q -r /tmp/rd.txt && python -m pytest -o asyncio_mode=auto tests"
+      - name: Listener tests
+        run: |
+          # shellcheck disable=SC2086 # TEST_ENV_ARGS is intentionally word-split
+          docker run --rm -u root --network tgci $TEST_ENV_ARGS -e PYTHONPATH=/shared/python:/app -w /app \
+            -v "$PWD/services/listener/tests:/app/tests:ro" \
+            -v "$PWD/services/listener/requirements-dev.txt:/tmp/rd.txt:ro" \
+            tgci-listener sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"
+      - name: API tests
+        run: |
+          # shellcheck disable=SC2086 # TEST_ENV_ARGS is intentionally word-split
+          docker run --rm -u root --network tgci $TEST_ENV_ARGS -e TEST_REDIS_URL=redis://tgci-redis:6379/14 -w /app \
+            -v "$PWD/services/api/tests:/app/tests:ro" \
+            tgci-api sh -c "pip install -q pytest pytest-asyncio && python -m pytest tests -c tests/pytest-approval.ini"
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      # vitest must run under Node (jsdom EventTarget error under Bun's runtime)
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ hashFiles('services/frontend/bun.lock') }}
+          restore-keys: bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run type-check
+      - run: bun run test:run
+
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [listener, processor, api, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max

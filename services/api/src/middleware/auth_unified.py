@@ -95,11 +95,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return None
 
         if not auth_header.startswith("Bearer "):
-            token = request.query_params.get("access_token")
-            if not token:
-                return None
-        else:
-            token = auth_header[7:]
+            return None
+        token = auth_header[7:]
 
         try:
             from ..auth.jwt import decode_access_token

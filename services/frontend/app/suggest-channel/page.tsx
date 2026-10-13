@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { getAuthHeaders } from '@/lib/auth-utils';
 
 // Use relative URLs when behind proxy, or NEXT_PUBLIC_API_URL for direct access
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -57,6 +58,11 @@ export default function SuggestChannelPage() {
   // Validate channel link in real-time
   const channelLinkValidation = useMemo(() => validateChannelLink(channelLink), [channelLink]);
 
+  // Anonymous visitors have no csrf_token cookie yet; any API GET sets it.
+  useEffect(() => {
+    fetch(`${API_URL}/api/auth/info`, { credentials: 'include' }).catch(() => {});
+  }, []);
+
   // Load Cloudflare Turnstile script
   useEffect(() => {
     // Already loaded (e.g. remount after client navigation)
@@ -96,6 +102,7 @@ export default function SuggestChannelPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           channel_link: channelLink,

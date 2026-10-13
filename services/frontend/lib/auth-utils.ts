@@ -33,31 +33,33 @@ export function removeToken(): void {
 }
 
 /**
- * Get authorization headers for API requests
+ * Read the double-submit CSRF token from the `csrf_token` cookie (client only)
+ */
+export function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(^| )csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+/**
+ * Get auth headers for API requests: Bearer token plus X-CSRF-Token.
+ * The CSRF header is always sent (the API only checks it on POST/PUT/PATCH/DELETE).
  */
 export function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
   const token = getToken();
-  if (token) {
-    return { 'Authorization': `Bearer ${token}` };
-  }
-  return {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const csrf = getCsrfToken();
+  if (csrf) headers['X-CSRF-Token'] = csrf;
+  return headers;
 }
 
 /**
  * Build fetch options with auth headers
  */
 export function withAuth(options: RequestInit = {}): RequestInit {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {}),
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   return {
     ...options,
-    headers,
+    headers: { ...(options.headers as Record<string, string> || {}), ...getAuthHeaders() },
   };
 }

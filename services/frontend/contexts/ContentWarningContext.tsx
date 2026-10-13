@@ -65,11 +65,15 @@ export function ContentWarningProvider({ children }: { children: ReactNode }) {
   // Feature disabled = implicit consent
   const hasConsent = !config.enabled || storedConsent;
 
-  // Clear expired or invalid consent from localStorage
+  // Clear expired or invalid consent from localStorage. Read storage directly:
+  // during hydration `storedConsent` is the server snapshot (always false), so
+  // trusting it here wiped valid consent on every page load.
   useEffect(() => {
-    if (!config.enabled || storedConsent) return;
+    if (!config.enabled) return;
     try {
-      localStorage.removeItem(CONSENT_STORAGE_KEY);
+      if (localStorage.getItem(CONSENT_STORAGE_KEY) !== null && !readStoredConsent()) {
+        localStorage.removeItem(CONSENT_STORAGE_KEY);
+      }
     } catch {
       // ignore
     }

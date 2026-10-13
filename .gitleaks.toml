@@ -1,0 +1,10 @@
+title = "tg-archiver gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documentation placeholder in an OpenAPI docstring curl example"
+regexTarget = "match"
+regexes = ['''Bearer\s+YOUR_TOKEN_HERE''']
+paths = ['''services/api/src/routers/auth\.py''']

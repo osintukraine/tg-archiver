@@ -1,0 +1,7 @@
+# Dev-only override: publish Postgres on loopback so the Claude Code Postgres MCP (.mcp.json) can reach it.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Then: CLAUDE_READONLY_PASSWORD=... scripts/create_readonly_db_role.sh
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"

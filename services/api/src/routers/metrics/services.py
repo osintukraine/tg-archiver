@@ -105,6 +105,18 @@ async def _async_none():
     return None
 
 
+def _safe_metric(results: List[Any], idx: int) -> Any:
+    """Value at `idx` of gathered Prometheus results; None for missing, errors, NaN or inf."""
+    if idx >= len(results):
+        return None
+    value = results[idx]
+    if isinstance(value, Exception):
+        return None
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    return value
+
+
 def _empty_services_metrics() -> dict:
     """Return empty services metrics when Prometheus unavailable."""
     return {
@@ -151,23 +163,11 @@ async def _fetch_services_metrics() -> dict:
 
         results = await asyncio.gather(*queries, return_exceptions=True)
 
-        def safe_val(idx):
-            if idx >= len(results):
-                return None
-            v = results[idx]
-            if isinstance(v, Exception):
-                return None
-            if isinstance(v, (int, float)):
-                if math.isnan(v) or math.isinf(v):
-                    return None
-                return v
-            return v
-
-        is_up = safe_val(0)
-        rate = safe_val(1)
-        queue = safe_val(2)
-        memory = safe_val(3)
-        conns = safe_val(4)
+        is_up = _safe_metric(results, 0)
+        rate = _safe_metric(results, 1)
+        queue = _safe_metric(results, 2)
+        memory = _safe_metric(results, 3)
+        conns = _safe_metric(results, 4)
 
         # Determine status
         if is_up is None or is_up == 0:

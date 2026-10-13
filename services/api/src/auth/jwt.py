@@ -427,8 +427,7 @@ def extract_token_from_request(request: Request) -> Optional[str]:
 
     Looks for token in (priority order):
     1. Authorization: Bearer <token> header
-    2. access_token query parameter (for WebSocket compatibility)
-    3. access_token cookie (for /docs and /redoc browser access)
+    2. access_token cookie (for /docs and /redoc browser access)
 
     Args:
         request: FastAPI request object
@@ -440,11 +439,6 @@ def extract_token_from_request(request: Request) -> Optional[str]:
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         return auth_header[7:]  # Remove "Bearer " prefix
-
-    # Check query parameter (for WebSocket)
-    token = request.query_params.get("access_token")
-    if token:
-        return token
 
     # Check cookie (for /docs and /redoc browser access)
     token = request.cookies.get("access_token")

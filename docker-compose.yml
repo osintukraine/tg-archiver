@@ -149,6 +149,8 @@ services:
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
       - MINIO_SECURE=false
       - MEDIA_BUFFER_PATH=/var/cache/media-buffer
+      # Failed messages are retried after this idle time (3 attempts, then DLQ)
+      - PROCESSOR_RETRY_IDLE_MS=${PROCESSOR_RETRY_IDLE_MS:-300000}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
       - TRANSLATION_ENABLED=${TRANSLATION_ENABLED:-false}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}

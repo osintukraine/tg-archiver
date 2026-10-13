@@ -6,7 +6,10 @@ Basic CRUD operations for RSS feed sources.
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from xml.etree.ElementTree import Element, ParseError
 
+from defusedxml import DefusedXmlException
+from defusedxml.ElementTree import fromstring as safe_fromstring
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -354,6 +357,72 @@ class FeedTestResult(BaseModel):
     error: Optional[str] = None
 
 
+ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
+FEED_PREVIEW_ITEMS = 5
+FEED_SUMMARY_CHARS = 200
+
+
+def _first(parent: Element, *paths: str) -> Optional[Element]:
+    """
+    First element found for any of `paths` (namespaced Atom paths allowed).
+
+    Explicit `is None` checks: an Element with no children is falsy, so
+    `find(a) or find(b)` silently dropped leaf elements such as <title>.
+    """
+    for path in paths:
+        found = parent.find(path, ATOM_NS)
+        if found is not None:
+            return found
+    return None
+
+
+def _text(element: Optional[Element]) -> str:
+    return (element.text or "") if element is not None else ""
+
+
+def parse_feed_preview(content: str) -> tuple[Optional[str], Optional[str], List[Dict[str, str]]]:
+    """
+    Parse an RSS 2.0 or Atom document into (title, description, first items).
+
+    The XML comes from an arbitrary URL, so it is parsed with defusedxml:
+    entity expansion and external entities raise DefusedXmlException.
+    """
+    root = safe_fromstring(content)
+
+    channel = root.find("channel")
+    if channel is not None:  # RSS 2.0
+        items = [
+            {
+                "title": item.findtext("title") or "[No title]",
+                "link": item.findtext("link") or "",
+                "published": item.findtext("pubDate") or "",
+                "summary": (item.findtext("description") or "")[:FEED_SUMMARY_CHARS],
+            }
+            for item in channel.findall("item")[:FEED_PREVIEW_ITEMS]
+        ]
+        return channel.findtext("title"), channel.findtext("description"), items
+
+    # Atom (namespaced, with a fallback for feeds that omit the namespace)
+    title_el = _first(root, "atom:title", "title")
+    subtitle_el = _first(root, "atom:subtitle", "subtitle")
+    entries = root.findall("atom:entry", ATOM_NS) or root.findall("entry")
+    items = []
+    for entry in entries[:FEED_PREVIEW_ITEMS]:
+        entry_title = _first(entry, "atom:title", "title")
+        entry_link = _first(entry, "atom:link", "link")
+        items.append({
+            "title": _text(entry_title) or "[No title]",
+            "link": entry_link.get("href", "") if entry_link is not None else "",
+            "published": _text(_first(entry, "atom:published", "published", "atom:updated", "updated")),
+            "summary": _text(_first(entry, "atom:summary", "summary", "atom:content", "content"))[:FEED_SUMMARY_CHARS],
+        })
+    return (
+        title_el.text if title_el is not None else None,
+        subtitle_el.text if subtitle_el is not None else None,
+        items,
+    )
+
+
 @router.post("/rss/test")
 async def test_feed(
     admin: AdminUser,
@@ -361,7 +430,6 @@ async def test_feed(
 ) -> FeedTestResult:
     """Test an RSS feed URL without saving it."""
     import httpx
-    import xml.etree.ElementTree as ET
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -369,48 +437,7 @@ async def test_feed(
             response.raise_for_status()
             content = response.text
 
-        # Parse RSS/Atom feed
-        root = ET.fromstring(content)
-
-        # Handle different feed formats
-        title = None
-        description = None
-        items = []
-
-        # RSS 2.0
-        channel = root.find("channel")
-        if channel is not None:
-            title = channel.findtext("title")
-            description = channel.findtext("description")
-            for item in channel.findall("item")[:5]:
-                items.append({
-                    "title": item.findtext("title") or "[No title]",
-                    "link": item.findtext("link") or "",
-                    "published": item.findtext("pubDate") or "",
-                    "summary": (item.findtext("description") or "")[:200],
-                })
-        # Atom
-        else:
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
-            title_el = root.find("atom:title", ns) or root.find("title")
-            title = title_el.text if title_el is not None else None
-            subtitle = root.find("atom:subtitle", ns) or root.find("subtitle")
-            description = subtitle.text if subtitle is not None else None
-
-            for entry in (root.findall("atom:entry", ns) or root.findall("entry"))[:5]:
-                entry_title = entry.find("atom:title", ns) or entry.find("title")
-                entry_link = entry.find("atom:link", ns) or entry.find("link")
-                entry_published = entry.find("atom:published", ns) or entry.find("published") or entry.find("atom:updated", ns) or entry.find("updated")
-                entry_summary = entry.find("atom:summary", ns) or entry.find("summary") or entry.find("atom:content", ns) or entry.find("content")
-
-                link_href = entry_link.get("href") if entry_link is not None else ""
-
-                items.append({
-                    "title": entry_title.text if entry_title is not None else "[No title]",
-                    "link": link_href,
-                    "published": entry_published.text if entry_published is not None else "",
-                    "summary": (entry_summary.text or "")[:200] if entry_summary is not None else "",
-                })
+        title, description, items = parse_feed_preview(content)
 
         return FeedTestResult(
             success=True,
@@ -427,7 +454,13 @@ async def test_feed(
             url=url,
             error=f"HTTP {e.response.status_code}: {e.response.reason_phrase}",
         )
-    except ET.ParseError as e:
+    except DefusedXmlException:
+        return FeedTestResult(
+            success=False,
+            url=url,
+            error="Rejected unsafe XML (entity declarations or external references)",
+        )
+    except ParseError as e:
         return FeedTestResult(
             success=False,
             url=url,

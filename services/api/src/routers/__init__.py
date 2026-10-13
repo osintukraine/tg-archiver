@@ -3,7 +3,7 @@ API Routers Package (tg-archiver - No AI)
 
 Exports all API router modules for registration in main.py
 Removed: analytics, channel_network, entities, events, map, network, search,
-         semantic, similarity, validation, news_timeline, channel_submissions,
+         semantic, similarity, validation, news_timeline,
          admin/entities, admin/prompts
 """
 
@@ -13,6 +13,7 @@ from .auth import router as auth_router
 from .health import router as health_router
 from .bookmarks import router as bookmarks_router
 from .channels import router as channels_router
+from .channel_submissions import router as channel_submissions_router
 from .comments import router as comments_router
 from .feed_tokens import router as feed_tokens_router
 from .media import router as media_router

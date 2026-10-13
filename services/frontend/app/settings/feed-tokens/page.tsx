@@ -6,19 +6,17 @@ import { getAuthHeaders } from '@/lib/auth-utils';
 
 interface FeedToken {
   id: string;
-  prefix: string;
-  label: string | null;
+  name: string | null;
   created_at: string;
   last_used_at: string | null;
-  use_count: number;
   is_active: boolean;
 }
 
 interface NewToken {
   id: string;
   token: string;
-  prefix: string;
-  label: string | null;
+
+  name: string | null;
 }
 
 export default function FeedTokensPage() {
@@ -80,7 +78,7 @@ export default function FeedTokensPage() {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({ label: label || null }),
+        body: JSON.stringify({ name: label || null }),
       });
 
       if (res.ok) {
@@ -239,10 +237,10 @@ export default function FeedTokensPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <code className="font-mono text-sm bg-gray-100 px-2 py-1 rounded-sm">
-                        {token.prefix}...
+                        #{token.id}
                       </code>
-                      {token.label && (
-                        <span className="text-gray-700">{token.label}</span>
+                      {token.name && (
+                        <span className="text-gray-700">{token.name}</span>
                       )}
                       {!token.is_active && (
                         <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-sm">
@@ -255,7 +253,6 @@ export default function FeedTokensPage() {
                       {token.last_used_at && (
                         <> · Last used: {formatDate(token.last_used_at)}</>
                       )}
-                      {' · '}{token.use_count.toLocaleString()} requests
                     </div>
                   </div>
                   {token.is_active && (

@@ -37,6 +37,7 @@ from .routers import (
     health_router,
     bookmarks_router,
     channels_router,
+    channel_submissions_router,
     comments_router,
     feed_tokens_router,
     media_router,
@@ -239,6 +240,7 @@ app.include_router(metrics_router)
 app.include_router(media_router)
 app.include_router(messages_router)
 app.include_router(channels_router)
+app.include_router(channel_submissions_router)
 app.include_router(rss_router)
 app.include_router(social_graph_router)
 app.include_router(comments_router)

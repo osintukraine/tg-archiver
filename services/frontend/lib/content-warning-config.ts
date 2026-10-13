@@ -75,6 +75,7 @@ export const CONTENT_WARNING_THEMES: Record<string, ContentWarningTheme> = {
  */
 export const EXEMPT_ROUTES = [
   '/about',
+  '/admin',      // authenticated operators; the gate is for public visitors
   '/auth',
   '/api',
   '/suggest-channel',

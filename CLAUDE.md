@@ -138,7 +138,7 @@ Python tests (pytest) live in `services/processor/tests`, `services/listener/tes
 
 Database: `infrastructure/postgres/tests/test_migrate.sh` (migration runner, needs Docker) and `infrastructure/postgres/tests/test_schema_drift.py` (model vs schema, set `DRIFT_DB_URL`).
 
-Browser testing: the UI shows an 18+ content-warning modal on every non-exempt route (including `/admin`) until accepted, and it blocks clicks. Accept it first (tick the checkbox, then "Enter Site"), or pre-seed `localStorage['tg-archiver-content-warning-consent'] = JSON.stringify({accepted: true, expiresAt: Date.now() + 30*86400000})` and reload. Consent is per origin.
+Browser testing: the UI shows an 18+ content-warning modal on public archive pages (`/`, `/messages`, `/channels`, `/search`, …) until accepted, and it blocks clicks. `/admin`, `/auth`, `/about` and `/suggest-channel` are exempt (`EXEMPT_ROUTES` in `lib/content-warning-config.ts`). On gated pages, accept it first (tick the checkbox, then "Enter Site"), or pre-seed `localStorage['tg-archiver-content-warning-consent'] = JSON.stringify({accepted: true, expiresAt: Date.now() + 30*86400000})` and reload. Consent lasts 30 days and is per origin.
 
 ### Lint / CI
 - CI (`.github/workflows/ci.yml`) runs on pushes to main/develop and on PRs: ruff + gitleaks, the Python suites, frontend lint/type-check/vitest, and a Docker build of all four services

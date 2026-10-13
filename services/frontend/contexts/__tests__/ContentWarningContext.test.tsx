@@ -5,7 +5,7 @@ import { hydrateRoot } from 'react-dom/client';
 import { ContentWarningProvider, useContentWarning } from '../ContentWarningContext';
 import { CONSENT_STORAGE_KEY } from '@/lib/content-warning-config';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/admin/channels' }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

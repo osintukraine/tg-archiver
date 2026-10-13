@@ -221,6 +221,8 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CSRF_ENABLED=${CSRF_ENABLED:-true}
       - TOKEN_BLACKLIST_FAIL_MODE=${TOKEN_BLACKLIST_FAIL_MODE:-open}
+      # Cloudflare Turnstile secret for POST /api/channel-submissions (unset = captcha not verified)
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-}
       # Backfill (for API to know if it's enabled)
       - BACKFILL_ENABLED=${BACKFILL_ENABLED:-false}
       - BACKFILL_START_DATE=${BACKFILL_START_DATE:-2024-01-01}
@@ -254,6 +256,8 @@ services:
         NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-}
         NEXT_PUBLIC_TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
         NEXT_PUBLIC_RSS_ENABLED: ${NEXT_PUBLIC_RSS_ENABLED:-false}
+        # Empty = Cloudflare's always-pass test key (suggest-channel captcha is then a no-op)
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
     container_name: tg-archiver-frontend
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}

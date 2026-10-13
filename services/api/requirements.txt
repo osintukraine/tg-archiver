@@ -16,6 +16,8 @@ python-multipart==0.0.32
 
 # RSS generation
 feedgen==1.0.0
+# Safe parsing of fetched (untrusted) RSS/Atom XML
+defusedxml==0.7.1
 
 # Monitoring
 prometheus-client==0.26.0

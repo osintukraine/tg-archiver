@@ -73,7 +73,7 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 ### Message Flow
 1. `listener/src/telegram_listener.py` receives Telegram events
 2. `listener/src/redis_queue.py` publishes to `telegram:messages:realtime` (live) or `telegram:messages:backfill` (historical)
-3. `processor/src/redis_consumer.py` consumes with consumer group `processor-workers` (realtime first; also drains the legacy `telegram:messages` stream). Failures go to `telegram:messages:dlq`
+3. `processor/src/redis_consumer.py` consumes with consumer group `processor-workers` (realtime first; also drains the legacy `telegram:messages` stream). A failed message is left pending and redelivered by XAUTOCLAIM after `PROCESSOR_RETRY_IDLE_MS` (default 5 min); after 3 deliveries it goes to `telegram:messages:dlq` with its full payload (admin API: `/api/admin/dlq` list/replay/delete). Persistence is idempotent (`ON CONFLICT DO NOTHING` on `(channel_id, message_id)`), so redelivery is safe
 4. `processor/src/message_processor.py`: channel info → routing → entity extraction → translation → media → DB persist; forwards also upsert `discovered_channels` / `message_forwards`
 5. `shared/python/media_archiver.py` uploads media to S3 (SeaweedFS) with SHA-256 deduplication
 
@@ -81,6 +81,7 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - `listener/src/channel_discovery.py` reads Telegram folders via `GetDialogFiltersRequest`
 - Folder name must match `FOLDER_ARCHIVE_ALL_PATTERN` exactly (case-insensitive). `.env.example` sets `tg-archiver`; if unset, code and compose default to `Archive`
 - Syncs to the database every 5 minutes (hardcoded, `listener/src/main.py`; `FOLDER_SYNC_INTERVAL` is not read)
+- Forwarded broadcast-channel posts record their source in `discovered_channels` (processor `_track_forward_chain`). `listener/src/channel_join_worker.py` joins them according to `CHANNEL_JOIN_MODE`: `approval` (default; only rows with `join_approved_at` set via `POST /api/admin/discovered/{id}/approve`), `auto`, or `off`. Daily cap, FloodWait and channel-limit pauses apply in every mode
 
 ### API Structure
 - Routers in `services/api/src/routers/` (e.g. messages, channels, rss, social_graph, auth, media, admin/*; full list in `services/api/src/main.py`)
@@ -102,6 +103,7 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - Migrations in `infrastructure/postgres/migrations/` are **not** applied automatically (no Alembic). Apply them manually on a fresh database:
   ```bash
   docker-compose exec -T postgres psql -U archiver -d tg_archiver < infrastructure/postgres/migrations/003_discovered_channels.sql
+  docker-compose exec -T postgres psql -U archiver -d tg_archiver < infrastructure/postgres/migrations/004_discovered_channel_approval.sql
   ```
 - SQLAlchemy models in `shared/python/models/`
 - Key tables: `messages`, `channels`, `media_files`, `message_media` (junction), `users`
@@ -118,7 +120,7 @@ Key variables in `.env` (see `.env.example` for full list):
 - `JWT_SECRET_KEY`, `JWT_ADMIN_EMAIL`, `JWT_ADMIN_PASSWORD`: Auth config (compose defaults to `change_me_in_production`; always set them)
 - `NEXT_PUBLIC_API_URL`: Empty for the proxied setup, `http://localhost:8000` for direct access
 
-**`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block. Setting e.g. `SOCIAL_FETCH_*`, `CHANNEL_JOIN_*`, `CSRF_ENABLED`, `ENVIRONMENT` or `TOKEN_BLACKLIST_FAIL_MODE` in `.env` has no effect until you add them to the relevant service.
+**`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block. Setting e.g. `CSRF_ENABLED`, `ENVIRONMENT` or `TOKEN_BLACKLIST_FAIL_MODE` in `.env` has no effect until you add them to the relevant service. (`CHANNEL_JOIN_*`, `SOCIAL_FETCH_*` and `PROCESSOR_RETRY_IDLE_MS` are passed through.)
 
 ## Session Files
 
@@ -132,7 +134,7 @@ cd services/frontend
 bun run test:run components/__tests__/ErrorBoundary.test.tsx
 ```
 
-Python services have no automated tests. Test manually via Docker logs.
+Python tests (pytest) live in `services/processor/tests`, `services/listener/tests` and `services/api/tests`. They run inside the service Docker images against a real Redis 8 / Postgres 18 (not fakes); see README → Development for the exact commands. Don't create a shared `services/api/tests/conftest.py`: each API test file keeps its own fixtures.
 
 ## Critical Instructions for Claude Code
 

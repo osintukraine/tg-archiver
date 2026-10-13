@@ -163,11 +163,13 @@ docker-compose logs -f
 
 **Fresh database only:** `infrastructure/postgres/init.sql` runs automatically on the first start
 (empty `postgres18_data` volume), but the migrations in `infrastructure/postgres/migrations/` are
-**not** applied automatically. Apply the forward-chain tables once Postgres is up:
+**not** applied automatically. Apply them in order once Postgres is up (both are safe to re-run):
 
 ```bash
 docker-compose exec -T postgres psql -U archiver -d tg_archiver \
   < infrastructure/postgres/migrations/003_discovered_channels.sql
+docker-compose exec -T postgres psql -U archiver -d tg_archiver \
+  < infrastructure/postgres/migrations/004_discovered_channel_approval.sql
 ```
 
 ### Step 5: Access the Interface
@@ -284,15 +286,24 @@ Your Monitored Channel          Discovered Channel (auto-joined)
 └──────────────────────┘        └──────────────────────────────┘
 ```
 
-> These tables come from `infrastructure/postgres/migrations/003_discovered_channels.sql`,
-> which must be applied manually on a fresh database (see Quick Start, Step 4).
+> These tables come from `infrastructure/postgres/migrations/003_discovered_channels.sql` and
+> `004_discovered_channel_approval.sql`, which must be applied manually on a fresh database
+> (see Quick Start, Step 4).
 
 When a forwarded message arrives in your monitored channels:
 
-1. **Discovery**: The source channel is recorded in `discovered_channels`
-2. **Auto-Join**: Background worker joins the channel (for social data access only)
-3. **Social Fetch**: Original message content, reactions, and comments are retrieved
-4. **Admin Review**: Discovered channels appear in `/admin/channels` → **Discovered** tab
+1. **Discovery**: The source channel of a forwarded **broadcast-channel post** is recorded in
+   `discovered_channels` (forwards from users, bots, groups and hidden senders are not tracked;
+   channels you already archive are skipped)
+2. **Admin Review**: Discovered channels appear in `/admin/channels` → **Discovered** tab
+3. **Join** (for social data access only): by default the account joins a discovered channel
+   **only after an admin approves it** (`CHANNEL_JOIN_MODE=approval`)
+4. **Social Fetch**: Original message content, reactions, and comments are retrieved from joined channels
+
+> **Why approval is the default:** joining is visible to the target channel's admins, and anyone
+> who can forward a post into a monitored chat (e.g. a member of a monitored supergroup) could
+> otherwise make the archiving account join arbitrary channels. `CHANNEL_JOIN_MODE=auto` restores
+> fully automatic joining; `off` disables joining.
 
 ### Key Benefits
 
@@ -307,25 +318,30 @@ Navigate to **Admin** → **Channels** → **Discovered** tab to:
 
 | Action | Description |
 |--------|-------------|
+| **Approve** | Allow the account to join this channel (approval mode). Approving a failed channel makes it eligible again |
+| **Unapprove** | Withdraw approval before the join happens |
 | **Promote** | Add channel to full archiving (select category, folder, rule) |
-| **Ignore** | Hide from suggestions, stop social fetching |
+| **Ignore** | Hide from suggestions, never join, stop social fetching |
 | **Retry** | Retry joining a failed/private channel |
+
+The tab shows the current join mode and how many channels are awaiting approval.
 
 ### Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CHANNEL_JOIN_ENABLED` | `true` | Enable auto-joining discovered channels |
-| `CHANNEL_JOIN_INTERVAL_SECONDS` | `60` | Seconds between join attempts |
+| `CHANNEL_JOIN_MODE` | `approval` | `approval` (join only admin-approved channels), `auto` (join automatically) or `off` |
+| `CHANNEL_JOIN_ENABLED` | `true` | Deprecated: `false` is treated as `CHANNEL_JOIN_MODE=off` |
+| `CHANNEL_JOIN_INTERVAL_SECONDS` | `60` | Seconds between join cycles |
 | `CHANNEL_JOIN_BATCH_SIZE` | `5` | Max channels to join per cycle |
+| `CHANNEL_JOIN_DAILY_CAP` | `20` | Max successful joins per rolling 24 hours |
 | `CHANNEL_JOIN_MAX_RETRIES` | `3` | Retries before marking as failed |
 | `CHANNEL_JOIN_RETRY_DELAY_HOURS` | `24` | Hours between retry attempts |
+| `CHANNEL_JOIN_LIMIT_PAUSE_HOURS` | `24` | Pause after Telegram reports the account is in too many channels |
 
-Social data fetching uses the existing `SOCIAL_FETCH_*` settings.
-
-> **Note:** none of the `CHANNEL_JOIN_*` or `SOCIAL_FETCH_*` variables are passed by
-> `docker-compose.yml`, so the defaults above always apply. To override them, add the
-> variables under `listener.environment` in `docker-compose.yml`.
+Telegram FloodWait errors are honoured (the cycle sleeps, up to 1 hour, then stops). Social data
+fetching uses the `SOCIAL_FETCH_*` settings (`SOCIAL_FETCH_ENABLED=false` turns it off). All of
+these are passed to the listener by `docker-compose.yml`, so setting them in `.env` takes effect.
 
 ### Database Tables
 
@@ -345,6 +361,8 @@ GET  /api/admin/discovered/stats     # Statistics
 GET  /api/admin/discovered/{id}      # Channel details + recent forwards
 POST /api/admin/discovered/{id}/promote  # Promote to full archiving
 POST /api/admin/discovered/{id}/ignore   # Mark as ignored
+POST /api/admin/discovered/{id}/approve    # Approve joining (approval mode)
+POST /api/admin/discovered/{id}/unapprove  # Withdraw approval
 POST /api/admin/discovered/{id}/retry    # Retry failed join
 DELETE /api/admin/discovered/{id}        # Remove a discovered channel
 ```
@@ -468,6 +486,24 @@ docker-compose build
 docker-compose up -d
 ```
 
+### Failed Messages and the Dead-Letter Queue
+
+If processing a message fails (for example a database error), the processor leaves it pending
+in Redis and retries it after `PROCESSOR_RETRY_IDLE_MS` (default 5 minutes). After 3 failed
+deliveries the full message is moved to the dead-letter queue (Redis stream
+`telegram:messages:dlq`, last 10,000 entries). A message that repeatedly crashes the processor
+is dead-lettered the same way instead of looping forever.
+
+Admins can inspect and recover dead-lettered messages through the API:
+
+```
+GET    /api/admin/dlq?limit=50&before=<id>   # List entries (newest first)
+POST   /api/admin/dlq/{dlq_id}/replay        # Put the message back on its original stream
+DELETE /api/admin/dlq/{dlq_id}               # Discard an entry
+```
+
+Media download failures don't fail the message: it is archived without the media file.
+
 ### Re-authenticating Telegram
 
 If your session expires or you need to switch accounts:
@@ -577,7 +613,42 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 # The API runs with uvicorn instead: PYTHONPATH=../../shared/python uvicorn src.main:app
 ```
 
-Python services have no automated tests yet.
+Python tests use pytest against real services (Redis 8 / Postgres 18 in Docker, no mocks for
+stream or SQL semantics). Run them inside the service images:
+
+```bash
+docker-compose build processor listener api
+docker network create tgtest
+docker run -d --name tgtest-redis --network tgtest redis:8-alpine
+docker run -d --name tgtest-pg --network tgtest -e POSTGRES_USER=archiver \
+  -e POSTGRES_PASSWORD=testpw -e POSTGRES_DB=tg_archiver postgres:18.6-alpine
+# schema for listener/api tests: init.sql, then migrations 003 and 004
+for f in init.sql migrations/003_discovered_channels.sql migrations/004_discovered_channel_approval.sql; do
+  docker exec -i tgtest-pg psql -q -U archiver -d tg_archiver < infrastructure/postgres/$f; done
+
+# Settings without defaults must be set (dummy values are fine for tests)
+ENV="-e POSTGRES_HOST=tgtest-pg -e POSTGRES_PASSWORD=testpw -e REDIS_PASSWORD=x -e MINIO_ENDPOINT=x:1 \
+  -e MINIO_ACCESS_KEY=x -e MINIO_SECRET_KEY=x -e JWT_SECRET_KEY=x -e TELEGRAM_API_ID=1 -e TELEGRAM_API_HASH=x"
+
+# processor (Redis Streams retry / dead-letter)
+docker run --rm -u root --network tgtest $ENV -e TEST_REDIS_URL=redis://tgtest-redis:6379/15 \
+  -v $PWD/services/processor/tests:/app/tests:ro -v $PWD/services/processor/requirements-dev.txt:/tmp/rd.txt:ro \
+  tg-archiver-processor sh -c "pip install -q -r /tmp/rd.txt && python -m pytest -o asyncio_mode=auto tests"
+
+# listener (channel join worker)
+docker run --rm -u root --network tgtest $ENV -e PYTHONPATH=/shared/python:/app -w /app \
+  -v $PWD/services/listener/tests:/app/tests:ro -v $PWD/services/listener/requirements-dev.txt:/tmp/rd.txt:ro \
+  tg-archiver-listener sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"
+
+# api (DLQ and discovered-channel approval endpoints)
+docker run --rm -u root --network tgtest $ENV -e TEST_REDIS_URL=redis://tgtest-redis:6379/14 -w /app \
+  -v $PWD/services/api/tests:/app/tests:ro \
+  tg-archiver-api sh -c "pip install -q pytest pytest-asyncio && python -m pytest tests -c tests/pytest-approval.ini"
+
+docker rm -f tgtest-redis tgtest-pg && docker network rm tgtest
+```
+
+Image names follow the compose project name (`tg-archiver-*` when the checkout directory is `tg-archiver`).
 
 ### Running Frontend Locally
 

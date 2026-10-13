@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Badge, StatCard } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
+import { getAuthHeaders } from '@/lib/auth-utils';
 
 /**
  * Admin - Channel Import
@@ -181,12 +182,9 @@ export default function ImportPage() {
       formData.append('file', file);
 
       // Upload requires multipart form, need custom fetch
-      const token = localStorage.getItem('tg_archiver_token');
       const response = await fetch('/api/admin/import/upload', {
         method: 'POST',
-        headers: {
-          Authorization: token ? `Bearer ${token}` : '',
-        },
+        headers: getAuthHeaders(),
         body: formData,
       });
 

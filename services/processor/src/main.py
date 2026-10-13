@@ -272,7 +272,7 @@ async def main() -> NoReturn:
 
                 if success:
                     # Acknowledge message
-                    await redis_consumer.acknowledge(message.stream_id)
+                    await redis_consumer.acknowledge(message.stream_id, message.source_stream)
                 else:
                     # Reject message (failed processing)
                     await redis_consumer.reject(

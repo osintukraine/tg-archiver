@@ -41,6 +41,7 @@ https://{$DOMAIN} {
     handle /api/* {
         reverse_proxy api:8000 {
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Proto https
         }
     }
@@ -97,6 +98,7 @@ https://{$DOMAIN} {
     handle /* {
         reverse_proxy frontend:3000 {
             header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
             header_up X-Forwarded-Proto https
         }
     }

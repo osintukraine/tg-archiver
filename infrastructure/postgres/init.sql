@@ -683,11 +683,12 @@ CREATE TABLE IF NOT EXISTS platform_config (
 CREATE INDEX IF NOT EXISTS idx_platform_config_category ON platform_config(category);
 CREATE INDEX IF NOT EXISTS idx_platform_config_key ON platform_config(key);
 
--- Seed platform config with tg-archiver defaults
+-- Seed platform config with tg-archiver defaults. Seeded rows (last_modified_at NULL) never
+-- override .env; only values an admin saved apply. Not every key is applied by a service yet
+-- (see APPLIED_KEYS in services/api/src/routers/admin/config.py).
 INSERT INTO platform_config (category, key, value, description, data_type, is_secret, restart_required)
 VALUES
     -- Telegram settings
-    ('telegram', 'telegram.session_name', 'default', 'Primary Telegram session name', 'string', false, true),
     ('telegram', 'telegram.folder_sync_interval', '300', 'Folder sync interval in seconds', 'integer', false, false),
     ('telegram', 'telegram.message_batch_size', '100', 'Messages to fetch per batch', 'integer', false, false),
 
@@ -706,8 +707,7 @@ VALUES
     ('feed', 'feed.cache_ttl', '300', 'Feed cache TTL in seconds', 'integer', false, false),
 
     -- API settings
-    ('api', 'api.rate_limit_requests', '100', 'Rate limit requests per minute', 'integer', false, false),
-    ('api', 'api.cors_allow_all', 'false', 'Allow all CORS origins (dev only)', 'boolean', false, true)
+    ('api', 'api.rate_limit_requests', '100', 'Rate limit requests per minute', 'integer', false, false)
 ON CONFLICT (key) DO NOTHING;
 
 -- ===========================================================================

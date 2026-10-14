@@ -28,6 +28,7 @@ from sqlalchemy import and_, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from config.platform_config import get_override
 from models.channel import Channel
 from models.message import Message
 from models.media import MessageMedia
@@ -41,6 +42,24 @@ from ..utils.sql_safety import escape_ilike_pattern
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/rss", tags=["feeds"])
+
+DEFAULT_FEED_LIMIT = 50
+MAX_FEED_LIMIT = 100
+
+
+async def feed_limit(
+    limit: Optional[int] = Query(default=None, ge=1, description="Max items in feed"),
+) -> int:
+    """Items per feed: requested limit (or default), clamped to the max.
+
+    Defaults come from the admin config (feed.default_limit / feed.max_limit) when saved
+    there, else the constants above.
+    """
+    max_limit = await get_override("feed.max_limit")
+    max_limit = max_limit if isinstance(max_limit, int) and max_limit > 0 else MAX_FEED_LIMIT
+    default = await get_override("feed.default_limit")
+    default = default if isinstance(default, int) and default > 0 else DEFAULT_FEED_LIMIT
+    return min(limit or default, max_limit)
 
 
 @router.get("/search")
@@ -67,7 +86,7 @@ async def feed_search(
     min_views: Optional[int] = Query(None, ge=0, description="Minimum view count"),
     min_forwards: Optional[int] = Query(None, ge=0, description="Minimum forward count"),
     # Feed-specific parameters
-    limit: int = Query(default=50, ge=1, le=100, description="Max items in feed"),
+    limit: int = Depends(feed_limit),
     # Database
     db: AsyncSession = Depends(get_db),
     feed_auth: FeedAuthResult = Depends(verify_feed_token),
@@ -99,7 +118,7 @@ async def feed_search(
         date_to: End date for date range filter (ISO format)
         min_views: Minimum Telegram view count
         min_forwards: Minimum forward count
-        limit: Maximum number of items in feed (1-100, default 50)
+        limit: Maximum number of items in feed (default 50, max 100; admin config feed.default_limit / feed.max_limit override)
         db: Database session
         feed_auth: Feed authentication result (supports both token and anonymous access)
 
@@ -325,7 +344,7 @@ async def feed_channel(
         pattern="^(rss|atom|json)$",
     ),
     days: Optional[int] = Query(default=30, ge=1, le=365, description="Last N days"),
-    limit: int = Query(default=50, ge=1, le=100, description="Max items in feed"),
+    limit: int = Depends(feed_limit),
     db: AsyncSession = Depends(get_db),
     feed_auth: FeedAuthResult = Depends(verify_feed_token),
 ) -> Response:
@@ -345,7 +364,7 @@ async def feed_channel(
         username: Channel username (without @ prefix)
         format: Output format - "rss" (RSS 2.0), "atom" (Atom 1.0), or "json" (JSON Feed 1.1)
         days: Show messages from last N days (default 30, range 1-365)
-        limit: Maximum number of items in feed (1-100, default 50)
+        limit: Maximum number of items in feed (default 50, max 100; admin config feed.default_limit / feed.max_limit override)
         db: Database session
         feed_auth: Feed authentication result (supports both token and anonymous access)
 
@@ -449,7 +468,7 @@ async def feed_topic(
         pattern="^(rss|atom|json)$",
     ),
     days: Optional[int] = Query(default=7, ge=1, le=365, description="Last N days"),
-    limit: int = Query(default=50, ge=1, le=100, description="Max items in feed"),
+    limit: int = Depends(feed_limit),
     db: AsyncSession = Depends(get_db),
     feed_auth: FeedAuthResult = Depends(verify_feed_token),
 ) -> Response:
@@ -468,7 +487,7 @@ async def feed_topic(
         topic: Topic slug (must be one of the valid topics listed below)
         format: Output format - "rss" (RSS 2.0), "atom" (Atom 1.0), or "json" (JSON Feed 1.1)
         days: Show messages from last N days (default 7, range 1-365)
-        limit: Maximum number of items in feed (1-100, default 50)
+        limit: Maximum number of items in feed (default 50, max 100; admin config feed.default_limit / feed.max_limit override)
         db: Database session
         feed_auth: Feed authentication result (supports both token and anonymous access)
 

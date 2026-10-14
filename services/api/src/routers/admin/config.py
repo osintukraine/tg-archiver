@@ -20,6 +20,18 @@ from ...dependencies import AdminUser
 router = APIRouter(prefix="/api/admin/config", tags=["admin-config"])
 
 
+# Keys a running service actually reads (see shared/python/config/platform_config.py).
+# Other keys are saved but have no effect yet; the UI says so.
+APPLIED_KEYS = frozenset({
+    "processing.translation_enabled",
+    "telegram.folder_sync_interval",
+    "storage.media_enabled",
+    "storage.max_file_size_mb",
+    "feed.default_limit",
+    "feed.max_limit",
+})
+
+
 class ConfigItem(BaseModel):
     """Configuration item."""
     id: int
@@ -31,6 +43,7 @@ class ConfigItem(BaseModel):
     is_secret: bool
     restart_required: bool
     last_modified_at: Optional[datetime]
+    applied: bool = False
 
 
 class ConfigListResponse(BaseModel):
@@ -107,6 +120,7 @@ async def get_all_config(
             is_secret=row[6],
             restart_required=row[7],
             last_modified_at=row[8],
+            applied=row[2] in APPLIED_KEYS,
         )
         if item.category not in categories:
             categories[item.category] = []
@@ -201,6 +215,7 @@ async def get_config_item(
         is_secret=row[6],
         restart_required=row[7],
         last_modified_at=row[8],
+        applied=row[2] in APPLIED_KEYS,
     )
 
 
@@ -281,7 +296,10 @@ async def update_config_item(
         "success": True,
         "key": key,
         "restart_required": restart_required,
-        "message": f"Updated '{key}'" + (" (restart required)" if restart_required else "")
+        "applied": key in APPLIED_KEYS,
+        "message": f"Updated '{key}'"
+        + ("" if key in APPLIED_KEYS else " (saved, but no service uses this setting yet)")
+        + (" (restart required)" if restart_required else ""),
     }
 
 
@@ -382,6 +400,7 @@ async def bulk_update_config(
         "updated": updated,
         "errors": errors,
         "restart_required": restart_required,
+        "not_applied": [k for k in updated if k not in APPLIED_KEYS],
     }
 
 

@@ -20,6 +20,7 @@ from typing import Optional, Tuple
 
 from sqlalchemy import text
 
+from config.platform_config import get_override
 from config.settings import settings
 from observability.metrics import translation_deepl_chars_today
 from translation import ProviderBusy, TranslationError, detect_language
@@ -119,6 +120,8 @@ class TranslationWorker:
 
     async def run_once(self) -> float:
         """Handle one batch; returns how long to wait before the next one."""
+        if await get_override("processing.translation_enabled", self.session_factory) is False:
+            return self.poll_interval  # admin paused translation; rows stay pending
         async with self.session_factory() as session:
             stale = (await session.execute(STALE_SQL, {"hours": self.max_age_hours})).rowcount
             rows = (await session.execute(CLAIM_SQL, {"lease": LEASE_SECONDS, "n": self.batch_size})).all()

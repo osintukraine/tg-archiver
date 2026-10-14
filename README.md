@@ -8,13 +8,13 @@ Archive messages from Telegram channels with media storage, translation support,
 
 - **Real-time Archiving**: Monitor channels via Telegram folders - add channels by drag-and-drop
 - **Media Storage**: Photos, videos, documents with SHA-256 deduplication
-- **Translation**: Auto-translate non-English content (Google Translate free tier via deep-translator)
+- **Translation**: Russian/Ukrainian posts are translated to English in a background worker (DeepL with a daily character cap, Google Translate as fallback); archiving never waits for it
 - **Full-Text Search**: PostgreSQL tsvector-powered search across content and translations
 - **RSS Feeds**: Generate RSS/Atom/JSON feeds for archived channels
 - **Social Graph**: Track forwards, replies, comments, and engagement metrics
 - **Forward Chain Tracking**: Auto-discover channels via forwards, fetch original message context
 - **Topic Classification**: Admin-defined topic taxonomy for message categorization
-- **Backfill**: Automatically fetch historical messages when adding new channels
+- **Backfill and gap detection**: Fetch historical messages when adding new channels, and fill gaps left by downtime
 - **Self-Hosted**: Complete data sovereignty - your data stays on your infrastructure
 
 ## Architecture
@@ -37,7 +37,7 @@ Archive messages from Telegram channels with media storage, translation support,
 | Service | Purpose |
 |---------|---------|
 | **Listener** | Connects to Telegram, monitors folder-based channels |
-| **Processor** | Processes messages, downloads media, stores to DB |
+| **Processor** | Processes messages, downloads media, stores to DB; runs the background translation worker |
 | **API** | FastAPI REST API with search, RSS, and admin endpoints |
 | **Frontend** | Next.js 16 / React 19 web interface for browsing and search (built with Bun) |
 | **Caddy** | Reverse proxy and single entry point on port 80 (`/api` → api, `/media` → SeaweedFS, `/` → frontend) |
@@ -380,19 +380,23 @@ docker-compose defaults unless noted.
 
 ### Database
 
+The PostgreSQL host and port are fixed to `postgres:5432` in `docker-compose.yml` and cannot be set from `.env`.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `POSTGRES_HOST` | `postgres` | PostgreSQL hostname |
-| `POSTGRES_PORT` | `5432` | PostgreSQL port |
 | `POSTGRES_DB` | `tg_archiver` | Database name |
 | `POSTGRES_USER` | `archiver` | Database user |
 | `POSTGRES_PASSWORD` | `change_me_in_production` | Database password (**must change**) |
+| `REDIS_PASSWORD` | (empty) | Redis password; empty = no auth (set it in production). The Redis host is fixed in compose |
+| `TELEGRAM_SESSION_NAME` | `listener` | Session file name under `sessions/` |
 
 ### Authentication
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTH_PROVIDER` | `jwt` | `jwt` for local auth, `none` to disable (code default without compose: `none`) |
+| `AUTH_REQUIRED` | `false` | `true` = every API endpoint needs a login (private archive); `false` = public read access |
+| `FEED_AUTH_REQUIRED` | `false` | `true` = RSS/Atom/JSON feeds need a feed token |
 | `JWT_SECRET_KEY` | `change_me_in_production` | Secret for JWT signing (**must change**) |
 | `JWT_ADMIN_EMAIL` | `admin@tg-archiver.local` | Admin email (the admin username is `admin`; either works for login) |
 | `JWT_ADMIN_PASSWORD` | `change_me_in_production` | Admin login password (**must change**) |
@@ -401,25 +405,49 @@ docker-compose defaults unless noted.
 ### Storage (SeaweedFS, S3-compatible)
 
 The `MINIO_*` variable names are kept for compatibility; they configure the
-SeaweedFS S3 gateway and the services that talk to it. Anonymous clients get
+SeaweedFS S3 gateway and the services that talk to it (the endpoint is fixed to `seaweedfs:8333` in compose). Anonymous clients get
 read-only access to the media bucket (served by Caddy at `/media/*`); writes,
 deletes and listings require the access key.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MINIO_ENDPOINT` | `seaweedfs:8333` | S3 endpoint (set by docker-compose) |
 | `MINIO_ACCESS_KEY` | `minioadmin` | S3 access key |
 | `MINIO_SECRET_KEY` | `minioadmin` | S3 secret key (**change in production**) |
-| `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files. Caddy hardcodes `/tg-archive-media` and the listener doesn't receive this variable, so keep the default |
+| `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files. Caddy hardcodes `/tg-archive-media`, so keep the default |
 | `PUBLIC_BASE_URL` | `http://localhost` | Public site origin (what browsers and feed readers use). Media links in the API, RSS/Atom/JSON feeds and OpenGraph tags are `<origin>/media/...` (Caddy proxies `/media/*` to SeaweedFS). The API prefers the origin of the incoming request and falls back to this value; the frontend bakes it in as `NEXT_PUBLIC_BASE_URL`, so rebuild the frontend after changing it |
 | `MINIO_PUBLIC_URL` | (empty) | Optional direct public S3 endpoint (e.g. `http://localhost:8333` with the port published). When set, API and feed media URLs become `{MINIO_PUBLIC_URL}/{bucket}/{key}` instead of Caddy paths |
 
 ### Translation
 
+Ingest never waits for translation. The processor detects each message's language (`langdetect`,
+stored in `messages.language_detected`) and marks it `translation_status = pending` (language in
+`TRANSLATION_FROM_LANGUAGES`) or `skipped`. A background worker in the processor
+(`services/processor/src/translation_worker.py`) translates pending messages newest first and sets
+`done`, or `failed` after `TRANSLATION_MAX_ATTEMPTS`. Pending messages older than
+`TRANSLATION_MAX_AGE_HOURS` are skipped. Migration `007_translation_queue.sql` adds the queue columns.
+
+With `TRANSLATION_PROVIDER=deepl` and a `DEEPL_API_KEY`, DeepL (target `EN-US` for `en`) is used first,
+up to `TRANSLATION_DAILY_CHAR_LIMIT` characters per UTC day (Redis counter, gauge
+`tg_translation_deepl_chars_today`). Past the cap, or when DeepL reports its quota exceeded, DeepL is
+paused until 00:00 UTC and the free Google Translate fallback is used. Google calls keep a minimum
+interval and back off exponentially after a rate-limit (429) or connection error; affected messages
+are rescheduled, never dropped.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRANSLATION_ENABLED` | `false` (`.env.example` sets `true`) | Enable auto-translation (also sets the frontend's `NEXT_PUBLIC_TRANSLATION_ENABLED`) |
-| `DEEPL_API_KEY` | - | Currently ignored: the processor creates the translator without a key, so only Google Translate is used |
+| `TRANSLATION_ENABLED` | `true` | Enable translation (also sets the frontend's `NEXT_PUBLIC_TRANSLATION_ENABLED`) |
+| `TRANSLATION_PROVIDER` | `deepl` | `deepl` (DeepL first if a key is set, then Google), `google` or `none` |
+| `DEEPL_API_KEY` | (empty) | DeepL API key; without it only Google is used |
+| `DEEPL_API_URL` | (empty) | Override the endpoint derived from the key |
+| `TRANSLATION_TARGET_LANG` | `en` | Target language |
+| `TRANSLATION_FROM_LANGUAGES` | `ru,uk` | Source languages that get translated (processor) |
+| `TRANSLATION_DAILY_CHAR_LIMIT` | `500000` | Max characters sent to DeepL per UTC day; `0` = no cap |
+| `TRANSLATION_MAX_AGE_HOURS` | `48` | Older untranslated messages are skipped |
+| `TRANSLATION_BATCH_SIZE` | `10` | Messages per worker batch |
+| `TRANSLATION_POLL_INTERVAL_SECONDS` | `5` | Idle poll interval |
+| `TRANSLATION_MAX_ATTEMPTS` | `8` | Attempts before `failed` |
+| `GOOGLE_MIN_INTERVAL_SECONDS` | `2` | Minimum pause between Google calls |
+| `GOOGLE_BACKOFF_BASE_SECONDS` / `GOOGLE_BACKOFF_MAX_SECONDS` | `30` / `900` | Exponential backoff after a Google rate limit |
 
 ### Backfill
 
@@ -430,6 +458,22 @@ deletes and listings require the access key.
 | `BACKFILL_MODE` | `manual` (`.env.example` sets `on_discovery`) | `manual` or `on_discovery` (`scheduled` is not implemented) |
 | `BACKFILL_BATCH_SIZE` | `100` | Messages per batch |
 | `BACKFILL_DELAY_MS` | `1000` | Delay between batches (rate limiting) |
+| `BACKFILL_MEDIA_STRATEGY` | `download_available` | `download_available`, `skip` or `download_all` |
+| `GAP_DETECTION_ENABLED` | `false` (`.env.example` sets `true`) | On startup and periodically, backfill channels silent for too long |
+| `GAP_THRESHOLD_HOURS` | `1.0` | Hours without a message before a channel is checked |
+| `GAP_CHECK_INTERVAL_SECONDS` | `600` | Seconds between gap checks |
+| `GAP_MAX_CHANNELS_PER_CHECK` | `10` | Max channels backfilled per check |
+
+### Logging and API
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `INFO` | Log level (listener, processor, api) |
+| `LOG_FORMAT` | `json` | `json` or `console` |
+| `PLATFORM_NAME` | `Telegram Archiver` | Site name in feeds and author fields (api) |
+| `API_CORS_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins allowed cross-origin; not needed behind Caddy |
+| `TRUSTED_PROXY_HOSTS` | `caddy,127.0.0.1,localhost` | Hosts whose `X-Forwarded-*` headers the API trusts |
+| `PROCESSOR_RETRY_IDLE_MS` | `300000` | Idle time before a failed message is redelivered (see Dead-Letter Queue) |
 
 ### Frontend
 
@@ -578,10 +622,12 @@ tg-archiver/
 ├── shared/python/      # Shared Python modules (models, utils)
 ├── infrastructure/
 │   ├── caddy/          # Caddyfile (local) and Caddyfile.production (HTTPS)
-│   ├── postgres/       # init.sql + migrations/ (applied manually)
+│   ├── postgres/       # init.sql, migrate.sh, migrations/ (applied by db-migrate)
 │   └── seaweedfs/      # entrypoint.sh (renders S3 identities from MINIO_* vars)
 ├── scripts/
 │   ├── telegram_auth.py              # Telegram authentication script
+│   ├── env_audit.py                  # finds dead/missing settings in .env vs compose and code
+│   ├── create_readonly_db_role.sh    # read-only DB role for the Postgres MCP
 │   └── backfill_discovered_channels.sql
 ├── docs/plans/         # Design notes
 ├── sessions/           # Telegram session files (gitignored)
@@ -658,15 +704,16 @@ database, re-run, existing deployment, failing migration) against throwaway Post
 
 ### Linting and CI
 
-CI (`.github/workflows/ci.yml`) runs on every push to `main`/`develop` and on pull requests: ruff and
-gitleaks, the Python test suites (against real Redis 8 / Postgres 18, schema applied with
+CI (`.github/workflows/ci.yml`) runs on every push to `main`/`develop` and on pull requests: ruff, the
+env audit (`.env.example` against compose and code) and gitleaks, the Python test suites (against real Redis 8 / Postgres 18, schema applied with
 `migrate.sh`), the migration runner test, frontend lint/type-check/vitest, and a Docker build of all
 four services. Dependabot (`.github/dependabot.yml`) opens weekly grouped update PRs.
 
 Run the same checks locally:
 
 ```bash
-pip install pre-commit ruff
+pip install pre-commit ruff pyyaml
+python scripts/env_audit.py --env-file .env.example --strict   # prints names only, never values
 ruff check .               # config + documented baseline of ignored rules in pyproject.toml
 pre-commit install         # gitleaks, ruff, hygiene hooks, eslint on changed frontend files
 pre-commit run --all-files

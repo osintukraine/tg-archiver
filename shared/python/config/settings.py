@@ -323,12 +323,22 @@ class Settings(BaseSettings):
     )
     DEEPL_API_KEY: Optional[str] = Field(None, description="DeepL API key")
     DEEPL_API_URL: str = Field(
-        default="https://api-free.deepl.com/v2", description="DeepL API endpoint"
+        default="",
+        description="DeepL API endpoint; empty = let the deepl library pick it from the key",
     )
+    # Characters sent to DeepL per UTC day (shared across instances via Redis); 0 = no cap.
+    # Replaces the unused TRANSLATION_DAILY_BUDGET_USD (characters are what DeepL bills).
+    TRANSLATION_DAILY_CHAR_LIMIT: int = Field(default=500_000, ge=0)
+    # Messages older than this are skipped instead of translated
+    TRANSLATION_MAX_AGE_HOURS: int = Field(default=48, ge=1)
+    TRANSLATION_BATCH_SIZE: int = Field(default=10, ge=1)
+    TRANSLATION_POLL_INTERVAL_SECONDS: float = Field(default=5.0, gt=0)
+    TRANSLATION_MAX_ATTEMPTS: int = Field(default=8, ge=1)
+    # Google (deep-translator scraping) pacing and rate-limit backoff
+    GOOGLE_MIN_INTERVAL_SECONDS: float = Field(default=2.0, ge=0)
+    GOOGLE_BACKOFF_BASE_SECONDS: float = Field(default=30.0, gt=0)
+    GOOGLE_BACKOFF_MAX_SECONDS: float = Field(default=900.0, gt=0)
     GOOGLE_TRANSLATE_API_KEY: Optional[str] = Field(None, description="Google Translate API key")
-    TRANSLATION_DAILY_BUDGET_USD: float = Field(
-        default=999999.0, description="Daily translation budget (effectively unlimited for free)"
-    )
 
     # =============================================================================
     # WORKER CONFIGURATION

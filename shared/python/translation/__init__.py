@@ -1,13 +1,11 @@
-"""
-Translation Module
+"""Translation backends (DeepL with daily cap, Google with backoff). See translator.py."""
 
-Provides automatic translation services for comments and messages.
-Primary backend: Google Translate Free (via deep-translator)
-Fallback: DeepL Free API (if configured)
+from .translator import (
+    CommentTranslator,
+    ProviderBusy,
+    TranslationError,
+    build_translator,
+    detect_language,
+)
 
-Cost: €0/month
-"""
-
-from .translator import CommentTranslator, get_translator
-
-__all__ = ["CommentTranslator", "get_translator"]
+__all__ = ["CommentTranslator", "ProviderBusy", "TranslationError", "build_translator", "detect_language"]

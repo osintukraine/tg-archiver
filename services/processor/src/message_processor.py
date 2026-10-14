@@ -4,8 +4,7 @@ Message Processor - Simplified Pipeline for tg-archiver (No AI)
 Orchestrates message processing pipeline WITHOUT any AI dependencies:
 1. Entity extraction (regex-based, fast)
 2. Media archival (SHA-256 dedup to MinIO)
-3. Translation (if enabled)
-4. PostgreSQL persistence
+3. PostgreSQL persistence (translation is queued, see translation_worker.py)
 
 NO LLM classification, NO quarantine system.
 All messages from monitored channels are archived.
@@ -19,11 +18,6 @@ Processing Flow:
 ┌─────────────┐
 │   Extract   │ → Entities (hashtags, mentions, coords, etc.)
 │  Entities   │
-└─────┬───────┘
-      │
-      ▼
-┌─────────────┐
-│ Translation │ → If enabled and non-English
 └─────┬───────┘
       │
       ▼
@@ -65,6 +59,7 @@ from .entity_extractor import EntityExtractor
 from media_archiver import MediaArchiver  # From shared/python
 from .message_router import MessageRouter, ProcessingRule
 from .redis_consumer import ProcessedMessage
+from .translation_worker import plan_translation
 
 # Import hash generation
 import sys
@@ -89,7 +84,7 @@ class MessageProcessor:
 
     This processor implements a straightforward archival pipeline:
     1. Entity extraction via regex (hashtags, mentions, coordinates)
-    2. Optional translation via DeepL
+    2. Translation is only queued (language detected, status 'pending'); a worker translates later
     3. Media archival to MinIO with SHA-256 deduplication
     4. PostgreSQL persistence with full-text search indexing
 
@@ -102,7 +97,6 @@ class MessageProcessor:
         entity_extractor: EntityExtractor,
         media_archiver: Optional[MediaArchiver] = None,
         telegram_client: Optional[TelegramClient] = None,
-        translation_service=None,
     ):
         """
         Initialize the message processor with required pipeline components.
@@ -112,13 +106,11 @@ class MessageProcessor:
             entity_extractor: Fast regex-based entity extraction.
             media_archiver: Handles media download and S3 storage with SHA-256 dedup.
             telegram_client: TelegramClient for downloading media files.
-            translation_service: DeepL translation service for non-English content.
         """
         self.message_router = message_router
         self.entity_extractor = entity_extractor
         self.media_archiver = media_archiver
         self.telegram_client = telegram_client
-        self.translation_service = translation_service
 
         # Statistics
         self.messages_processed = 0
@@ -133,7 +125,7 @@ class MessageProcessor:
         All messages are archived. Pipeline stages:
         1. Phantom message check (skip if no content AND no media)
         2. Entity extraction (regex-based)
-        3. Translation (if enabled)
+        3. Translation planning (language + queue status; never translates inline)
         4. Media archival (if media present)
         5. PostgreSQL persistence
 
@@ -221,30 +213,10 @@ class MessageProcessor:
 
                 logger.debug(f"Extracted {entity_count} entities")
 
-                # Step 4: Translation (if enabled)
-                translated_content = None
-                translation_metadata = {}
-
-                if message.content and routing_decision.should_translate:
-                    if self.translation_service:
-                        try:
-                            text, method, confidence = await self.translation_service.translate(
-                                text=message.content,
-                            )
-
-                            if text:
-                                translated_content = text
-                                translation_metadata = {
-                                    "provider": method,
-                                    "target_lang": "en",
-                                }
-
-                                logger.debug(
-                                    f"Translated message {message.message_id} via {method}"
-                                )
-
-                        except Exception as e:
-                            logger.error(f"Translation failed for message {message.message_id}: {e}")
+                # Step 4: Translation planning. Only queues; the translation worker does the rest.
+                translation_status, language_detected = plan_translation(
+                    message.content, routing_decision.should_translate
+                )
 
                 # Step 5: Media Archival
                 media_file_ids = []
@@ -297,8 +269,8 @@ class MessageProcessor:
                     session=session,
                     entities=entities,
                     media_file_ids=media_file_ids,
-                    content_translated=translated_content,
-                    translation_metadata=translation_metadata,
+                    translation_status=translation_status,
+                    language_detected=language_detected,
                 )
 
                 self.messages_archived += 1
@@ -348,8 +320,8 @@ class MessageProcessor:
         session: AsyncSession,
         entities: Optional[dict] = None,
         media_file_ids: Optional[list[int]] = None,
-        content_translated: Optional[str] = None,
-        translation_metadata: Optional[dict] = None,
+        translation_status: Optional[str] = None,
+        language_detected: Optional[str] = None,
     ) -> None:
         """
         Persist message to PostgreSQL messages table.
@@ -432,12 +404,8 @@ class MessageProcessor:
             media_type=message.media_type,
             media_url_telegram=message.media_url,
             # Translation
-            content_translated=content_translated,
-            language_detected=translation_metadata.get("source_lang") if translation_metadata else None,
-            translation_target=translation_metadata.get("target_lang") if translation_metadata else None,
-            translation_provider=translation_metadata.get("provider") if translation_metadata else None,
-            translation_cost_usd=translation_metadata.get("cost_usd") if translation_metadata else None,
-            translation_timestamp=datetime.utcnow() if content_translated else None,
+            language_detected=language_detected,
+            translation_status=translation_status,
             # Social graph metadata
             author_user_id=message.author_user_id,
             replied_to_message_id=message.replied_to_message_id,
@@ -474,12 +442,8 @@ class MessageProcessor:
                 entities=db_message.entities,
                 media_type=db_message.media_type,
                 media_url_telegram=db_message.media_url_telegram,
-                content_translated=db_message.content_translated,
                 language_detected=db_message.language_detected,
-                translation_target=db_message.translation_target,
-                translation_provider=db_message.translation_provider,
-                translation_cost_usd=db_message.translation_cost_usd,
-                translation_timestamp=db_message.translation_timestamp,
+                translation_status=db_message.translation_status,
                 author_user_id=db_message.author_user_id,
                 replied_to_message_id=db_message.replied_to_message_id,
                 forward_from_channel_id=db_message.forward_from_channel_id,

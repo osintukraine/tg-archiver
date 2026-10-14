@@ -5,7 +5,7 @@ This service:
 1. Pulls messages from Redis queue
 2. Downloads and archives media with content-addressed storage (SHA-256 deduplication)
 3. Extracts entities (regex-based)
-4. Detects language and translates if needed (DeepL Pro)
+4. Detects language and queues translation; a background worker translates (DeepL, then Google)
 5. Stores messages in PostgreSQL
 
 NO LLM classification - all messages from monitored channels are archived.
@@ -39,7 +39,9 @@ from audit.audit_logger import AuditLogger
 audit = AuditLogger("processor")
 
 # Import translation service from shared modules
-from translation import CommentTranslator as TranslationService
+from translation import build_translator
+
+from .translation_worker import TranslationWorker
 
 # Initialize structured logging
 setup_logging(service_name="processor")
@@ -150,6 +152,8 @@ async def main() -> NoReturn:
     processor = None
     queue_depth_task = None
     pattern_reload_task = None
+    translation_task = None
+    translation_worker = None
 
     try:
         # 1. Initialize Redis consumer
@@ -223,12 +227,17 @@ async def main() -> NoReturn:
             storage_box_id="default",
         )
 
-        # 7. Initialize translation service
-        translation_service = None
-        if settings.TRANSLATION_ENABLED:
-            logger.info("Initializing translation service (DeepL + Google fallback)...")
-            translation_service = TranslationService()
-            logger.info("Translation service initialized")
+        # 7. Translation: ingest only queues; the worker below translates in the background
+        if settings.TRANSLATION_ENABLED and settings.TRANSLATION_PROVIDER.strip().lower() != "none":
+            translator = build_translator(settings, redis_client=redis_consumer.client)
+            if translator.enabled:
+                translation_worker = TranslationWorker(translator, AsyncSessionLocal)
+                logger.info(
+                    f"Translation worker configured (provider={settings.TRANSLATION_PROVIDER}, "
+                    f"deepl_daily_char_limit={settings.TRANSLATION_DAILY_CHAR_LIMIT})"
+                )
+            else:
+                logger.warning("Translation enabled but no provider is available; messages stay untranslated")
         else:
             logger.info("Translation disabled in processor")
 
@@ -239,7 +248,6 @@ async def main() -> NoReturn:
             entity_extractor=entity_extractor,
             media_archiver=media_archiver,
             telegram_client=telegram_client,
-            translation_service=translation_service,
         )
 
         logger.info("All components initialized successfully")
@@ -262,7 +270,11 @@ async def main() -> NoReturn:
         # 10. Start pattern reload listener (for admin API updates)
         pattern_reload_task = asyncio.create_task(pattern_reload_listener(entity_extractor))
 
-        # 11. Start processing messages
+        # 11. Start the translation worker (never blocks archiving)
+        if translation_worker:
+            translation_task = asyncio.create_task(translation_worker.run(shutdown_event))
+
+        # 12. Start processing messages
         logger.info("Starting message processing...")
 
         async for message in redis_consumer.consume_messages():
@@ -322,6 +334,13 @@ async def main() -> NoReturn:
             except asyncio.CancelledError:
                 pass
 
+        if translation_task and not translation_task.done():
+            translation_task.cancel()
+            try:
+                await translation_task
+            except asyncio.CancelledError:
+                pass
+
         if redis_consumer:
             redis_consumer.shutdown()
             await redis_consumer.disconnect()
@@ -333,6 +352,8 @@ async def main() -> NoReturn:
         # Print statistics and log to audit
         if processor:
             stats = processor.get_stats()
+            if translation_worker:
+                stats["translation"] = translation_worker.stats
             logger.info(f"Processing statistics: {stats}")
 
             # Log batch stats to audit trail

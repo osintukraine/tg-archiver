@@ -382,6 +382,12 @@ pipeline_active = Gauge(
     "Whether the pipeline is actively processing (1=active, 0=inactive)",
 )
 
+# Characters sent to DeepL today (UTC), from the shared Redis counter
+translation_deepl_chars_today = Gauge(
+    "tg_translation_deepl_chars_today",
+    "Characters sent to DeepL today (UTC day), as counted against the daily cap",
+)
+
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================

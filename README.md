@@ -411,7 +411,8 @@ deletes and listings require the access key.
 | `MINIO_ACCESS_KEY` | `minioadmin` | S3 access key |
 | `MINIO_SECRET_KEY` | `minioadmin` | S3 secret key (**change in production**) |
 | `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files. Caddy hardcodes `/tg-archive-media` and the listener doesn't receive this variable, so keep the default |
-| `MINIO_PUBLIC_URL` | `http://localhost:9000` | Browser-reachable S3 base URL, used for RSS enclosures and the media-redirect fallback. The default is a MinIO leftover that nothing listens on; set it to a reachable S3 endpoint (e.g. `http://localhost:8333` with the port published) if you need those links |
+| `PUBLIC_BASE_URL` | `http://localhost` | Public site origin (what browsers and feed readers use). Media links in the API, RSS/Atom/JSON feeds and OpenGraph tags are `<origin>/media/...` (Caddy proxies `/media/*` to SeaweedFS). The API prefers the origin of the incoming request and falls back to this value; the frontend bakes it in as `NEXT_PUBLIC_BASE_URL`, so rebuild the frontend after changing it |
+| `MINIO_PUBLIC_URL` | (empty) | Optional direct public S3 endpoint (e.g. `http://localhost:8333` with the port published). When set, API and feed media URLs become `{MINIO_PUBLIC_URL}/{bucket}/{key}` instead of Caddy paths |
 
 ### Translation
 
@@ -639,7 +640,7 @@ docker run --rm -u root --network tgtest $ENV -e PYTHONPATH=/shared/python:/app 
   -v $PWD/services/listener/tests:/app/tests:ro -v $PWD/services/listener/requirements-dev.txt:/tmp/rd.txt:ro \
   tg-archiver-listener sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"
 
-# api (DLQ and discovered-channel approval endpoints)
+# api (DLQ, discovered-channel approval, channel submissions, middleware, media URLs, logout blacklist)
 docker run --rm -u root --network tgtest $ENV -e TEST_REDIS_URL=redis://tgtest-redis:6379/14 -w /app \
   -v $PWD/services/api/tests:/app/tests:ro \
   tg-archiver-api sh -c "pip install -q pytest pytest-asyncio && python -m pytest tests -c tests/pytest-approval.ini"
@@ -778,7 +779,7 @@ docker-compose ps
 | **HTTPS** | TLS 1.2+ with automatic Let's Encrypt | Caddyfile.production |
 | **Rate Limiting** | 5 login attempts per minute per client IP (Caddy forwards the real IP); suggest-channel submissions 3 per minute | Built-in |
 | **CSRF Protection** | Double-submit cookie pattern (`csrf_token` cookie is readable by JS by design) | On by default |
-| **Token Invalidation** | `POST /api/auth/logout` blacklists JWT tokens (the web UI's logout doesn't call it yet) | Built-in |
+| **Token Invalidation** | Logging out (web UI or `POST /api/auth/logout`) blacklists the JWT in Redis until it expires; blacklisted tokens get 401 | `TOKEN_BLACKLIST_FAIL_MODE` |
 | **Token transport** | JWTs only via `Authorization: Bearer` header (or the `access_token` cookie for /docs), never URL query parameters | Built-in |
 | **Captcha** | Cloudflare Turnstile on the public suggest-channel form | `TURNSTILE_SECRET_KEY` |
 | **Secure Cookies** | `access_token`: HttpOnly, SameSite=Strict, plus Secure in production | `ENVIRONMENT=production` (see above) |
@@ -822,9 +823,6 @@ These are current gaps in the code, documented here so they don't surprise you:
 - **Unpopulated tables:** `message_engagement_timeline` and `message_replies` are queried but
   nothing writes them (endpoints return empty results), and the media-status check in
   `/api/system` reads a `messages.media_archived` column that nothing sets.
-- **Media URLs from the API:** the `media_url` field in API responses and RSS enclosures use
-  `MINIO_PUBLIC_URL` (see Storage); the web UI builds its own `/media/...` URLs and is unaffected.
-  OpenGraph images use a `/minio-storage/...` path that has no Caddy route.
 - **React hydration warnings (#418)** appear in the browser console on the home and message pages.
 
 ---

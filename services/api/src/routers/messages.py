@@ -8,7 +8,7 @@ Implements full-text search using PostgreSQL tsvector.
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -152,6 +152,7 @@ async def get_adjacent_messages(
 
 @router.get("/{message_id}/album", response_model=AlbumMediaResponse)
 async def get_message_album(
+    request: Request,
     message_id: int,
     db: AsyncSession = Depends(get_db)
 ):
@@ -194,7 +195,7 @@ async def get_message_album(
         query = (
             select(Message, MediaFile)
             .join(MessageMedia, Message.id == MessageMedia.message_id)
-            .join(MediaFile, MessageMedia.media_id == MediaFile.id)
+            .join(MediaFile, MessageMedia.media_file_id == MediaFile.id)
             .where(Message.grouped_id == message.grouped_id)
             .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
             .order_by(Message.id.asc())  # Chronological within album
@@ -204,7 +205,7 @@ async def get_message_album(
         query = (
             select(Message, MediaFile)
             .join(MessageMedia, Message.id == MessageMedia.message_id)
-            .join(MediaFile, MessageMedia.media_id == MediaFile.id)
+            .join(MediaFile, MessageMedia.media_file_id == MediaFile.id)
             .where(Message.id == message_id)
             .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
         )
@@ -224,7 +225,7 @@ async def get_message_album(
         media_items.append(AlbumMediaItem(
             message_id=msg.id,
             media_id=media.id,
-            media_url=get_media_url(media.s3_key),
+            media_url=get_media_url(media.s3_key, str(request.base_url)),
             media_type=msg.media_type or "unknown",
             mime_type=media.mime_type,
             file_size=media.file_size,

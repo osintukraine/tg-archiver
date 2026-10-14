@@ -83,9 +83,6 @@ class Settings(BaseSettings):
         default="tg-archive-media", description="S3 bucket name"
     )
     MINIO_SECURE: bool = Field(default=False, description="Use HTTPS for MinIO")
-    MINIO_PUBLIC_URL: str = Field(
-        default="http://localhost:9000", description="Public URL for media access"
-    )
 
     # =============================================================================
     # TELEGRAM

@@ -19,6 +19,7 @@ from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_
 # Structured logging for Loki aggregation
 from observability import setup_logging, get_logger
 
+from config.secrets_check import require_secrets
 from config.settings import settings
 
 # Initialize structured logging on module load
@@ -167,6 +168,11 @@ async def startup_auth():
 
     auth_config = init_auth_config()
     logger.info(f"API starting with AUTH_PROVIDER={auth_config.provider}")
+
+    secrets = ["POSTGRES_PASSWORD", "MINIO_SECRET_KEY"]
+    if auth_config.provider == "jwt":
+        secrets += ["JWT_SECRET_KEY", "JWT_ADMIN_PASSWORD"]
+    require_secrets("api", secrets)
 
     # Create admin user from env vars if using JWT auth
     if auth_config.provider == "jwt":

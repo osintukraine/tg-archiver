@@ -114,3 +114,15 @@ def test_strict_exit_code_and_no_values(tmp_path, capsys):
     assert env_audit.main(argv) == 0
     assert env_audit.main([*argv, "--strict"]) == 1
     assert "hunter2" not in capsys.readouterr().out
+
+
+def test_renamed_names_point_to_their_replacement(tmp_path, capsys):
+    (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+    (tmp_path / ".env").write_text("SECRET_KEY=s3cret\nMINIO_BUCKET_NAME=b\nGAP_LOOKBACK_HOURS=24\n")
+    result = env_audit.audit(tmp_path, tmp_path / ".env", tmp_path / "docker-compose.yml")
+    renamed = {f["name"]: f["detail"] for f in result["findings"] if f["kind"] == "RENAMED"}
+    assert set(renamed) == {"SECRET_KEY", "MINIO_BUCKET_NAME", "GAP_LOOKBACK_HOURS"}
+    assert "set JWT_SECRET_KEY instead" in renamed["SECRET_KEY"]
+    argv = ["--root", str(tmp_path), "--env-file", str(tmp_path / ".env"), "--strict"]
+    assert env_audit.main(argv) == 1
+    assert "s3cret" not in capsys.readouterr().out

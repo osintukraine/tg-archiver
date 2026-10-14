@@ -240,6 +240,8 @@ def setup_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("telethon").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
+    # deepl logs every request and response at INFO
+    logging.getLogger("deepl").setLevel(logging.WARNING)
 
     # Log startup message
     logger = logging.getLogger(__name__)

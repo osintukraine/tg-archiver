@@ -257,12 +257,12 @@ class ChannelDiscovery:
 
                 if not rule:
                     logger.info(
-                        f"Skipping folder '{folder.title}' - no matching rule pattern"
+                        f"Skipping folder '{folder.title.text}' - no matching rule pattern"
                     )
                     continue
 
                 logger.info(
-                    f"Processing folder '{folder.title}' with rule '{rule}' "
+                    f"Processing folder '{folder.title.text}' with rule '{rule}' "
                     f"({len(folder.include_peers)} channels)"
                 )
 
@@ -286,7 +286,7 @@ class ChannelDiscovery:
 
                         logger.info(
                             f"Discovered: {channel.name} (@{channel.username or 'private'}) "
-                            f"in folder '{folder.title}' → rule '{rule}'"
+                            f"in folder '{folder.title.text}' → rule '{rule}'"
                         )
 
                     except Exception as e:

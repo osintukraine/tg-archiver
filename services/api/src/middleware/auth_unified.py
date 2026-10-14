@@ -99,10 +99,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
         token = auth_header[7:]
 
         try:
-            from ..auth.jwt import decode_access_token
+            from ..auth.jwt import decode_access_token, is_token_blacklisted
 
             payload = decode_access_token(token)
             if not payload:
+                return None
+
+            # Logout blacklists the token in Redis; honour it here (fail mode per
+            # TOKEN_BLACKLIST_FAIL_MODE inside is_token_blacklisted)
+            if await is_token_blacklisted(token):
                 return None
 
             # Extract user info from JWT payload

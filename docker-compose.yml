@@ -180,7 +180,7 @@ services:
       # Failed messages are retried after this idle time (3 attempts, then DLQ)
       - PROCESSOR_RETRY_IDLE_MS=${PROCESSOR_RETRY_IDLE_MS:-300000}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
-      - TRANSLATION_ENABLED=${TRANSLATION_ENABLED:-false}
+      - TRANSLATION_ENABLED=${TRANSLATION_ENABLED:-true}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
       - DEEPL_API_URL=${DEEPL_API_URL:-}
       - TRANSLATION_PROVIDER=${TRANSLATION_PROVIDER:-deepl}

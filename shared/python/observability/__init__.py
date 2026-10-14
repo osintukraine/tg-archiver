@@ -14,6 +14,7 @@ from .logging import (
     set_trace_id,
     get_trace_id,
     clear_trace_id,
+    redact_url,
 )
 
 from .metrics import (
@@ -40,6 +41,7 @@ __all__ = [
     "set_trace_id",
     "get_trace_id",
     "clear_trace_id",
+    "redact_url",
     # Metrics servers
     "processor_metrics_server",
     "api_metrics_server",

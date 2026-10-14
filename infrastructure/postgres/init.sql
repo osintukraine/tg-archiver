@@ -313,7 +313,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_forwards ON messages(forwards);
 CREATE OR REPLACE FUNCTION update_messages_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.search_vector := to_tsvector('simple', COALESCE(NEW.content, '') || ' ' || COALESCE(NEW.content_translated, ''));
+    NEW.search_vector := to_tsvector('russian', COALESCE(NEW.content, '') || ' ' || COALESCE(NEW.content_translated, ''));
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

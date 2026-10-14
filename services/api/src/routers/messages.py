@@ -33,6 +33,9 @@ from ..utils import get_media_url
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
+# Must match the config of the messages.search_vector trigger (migration 009)
+SEARCH_CONFIG = "russian"
+
 
 def _get_media_type_from_mime(mime_type: str) -> str:
     """
@@ -555,12 +558,13 @@ async def search_messages(
     # Track if we need to join Channel table
     needs_channel_join = bool(channel_username or channel_folder)
 
-    # Full-text search
+    # Full-text search (whitespace-only means no query)
+    q = q.strip() if q else None
     if q:
         # PostgreSQL full-text search using tsvector + GIN index
         # This is 10-100x faster than ILIKE for text search
-        # The search_vector column uses 'simple' config (no language-specific stemming)
-        # which is better for multilingual content
+        # SEARCH_CONFIG stems Cyrillic (Russian) and Latin (English) words, so every
+        # inflected form matches ("Украина" also finds "Украины", "Украине")
         #
         # websearch_to_tsquery supports advanced syntax:
         # - "quoted phrase" for exact phrases
@@ -568,7 +572,7 @@ async def search_messages(
         # - -word to exclude terms
         # Example: "keyword" OR "term" -exclude
         filters.append(
-            Message.search_vector.op('@@')(func.websearch_to_tsquery('simple', q))
+            Message.search_vector.op('@@')(func.websearch_to_tsquery(SEARCH_CONFIG, q))
         )
 
     # Channel filters

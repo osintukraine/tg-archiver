@@ -223,7 +223,7 @@ class MediaArchiver:
             temp_path = await self._download_media(telegram_client, telegram_message)
 
             if not temp_path:
-                logger.warning("Failed to download media")
+                logger.warning("Media not downloaded (failed or skipped by size cap)")
                 return None
 
             # Calculate SHA-256 hash
@@ -442,7 +442,7 @@ class MediaArchiver:
             temp_path = await self._download_media(telegram_client, telegram_message)
 
             if not temp_path:
-                logger.warning("Failed to download media")
+                logger.warning("Media not downloaded (failed or skipped by size cap)")
                 return None
 
             # Calculate SHA-256 hash

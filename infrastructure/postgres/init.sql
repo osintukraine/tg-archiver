@@ -698,7 +698,7 @@ VALUES
     ('storage', 'storage.dedup_enabled', 'true', 'Enable SHA-256 deduplication', 'boolean', false, false),
 
     -- Processing settings
-    ('processing', 'processing.translation_enabled', 'true', 'Enable automatic translation', 'boolean', false, false),
+    ('processing', 'processing.translation_enabled', 'true', 'Pause translation when false (only takes effect if TRANSLATION_ENABLED=true in .env)', 'boolean', false, false),
     ('processing', 'processing.translation_target', 'en', 'Target language for translation', 'string', false, false),
 
     -- Feed settings

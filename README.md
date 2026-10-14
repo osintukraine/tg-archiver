@@ -635,8 +635,9 @@ docker run --rm -u root --network tgtest $ENV -e TEST_REDIS_URL=redis://tgtest-r
   -v $PWD/services/processor/tests:/app/tests:ro -v $PWD/services/processor/requirements-dev.txt:/tmp/rd.txt:ro \
   tg-archiver-processor sh -c "pip install -q -r /tmp/rd.txt && python -m pytest -o asyncio_mode=auto tests"
 
-# listener (channel join worker)
+# listener (channel join worker, import/promotion worker Redis reads)
 docker run --rm -u root --network tgtest $ENV -e PYTHONPATH=/shared/python:/app -w /app \
+  -e TEST_REDIS_URL=redis://tgtest-redis:6379/13 \
   -v $PWD/services/listener/tests:/app/tests:ro -v $PWD/services/listener/requirements-dev.txt:/tmp/rd.txt:ro \
   tg-archiver-listener sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"
 

@@ -84,6 +84,7 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # TEST_ENV_ARGS is intentionally word-split
           docker run --rm -u root --network tgci $TEST_ENV_ARGS -e PYTHONPATH=/shared/python:/app -w /app \
+            -e TEST_REDIS_URL=redis://tgci-redis:6379/13 \
             -v "$PWD/services/listener/tests:/app/tests:ro" \
             -v "$PWD/services/listener/requirements-dev.txt:/tmp/rd.txt:ro" \
             tgci-listener sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"

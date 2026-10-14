@@ -22,7 +22,7 @@ Telegram Folders → Listener → Redis Streams → Processor → PostgreSQL + S
 - **frontend**: Next.js 16 (App Router), React 19, Tailwind CSS 4, TypeScript 6; built and run with **Bun** (`bun.lock`, `oven/bun` image). Small shadcn-style primitives in `components/ui/`
 - **Infrastructure images**: PostgreSQL 18.6, Redis 8, SeaweedFS 4.48 (S3 gateway on :8333; replaced MinIO, whose images were discontinued), Caddy 2
 
-Python services run on Python 3.13.
+Python services run on Python 3.14.
 
 **Shared code** (`shared/python/`, on `PYTHONPATH` in every Python image):
 - `models/`: SQLAlchemy ORM models; `AsyncSessionLocal` lives in `models/base.py`

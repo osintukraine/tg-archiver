@@ -18,6 +18,14 @@ updates:
     groups:
       frontend-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # typescript-eslint (via eslint-config-next) supports typescript <6.1;
+      # lift this once @typescript-eslint/eslint-plugin accepts TS 7.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+      # Keep @types/node on the Node major the frontend runs on (24).
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
   - package-ecosystem: docker
     directories:
       - /services/api

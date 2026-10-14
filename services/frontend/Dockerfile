@@ -64,6 +64,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+# Next standalone binds to $HOSTNAME, which Docker sets to the container id
+# (container IP only); listen on all interfaces so the localhost healthcheck works
+ENV HOSTNAME=0.0.0.0
 
 # Create non-root user for security
 # Using groupadd/useradd (standard Linux) instead of addgroup/adduser (Debian-specific)

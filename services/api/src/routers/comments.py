@@ -40,8 +40,11 @@ def get_translator():
     global _translator
     if _translator is None:
         try:
-            from translation.translator import CommentTranslator
-            _translator = CommentTranslator(target_language="en")
+            import redis.asyncio as aioredis
+            from config.settings import settings
+            from translation import build_translator
+            # Same provider/key/cap as the processor's worker (the DeepL char counter is shared via Redis)
+            _translator = build_translator(settings, redis_client=aioredis.from_url(settings.REDIS_URL))
             logger.info("CommentTranslator initialized for API")
         except ImportError as e:
             logger.warning(f"Could not import CommentTranslator: {e}")
@@ -55,7 +58,7 @@ class TranslateResponse(BaseModel):
     original_content: str
     translated_content: Optional[str]
     original_language: str
-    translation_method: str  # "google_free", "deepl_free", "cached", "none"
+    translation_method: str  # "google", "deepl", "cached", "none"
     cached: bool  # True if translation was already in database
 
 
@@ -87,13 +90,13 @@ async def translate_comment(
     - First checks if translation already exists (returns cached result)
     - Detects source language using language detection
     - Skips translation if content is already English
-    - Uses DeepL Free API (primary) or Google Translate Free (fallback)
+    - Uses TRANSLATION_PROVIDER (DeepL first, then Google Translate Free)
     - Stores translation permanently for future requests
 
     Translation Methods:
     - "cached": Translation was already in database
-    - "deepl_free": Translated via DeepL Free API
-    - "google_free": Translated via Google Translate Free
+    - "deepl": Translated via DeepL
+    - "google": Translated via Google Translate Free
     - "none": Content was already English or empty
 
     Args:

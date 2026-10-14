@@ -37,5 +37,6 @@ httpx==0.28.1
 # strawberry-graphql==0.217.1
 
 # Translation (on-demand comment translation)
+deepl>=1.32.0
 deep-translator>=1.11.4
 langdetect>=1.0.9

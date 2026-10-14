@@ -31,6 +31,12 @@ jobs:
         with:
           version: 0.17.0
           args: check --output-format=github
+      - name: Env audit (.env.example vs compose and code)
+        # TODO: make blocking (drop continue-on-error) once the .env.example dead-entry cleanup lands.
+        continue-on-error: true
+        run: |
+          pip install pyyaml
+          python scripts/env_audit.py --env-file .env.example --strict
       - name: Gitleaks (working tree and history)
         run: |
           GL="docker run --rm -v $PWD:/repo zricethezav/gitleaks:v8.30.1"

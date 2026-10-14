@@ -91,6 +91,8 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - Dependencies: `CurrentUser`, `AuthenticatedUser`, `AdminUser` from `services/api/src/dependencies/`
 - Health: `/api/health` (also `/health`). API docs at `http://localhost/docs` (role-filtered; FastAPI's built-in docs are disabled)
 - JWTs are accepted only from the `Authorization: Bearer` header (and the `access_token` cookie used by /docs), never from query parameters
+- Logout: the frontend `logout()` fires `POST /api/auth/logout` (Bearer + CSRF) without awaiting it, then clears local state. The API blacklists the JWT in Redis (`jwt:blacklist:<sha256[:32]>`, TTL = remaining lifetime) and `AuthMiddleware` rejects blacklisted tokens with 401 (Redis outage behaviour per `TOKEN_BLACKLIST_FAIL_MODE`)
+- Media URLs come from `services/api/src/utils/minio_client.py:get_media_url` → `<origin>/media/<key>` (Caddy serves `/media/*` from SeaweedFS); feed and album URLs use the request's origin, falling back to `PUBLIC_BASE_URL`. Presigned URLs were removed (the bucket is public-read behind Caddy)
 
 ### Frontend Structure
 - App Router pages in `services/frontend/app/`
@@ -119,6 +121,7 @@ Key variables in `.env` (see `.env.example` for full list):
 - `MINIO_*`: Object storage (names kept from MinIO; they configure SeaweedFS and its clients). `MINIO_BUCKET` sets the bucket; Caddy hardcodes `/tg-archive-media`, so keep the default
 - `JWT_SECRET_KEY`, `JWT_ADMIN_EMAIL`, `JWT_ADMIN_PASSWORD`: Auth config (compose defaults to `change_me_in_production`; always set them)
 - `NEXT_PUBLIC_API_URL`: Empty for the proxied setup, `http://localhost:8000` for direct access
+- `PUBLIC_BASE_URL`: public site origin (default `http://localhost`); passed to the api and baked into the frontend as `NEXT_PUBLIC_BASE_URL` (rebuild after changing). Used for absolute media URLs in feeds and OpenGraph tags. `MINIO_PUBLIC_URL` is optional (empty = Caddy `/media/...` URLs)
 
 **`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block; a new setting must be added there to take effect. Passed through today include `ENVIRONMENT` (`production` enables `Secure` cookies), `CSRF_ENABLED`, `TOKEN_BLACKLIST_FAIL_MODE`, `TURNSTILE_SECRET_KEY` (api), `CHANNEL_JOIN_*`, `SOCIAL_FETCH_*` (listener) and `PROCESSOR_RETRY_IDLE_MS` (processor).
 

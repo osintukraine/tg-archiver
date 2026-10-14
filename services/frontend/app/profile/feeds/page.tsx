@@ -179,6 +179,7 @@ export default function FeedTokensPage() {
   // ============================================================================
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return 'Unknown';
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',

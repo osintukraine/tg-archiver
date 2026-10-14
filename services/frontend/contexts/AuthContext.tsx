@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { getAuthHeaders } from '@/lib/auth-utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -166,6 +167,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Logout
   const logout = useCallback(() => {
+    // Revoke the JWT server-side (Redis blacklist). Headers are snapshotted before the
+    // token is cleared; the request is fire-and-forget so the UI never waits on it, and
+    // a network/401 failure still logs the user out locally.
+    fetch(`${API_URL}/api/auth/logout`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      keepalive: true,
+    }).catch((err) => console.error('[Auth] Server-side logout failed:', err));
     removeStoredToken();
     setUser(null);
     setToken(null);

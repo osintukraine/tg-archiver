@@ -5,7 +5,7 @@ import { API_URL } from '@/lib/api';
 import { getAuthHeaders } from '@/lib/auth-utils';
 
 interface FeedToken {
-  id: string;
+  id: number;
   name: string | null;
   created_at: string;
   last_used_at: string | null;
@@ -13,7 +13,7 @@ interface FeedToken {
 }
 
 interface NewToken {
-  id: string;
+  id: number;
   token: string;
 
   name: string | null;
@@ -97,7 +97,7 @@ export default function FeedTokensPage() {
     }
   };
 
-  const revokeToken = async (tokenId: string) => {
+  const revokeToken = async (tokenId: number) => {
     if (!confirm('Revoke this token? All feed URLs using it will stop working.')) {
       return;
     }
@@ -128,6 +128,7 @@ export default function FeedTokensPage() {
   };
 
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return 'Unknown';
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',

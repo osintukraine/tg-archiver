@@ -5,3 +5,8 @@
 -- Idempotent.
 
 DELETE FROM platform_config WHERE key IN ('telegram.session_name', 'api.cors_allow_all');
+
+-- The admin switch can only pause translation; it cannot start it when .env disables it.
+UPDATE platform_config
+SET description = 'Pause translation when false (only takes effect if TRANSLATION_ENABLED=true in .env)'
+WHERE key = 'processing.translation_enabled';

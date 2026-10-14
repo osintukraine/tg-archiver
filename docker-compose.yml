@@ -208,7 +208,9 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
-      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
+      # Empty = media served via Caddy /media/*; set to a direct public S3 endpoint to override
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost}
       - MINIO_SECURE=false
       - SECRET_KEY=${SECRET_KEY:-change_me_in_production}
       # Authentication
@@ -254,6 +256,8 @@ services:
         # API: /api/* -> api:8000, Media: /media/* -> seaweedfs, Frontend: /* -> frontend
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
         NEXT_PUBLIC_MINIO_URL: ${NEXT_PUBLIC_MINIO_URL:-}
+        # Public site origin; OpenGraph image URLs must be absolute
+        NEXT_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
         NEXT_PUBLIC_TRANSLATION_ENABLED: ${TRANSLATION_ENABLED:-true}
         NEXT_PUBLIC_RSS_ENABLED: ${NEXT_PUBLIC_RSS_ENABLED:-false}
         # Empty = Cloudflare's always-pass test key (suggest-channel captcha is then a no-op)

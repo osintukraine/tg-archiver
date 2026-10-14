@@ -36,13 +36,12 @@ from .minio_client import (
     get_minio_client,
     close_minio_client,
     get_media_url,
-    get_public_url,
-    get_presigned_url,
     get_media_path,
     ensure_bucket_exists,
     check_object_exists,
     MINIO_BUCKET,
     MINIO_PUBLIC_URL,
+    PUBLIC_BASE_URL,
 )
 
 __all__ = [
@@ -80,11 +79,10 @@ __all__ = [
     "get_minio_client",
     "close_minio_client",
     "get_media_url",
-    "get_public_url",
-    "get_presigned_url",
     "get_media_path",
     "ensure_bucket_exists",
     "check_object_exists",
     "MINIO_BUCKET",
     "MINIO_PUBLIC_URL",
+    "PUBLIC_BASE_URL",
 ]

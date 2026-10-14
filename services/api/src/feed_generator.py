@@ -28,6 +28,8 @@ from feedgen.feed import FeedGenerator as FeedGenFeed
 from config.settings import settings
 from models.message import Message
 
+from .utils.minio_client import get_media_url
+
 
 class FeedFormat(str, Enum):
     """Supported feed output formats."""
@@ -59,8 +61,6 @@ class FeedGenerator:
             base_url: Base URL for the API (e.g., https://api.example.com)
         """
         self.base_url = base_url.rstrip("/")
-        self.minio_public_url = settings.MINIO_PUBLIC_URL.rstrip("/")
-        self.minio_bucket = settings.MINIO_BUCKET_NAME
 
     def generate(
         self,
@@ -247,8 +247,7 @@ class FeedGenerator:
             for mm in message.media:
                 media_file = mm.media_file
                 if media_file:
-                    # Construct MinIO URL
-                    media_url = f"{self.minio_public_url}/{self.minio_bucket}/{media_file.s3_key}"
+                    media_url = get_media_url(media_file.s3_key, self.base_url)
                     mime_type = media_file.mime_type or self._get_mime_type(message.media_type)
                     file_size = str(media_file.file_size) if media_file.file_size else "0"
 
@@ -452,7 +451,7 @@ class FeedGenerator:
             for i, mm in enumerate(message.media):
                 media_file = mm.media_file
                 if media_file:
-                    media_url = f"{self.minio_public_url}/{self.minio_bucket}/{media_file.s3_key}"
+                    media_url = get_media_url(media_file.s3_key, self.base_url)
                     attachment = {
                         "url": media_url,
                         "mime_type": media_file.mime_type or "application/octet-stream",
@@ -592,7 +591,7 @@ class FeedGenerator:
             for mm in message.media:
                 media_file = mm.media_file
                 if media_file:
-                    media_url = f"{self.minio_public_url}/{self.minio_bucket}/{media_file.s3_key}"
+                    media_url = get_media_url(media_file.s3_key, self.base_url)
                     mime_type = media_file.mime_type or ""
 
                     if mime_type.startswith("image/"):
@@ -654,7 +653,7 @@ class FeedGenerator:
             for mm in message.media:
                 media_file = mm.media_file
                 if media_file and media_file.mime_type and media_file.mime_type.startswith("image/"):
-                    return f"{self.minio_public_url}/{self.minio_bucket}/{media_file.s3_key}"
+                    return get_media_url(media_file.s3_key, self.base_url)
 
         if message.media_type == "photo" and message.media_url_telegram:
             return message.media_url_telegram

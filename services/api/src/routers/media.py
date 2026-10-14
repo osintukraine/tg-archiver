@@ -24,6 +24,7 @@ from models.media import MessageMedia, MediaFile
 
 from ..database import get_db
 from ..schemas import MediaGalleryResult, MediaItem
+from ..utils import get_media_url
 from ..utils.rate_limit import rate_limit_dependency, MEDIA_REDIRECT_RATE_LIMIT
 
 router = APIRouter(prefix="/api/media", tags=["media"])
@@ -31,11 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Storage configuration
 # Production: Set HETZNER_STORAGE_URL=http://storage.example.com:8081
-# Development: Falls back to MinIO at localhost:9000
 STORAGE_BASE_URL = os.environ.get("HETZNER_STORAGE_URL", "")
-# MINIO_PUBLIC_URL is browser-accessible (for redirects)
-# MINIO_URL is Docker-internal (for server-to-server communication)
-MINIO_PUBLIC_URL = os.environ.get("MINIO_PUBLIC_URL", "http://localhost:9000")
 MINIO_BUCKET = (
     os.environ.get("MINIO_BUCKET_NAME") or os.environ.get("MINIO_BUCKET") or "tg-archive-media"
 )
@@ -122,7 +119,7 @@ async def route_media_request(
         RedirectResponse: 307 Temporary Redirect to storage box endpoint
             - Multi-box: /minio-{storage_box}/{bucket}/{file_hash} (via Caddy proxy)
             - Legacy: HETZNER_STORAGE_URL/{storage_box}/{file_hash}
-            - Development: MINIO_PUBLIC_URL/{bucket}/{file_hash}
+            - Default: PUBLIC_BASE_URL/media/... (or MINIO_PUBLIC_URL/{bucket}/{file_hash})
 
     Raises:
         HTTPException 404: Media file not found in database
@@ -205,9 +202,8 @@ async def route_media_request(
         # Legacy: Hetzner storage URL
         redirect_url = f"{STORAGE_BASE_URL}/{storage_box}/{file_hash}"
     else:
-        # Development: Single MinIO at MINIO_PUBLIC_URL
-        redirect_url = f"{MINIO_PUBLIC_URL}/{MINIO_BUCKET}/{file_hash}"
-        logger.debug(f"Dev mode: Redirecting to MinIO: {redirect_url}")
+        # Single S3 store: public Caddy /media/... URL (or MINIO_PUBLIC_URL if set)
+        redirect_url = get_media_url(file_hash)
 
     return RedirectResponse(
         url=redirect_url,

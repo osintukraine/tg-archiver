@@ -74,13 +74,14 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 1. `listener/src/telegram_listener.py` receives Telegram events
 2. `listener/src/redis_queue.py` publishes to `telegram:messages:realtime` (live) or `telegram:messages:backfill` (historical)
 3. `processor/src/redis_consumer.py` consumes with consumer group `processor-workers` (realtime first; also drains the legacy `telegram:messages` stream). A failed message is left pending and redelivered by XAUTOCLAIM after `PROCESSOR_RETRY_IDLE_MS` (default 5 min); after 3 deliveries it goes to `telegram:messages:dlq` with its full payload (admin API: `/api/admin/dlq` list/replay/delete). Persistence is idempotent (`ON CONFLICT DO NOTHING` on `(channel_id, message_id)`), so redelivery is safe
-4. `processor/src/message_processor.py`: channel info → routing → entity extraction → translation → media → DB persist; forwards also upsert `discovered_channels` / `message_forwards`
+4. `processor/src/message_processor.py`: channel info → routing → entity extraction → language detection → media → DB persist; forwards also upsert `discovered_channels` / `message_forwards`
 5. `shared/python/media_archiver.py` uploads media to S3 (SeaweedFS) with SHA-256 deduplication
+6. Translation is out of the ingest path: the processor only detects the language and stores `messages.translation_status` (`pending` or `skipped`). The background `processor/src/translation_worker.py` claims `pending` rows (newest first) and translates with DeepL (daily cap `TRANSLATION_DAILY_CHAR_LIMIT`, default 500000, counted in Redis; 0 = no cap), then falls back to Google with backoff. Statuses: `pending`, `done`, `skipped` (also rows older than `TRANSLATION_MAX_AGE_HOURS`), `failed` (after `TRANSLATION_MAX_ATTEMPTS`). Columns added by migration 007
 
 ### Channel Discovery
 - `listener/src/channel_discovery.py` reads Telegram folders via `GetDialogFiltersRequest`
 - Folder name must match `FOLDER_ARCHIVE_ALL_PATTERN` exactly (case-insensitive). `.env.example` sets `tg-archiver`; if unset, code and compose default to `Archive`
-- Syncs to the database every 5 minutes (hardcoded, `listener/src/main.py`; `FOLDER_SYNC_INTERVAL` is not read)
+- Syncs to the database every 5 minutes (hardcoded in `listener/src/main.py`, not configurable)
 - Forwarded broadcast-channel posts record their source in `discovered_channels` (processor `_track_forward_chain`). `listener/src/channel_join_worker.py` joins them according to `CHANNEL_JOIN_MODE`: `approval` (default; only rows with `join_approved_at` set via `POST /api/admin/discovered/{id}/approve`), `auto`, or `off`. Daily cap, FloodWait and channel-limit pauses apply in every mode
 
 ### API Structure
@@ -123,7 +124,7 @@ Key variables in `.env` (see `.env.example` for full list):
 - `NEXT_PUBLIC_API_URL`: Empty for the proxied setup, `http://localhost:8000` for direct access
 - `PUBLIC_BASE_URL`: public site origin (default `http://localhost`); passed to the api and baked into the frontend as `NEXT_PUBLIC_BASE_URL` (rebuild after changing). Used for absolute media URLs in feeds and OpenGraph tags. `MINIO_PUBLIC_URL` is optional (empty = Caddy `/media/...` URLs)
 
-**`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block; a new setting must be added there to take effect. Passed through today include `ENVIRONMENT` (`production` enables `Secure` cookies), `CSRF_ENABLED`, `TOKEN_BLACKLIST_FAIL_MODE`, `TURNSTILE_SECRET_KEY` (api), `CHANNEL_JOIN_*`, `SOCIAL_FETCH_*` (listener) and `PROCESSOR_RETRY_IDLE_MS` (processor).
+**`docker-compose.yml` has no `env_file`.** A container only sees the variables listed under its `environment:` block; a new setting must be added there to take effect. Passed through today: `LOG_LEVEL`/`LOG_FORMAT` (python services), `CHANNEL_JOIN_*`, `SOCIAL_FETCH_*`, `GAP_*`, `BACKFILL_*` (listener), `TRANSLATION_*`, `DEEPL_*`, `GOOGLE_*` (processor; the api gets a subset), `PROCESSOR_RETRY_IDLE_MS` (processor), and for the api `PLATFORM_NAME`, `API_CORS_ORIGINS`, `TRUSTED_PROXY_HOSTS`, `AUTH_REQUIRED`, `FEED_AUTH_REQUIRED`, `PUBLIC_BASE_URL`, `ENVIRONMENT` (`production` enables `Secure` cookies), `CSRF_ENABLED`, `TOKEN_BLACKLIST_FAIL_MODE`, `TURNSTILE_SECRET_KEY`. Postgres, Redis and SeaweedFS hostnames and ports are fixed in compose, not `.env` settings. To check a `.env` for dead or unpassed names (prints names only, never values): `python scripts/env_audit.py --env-file .env --strict` (needs PyYAML).
 
 ## Session Files
 
@@ -144,7 +145,7 @@ Database: `infrastructure/postgres/tests/test_migrate.sh` (migration runner, nee
 Browser testing: the UI shows an 18+ content-warning modal on public archive pages (`/`, `/messages`, `/channels`, `/search`, …) until accepted, and it blocks clicks. `/admin`, `/auth`, `/about` and `/suggest-channel` are exempt (`EXEMPT_ROUTES` in `lib/content-warning-config.ts`). On gated pages, accept it first (tick the checkbox, then "Enter Site"), or pre-seed `localStorage['tg-archiver-content-warning-consent'] = JSON.stringify({accepted: true, expiresAt: Date.now() + 30*86400000})` and reload. Consent lasts 30 days and is per origin.
 
 ### Lint / CI
-- CI (`.github/workflows/ci.yml`) runs on pushes to main/develop and on PRs: ruff + gitleaks, the Python suites, frontend lint/type-check/vitest, and a Docker build of all four services
+- CI (`.github/workflows/ci.yml`) runs on pushes to main/develop and on PRs: `lint` (ruff, `env_audit.py --env-file .env.example --strict`, gitleaks), `python-tests` (applies `init.sql` + the `db-migrate` runner, runs the migration runner test, then the processor, listener and API suites), `frontend` (lint, type-check, vitest) and `docker-build` of all four services
 - `ruff check .` must pass (config and documented baseline of ignored rules in `pyproject.toml`; the ignores are burn-down items, don't add new ones without a reason)
 - gitleaks runs in CI and pre-commit (`.pre-commit-config.yaml`); allowlist false positives narrowly in `.gitleaks.toml`
 

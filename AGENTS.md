@@ -23,7 +23,7 @@ Use `.env.example` for variable names. Do not guess credentials, table names, or
 
 ## Tests and checks
 
-See `README.md` -> "Development". Frontend (from `services/frontend`): `bun run lint`, `bun run type-check`, `bun run test:run`. Python: `ruff check`.
+See `README.md` -> "Development". Frontend (from `services/frontend`): `bun run lint`, `bun run type-check`, `bun run test:run`. Python: `ruff check .`. Env names: `python scripts/env_audit.py --env-file .env.example --strict`.
 
 ## Live schema (optional)
 

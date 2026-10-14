@@ -77,6 +77,13 @@ class Message(Base):
     )  # 'deepl', 'google', 'manual'
     translation_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     translation_cost_usd: Mapped[Optional[float]] = mapped_column(Numeric(10, 6), nullable=True)
+    # Translation queue state (migration 007): NULL, pending, done, skipped, failed
+    translation_status: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    translation_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    translation_next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    translation_last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Media handling
     media_type: Mapped[Optional[str]] = mapped_column(

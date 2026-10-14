@@ -11,7 +11,7 @@ services:
     container_name: tg-archiver-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-archiver}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-tg_archiver}
     volumes:
       # Postgres 18+ images keep data under /var/lib/postgresql/<major>/docker
@@ -35,7 +35,7 @@ services:
     environment:
       PGHOST: postgres
       PGUSER: ${POSTGRES_USER:-archiver}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       PGDATABASE: ${POSTGRES_DB:-tg_archiver}
     volumes:
       - ./infrastructure/postgres/migrate.sh:/migrate.sh:ro
@@ -68,7 +68,7 @@ services:
     entrypoint: ["/bin/sh", "/etc/seaweedfs/entrypoint.sh"]
     environment:
       S3_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      S3_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
       S3_PUBLIC_BUCKET: ${MINIO_BUCKET:-tg-archive-media}
     volumes:
       - seaweedfs_data:/data
@@ -103,16 +103,16 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
       - MINIO_ENDPOINT=seaweedfs:8333
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
       - MINIO_SECURE=false
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env (openssl rand -hex 32)}
       - FOLDER_ARCHIVE_ALL_PATTERN=${FOLDER_ARCHIVE_ALL_PATTERN:-Archive}
       # Backfill configuration
       - BACKFILL_ENABLED=${BACKFILL_ENABLED:-false}
@@ -167,11 +167,11 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
       - MINIO_ENDPOINT=seaweedfs:8333
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
       - MINIO_SECURE=false
       - MEDIA_BUFFER_PATH=/var/cache/media-buffer
@@ -179,7 +179,7 @@ services:
       - LOG_FORMAT=${LOG_FORMAT:-json}
       # Failed messages are retried after this idle time (3 attempts, then DLQ)
       - PROCESSOR_RETRY_IDLE_MS=${PROCESSOR_RETRY_IDLE_MS:-300000}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env (openssl rand -hex 32)}
       - TRANSLATION_ENABLED=${TRANSLATION_ENABLED:-true}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}
       - DEEPL_API_URL=${DEEPL_API_URL:-}
@@ -221,11 +221,11 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-archiver}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-change_me_in_production}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       - POSTGRES_DB=${POSTGRES_DB:-tg_archiver}
       - MINIO_ENDPOINT=seaweedfs:8333
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?set MINIO_SECRET_KEY in .env}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
       # Empty = media served via Caddy /media/*; set to a direct public S3 endpoint to override
       - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-}
@@ -239,9 +239,9 @@ services:
       - FOLDER_ARCHIVE_ALL_PATTERN=${FOLDER_ARCHIVE_ALL_PATTERN:-Archive}
       # Authentication
       - AUTH_PROVIDER=${AUTH_PROVIDER:-jwt}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_in_production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env (openssl rand -hex 32)}
       - JWT_ADMIN_EMAIL=${JWT_ADMIN_EMAIL:-admin@tg-archiver.local}
-      - JWT_ADMIN_PASSWORD=${JWT_ADMIN_PASSWORD:-change_me_in_production}
+      - JWT_ADMIN_PASSWORD=${JWT_ADMIN_PASSWORD:?set JWT_ADMIN_PASSWORD in .env}
       - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
       - FEED_AUTH_REQUIRED=${FEED_AUTH_REQUIRED:-false}

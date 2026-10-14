@@ -20,6 +20,7 @@ from typing import NoReturn
 from minio import Minio
 from telethon import TelegramClient
 
+from config.secrets_check import require_secrets
 from config.settings import settings
 from media_archiver import MediaArchiver
 
@@ -378,6 +379,8 @@ def handle_shutdown(signum: int, frame) -> None:
 
 
 if __name__ == "__main__":
+    require_secrets("processor", ["POSTGRES_PASSWORD", "MINIO_SECRET_KEY", "TELEGRAM_API_HASH"])
+
     # Setup signal handlers
     signal.signal(signal.SIGTERM, handle_shutdown)
     signal.signal(signal.SIGINT, handle_shutdown)

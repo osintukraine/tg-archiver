@@ -72,9 +72,11 @@ Edit `.env` with your Telegram credentials:
 TELEGRAM_API_ID=your_api_id_here
 TELEGRAM_API_HASH=your_api_hash_here
 
-# Change these! If unset, docker-compose falls back to `change_me_in_production`,
-# which gives a working admin login with a publicly known password.
+# Required. docker compose refuses to start while one is missing, and the services
+# refuse the .env.example placeholders (change_me_..., minioadmin) and a JWT key
+# shorter than 32 characters. Generate values with: openssl rand -hex 32
 POSTGRES_PASSWORD=your_secure_password
+MINIO_SECRET_KEY=your_s3_secret
 JWT_SECRET_KEY=generate_a_64_char_secret_key
 JWT_ADMIN_PASSWORD=your_admin_password
 ```
@@ -386,7 +388,7 @@ The PostgreSQL host and port are fixed to `postgres:5432` in `docker-compose.yml
 |----------|---------|-------------|
 | `POSTGRES_DB` | `tg_archiver` | Database name |
 | `POSTGRES_USER` | `archiver` | Database user |
-| `POSTGRES_PASSWORD` | `change_me_in_production` | Database password (**must change**) |
+| `POSTGRES_PASSWORD` | (required) | Database password (**must change**) |
 | `REDIS_PASSWORD` | (empty) | Redis password; empty = no auth (set it in production). The Redis host is fixed in compose |
 | `TELEGRAM_SESSION_NAME` | `listener` | Session file name under `sessions/` |
 
@@ -397,9 +399,9 @@ The PostgreSQL host and port are fixed to `postgres:5432` in `docker-compose.yml
 | `AUTH_PROVIDER` | `jwt` | `jwt` for local auth, `none` to disable (code default without compose: `none`) |
 | `AUTH_REQUIRED` | `false` | `true` = every API endpoint needs a login (private archive); `false` = public read access |
 | `FEED_AUTH_REQUIRED` | `false` | `true` = RSS/Atom/JSON feeds need a feed token |
-| `JWT_SECRET_KEY` | `change_me_in_production` | Secret for JWT signing (**must change**) |
+| `JWT_SECRET_KEY` | (required) | Secret for JWT signing (**must change**) |
 | `JWT_ADMIN_EMAIL` | `admin@tg-archiver.local` | Admin email (the admin username is `admin`; either works for login) |
-| `JWT_ADMIN_PASSWORD` | `change_me_in_production` | Admin login password (**must change**) |
+| `JWT_ADMIN_PASSWORD` | (required) | Admin login password (**must change**) |
 | `JWT_EXPIRATION_MINUTES` | `60` | Token expiration time |
 
 ### Storage (SeaweedFS, S3-compatible)
@@ -714,6 +716,7 @@ Run the same checks locally:
 ```bash
 pip install pre-commit ruff pyyaml
 python scripts/env_audit.py --env-file .env.example --strict   # prints names only, never values
+python scripts/env_audit.py --env-file .env --strict           # your real .env: dead, unpassed and RENAMED names (with their replacement)
 ruff check .               # config + documented baseline of ignored rules in pyproject.toml
 pre-commit install         # gitleaks, ruff, hygiene hooks, eslint on changed frontend files
 pre-commit run --all-files

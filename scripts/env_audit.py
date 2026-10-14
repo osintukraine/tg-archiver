@@ -8,6 +8,7 @@ Static analysis only (stdlib + PyYAML). Prints variable NAMES, never values.
     python scripts/env_audit.py --json
 
 Findings for names in the env file:
+  RENAMED          an old name nothing reads any more; the finding names its replacement
   DEAD_NOT_PASSED  compose never references it and no host script reads it
   DEAD_UNREAD      compose passes it to a service, but that service never reads it
   UNUSED_SETTING   reaches a service as a Settings field that no code uses
@@ -63,8 +64,15 @@ GENERIC = {"HOME", "PATH", "PWD", "USER", "HOSTNAME", "LANG", "TZ", "TERM", "SHE
            "NODE_ENV", "PORT", "NEXT_RUNTIME", "NEXT_TELEMETRY_DISABLED", "NEXT_PHASE", "VITEST", "NEXT_PUBLIC_VERSION"}
 # Intentional exceptions: NAME -> reason. Keep tiny; every entry needs a reason.
 ALLOW: dict[str, str] = {}
+# Names that older .env files carry but nothing reads any more: OLD -> (NEW, why).
+# Reported as RENAMED so a setting never silently stops working.
+RENAMED: dict[str, tuple[str, str]] = {
+    "SECRET_KEY": ("JWT_SECRET_KEY", "the OSINT platform signed JWTs with SECRET_KEY; tg-archiver reads JWT_SECRET_KEY"),
+    "MINIO_BUCKET_NAME": ("MINIO_BUCKET", "compose maps MINIO_BUCKET to each service's MINIO_BUCKET_NAME"),
+    "GAP_LOOKBACK_HOURS": ("GAP_THRESHOLD_HOURS", "gap detection never read GAP_LOOKBACK_HOURS"),
+}
 
-FAIL_KINDS = {"DEAD_NOT_PASSED", "DEAD_UNREAD", "UNUSED_SETTING"}
+FAIL_KINDS = {"RENAMED", "DEAD_NOT_PASSED", "DEAD_UNREAD", "UNUSED_SETTING"}
 SETTINGS_NAME = re.compile(r"settings|config|cfg", re.I)
 HOST_VAR = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 # Shared modules CLAUDE.md documents as unused; skipping them avoids crediting dead reads to every service.
@@ -342,6 +350,9 @@ def audit(root: Path, env_file: Path, compose_file: Path) -> dict:
             if name in host:
                 how.append(f"host script ({host[name][0]})")
             add("OK", name, "; ".join(how), evidence)
+        elif name in RENAMED:
+            new, why = RENAMED[name]
+            add("RENAMED", name, f"has no effect; set {new} instead ({why})")
         elif not receivers:
             literal = [s for s, c in comp.items() if s != "__lines__" and name in c["passes"]]
             hint = f" (compose sets {name} literally in {', '.join(literal)}, ignoring .env)" if literal else ""
@@ -373,7 +384,7 @@ def audit(root: Path, env_file: Path, compose_file: Path) -> dict:
 
 
 # ---------------------------------------------------------------- output
-ORDER = ["DEAD_NOT_PASSED", "DEAD_UNREAD", "UNUSED_SETTING", "MISSING_PASSTHROUGH", "SETTINGS_DECLARED_UNUSED", "OK"]
+ORDER = ["RENAMED", "DEAD_NOT_PASSED", "DEAD_UNREAD", "UNUSED_SETTING", "MISSING_PASSTHROUGH", "SETTINGS_DECLARED_UNUSED", "OK"]
 
 
 def render(result: dict) -> str:
@@ -401,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--compose", default="docker-compose.yml")
     ap.add_argument("--root", default=str(root_default))
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("--strict", action="store_true", help="exit 1 on DEAD_*/UNUSED_SETTING")
+    ap.add_argument("--strict", action="store_true", help="exit 1 on RENAMED/DEAD_*/UNUSED_SETTING")
     a = ap.parse_args(argv)
     root = Path(a.root)
     env = Path(a.env_file) if Path(a.env_file).is_absolute() else Path.cwd() / a.env_file

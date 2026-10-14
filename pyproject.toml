@@ -1,5 +1,5 @@
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 # Existing code goes up to ~177 cols (33 lines > 120, 225 > 100); 120 fits nearly all. E501 is not selected.
 line-length = 120
 extend-exclude = ["services/frontend"]

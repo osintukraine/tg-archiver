@@ -1,9 +1,7 @@
 # REST API Service Dockerfile
 # Provides REST API, RSS feeds, and search functionality
 
-ARG PYTHON_VERSION=3.13
-
-FROM python:${PYTHON_VERSION}-slim as base
+FROM python:3.14-slim AS base
 
 # Prevent Python from buffering stdout and stderr
 ENV PYTHONUNBUFFERED=1 \

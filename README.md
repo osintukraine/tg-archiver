@@ -52,7 +52,7 @@ Archive messages from Telegram channels with media storage, translation support,
 ### Prerequisites
 
 - **Docker** and **Docker Compose** (v2.0+)
-- **Python 3.11+** (for initial Telegram authentication only; the services themselves run on Python 3.13 in Docker)
+- **Python 3.11+** (for initial Telegram authentication only; the services themselves run on Python 3.14 in Docker)
 - **Telegram API credentials** from [my.telegram.org/apps](https://my.telegram.org/apps)
 
 ### Step 1: Clone and Configure

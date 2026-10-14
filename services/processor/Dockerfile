@@ -1,7 +1,7 @@
 # Message Processor Service Dockerfile (No AI)
 # Handles message archival, entity extraction, and media storage
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 # Prevent Python from buffering stdout and stderr
 ENV PYTHONUNBUFFERED=1 \

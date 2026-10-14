@@ -34,6 +34,7 @@ from redis.asyncio.client import Redis
 from redis.exceptions import RedisError
 
 from config.settings import settings
+from observability import redact_url
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class RedisQueue:
             self._connection_count += 1
             logger.info(
                 f"Connected to Redis (connection #{self._connection_count}): "
-                f"{settings.REDIS_URL}"
+                f"{redact_url(settings.REDIS_URL)}"
             )
 
             # Create consumer group if it doesn't exist

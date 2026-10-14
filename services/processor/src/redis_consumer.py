@@ -29,6 +29,7 @@ from redis.asyncio.client import Redis
 from redis.exceptions import RedisError
 
 from config.settings import settings
+from observability import redact_url
 from config import Timeouts, RetryConfig
 from .dead_letter_queue import DeadLetterQueue
 
@@ -225,7 +226,7 @@ class RedisConsumer:
             await self.client.ping()
 
             logger.info(
-                f"Redis consumer connected: {self.consumer_name} @ {settings.REDIS_URL}"
+                f"Redis consumer connected: {self.consumer_name} @ {redact_url(settings.REDIS_URL)}"
             )
 
             # Initialize Dead Letter Queue

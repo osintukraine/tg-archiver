@@ -24,11 +24,28 @@ import os
 import sys
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 import json
 
 # Thread-local storage for trace_id context
 import threading
 _context = threading.local()
+
+
+def redact_url(url: str) -> str:
+    """
+    Return a connection URL safe to log: the password (if any) is replaced by ***.
+
+    e.g. redis://:secret@redis:6379/0 -> redis://:***@redis:6379/0
+    """
+    parts = urlsplit(url)
+    if parts.password is None:
+        return url
+    userinfo = f"{parts.username or ''}:***"
+    host = parts.hostname or ""
+    if parts.port is not None:
+        host = f"{host}:{parts.port}"
+    return urlunsplit(parts._replace(netloc=f"{userinfo}@{host}"))
 
 
 def get_trace_id() -> Optional[str]:

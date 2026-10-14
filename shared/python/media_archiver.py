@@ -47,6 +47,7 @@ from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.tl.types import Message as TelegramMessage
 
+from config.platform_config import get_override
 from config.settings import settings
 from models.media import MediaFile, MessageMedia
 from models.message import Message
@@ -569,6 +570,13 @@ class MediaArchiver:
         """
         download_start = time.time()
         media_type = self._get_media_type_label(message)
+
+        # Admin-set size cap (storage.max_file_size_mb); no cap unless saved in the admin panel
+        max_mb = await get_override("storage.max_file_size_mb")
+        size = getattr(getattr(message, "file", None), "size", None)
+        if isinstance(max_mb, int) and max_mb > 0 and isinstance(size, int) and size > max_mb * 1024 * 1024:
+            logger.info(f"Skipping {media_type}: {size} bytes exceeds storage.max_file_size_mb={max_mb}")
+            return None
 
         try:
             # Download to local buffer's .tmp directory (same filesystem for atomic moves)

@@ -95,6 +95,12 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - Logout: the frontend `logout()` fires `POST /api/auth/logout` (Bearer + CSRF) without awaiting it, then clears local state. The API blacklists the JWT in Redis (`jwt:blacklist:<sha256[:32]>`, TTL = remaining lifetime) and `AuthMiddleware` rejects blacklisted tokens with 401 (Redis outage behaviour per `TOKEN_BLACKLIST_FAIL_MODE`)
 - Media URLs come from `services/api/src/utils/minio_client.py:get_media_url` → `<origin>/media/<key>` (Caddy serves `/media/*` from SeaweedFS); feed and album URLs use the request's origin, falling back to `PUBLIC_BASE_URL`. Presigned URLs were removed (the bucket is public-read behind Caddy)
 
+### Admin config (`platform_config`)
+- The admin Configuration page edits `platform_config` rows. Services read them through `shared/python/config/platform_config.py:get_override(key)` (60 s in-process cache, so an edit applies within about a minute, no restart; errors fall back to env/default)
+- Precedence: a row overrides `.env`/defaults ONLY when `last_modified_at IS NOT NULL` (an admin saved it); seeded rows never override anything
+- Applied keys (`APPLIED_KEYS` in `services/api/src/routers/admin/config.py`, returned as `applied` per item): `processing.translation_enabled` (false pauses the translation worker; queued rows stay pending), `telegram.folder_sync_interval`, `storage.media_enabled`, `storage.max_file_size_mb` (skips larger downloads), `feed.default_limit`, `feed.max_limit`. The other keys are stored but not applied, and the page labels them "not applied". To wire a key, call `get_override` where it is used and add it to `APPLIED_KEYS`
+- Deliberately not configurable from the UI: Telegram session name and "allow all CORS origins" (removed by migration 008)
+
 ### Frontend Structure
 - App Router pages in `services/frontend/app/`
 - Reusable components in `services/frontend/components/`

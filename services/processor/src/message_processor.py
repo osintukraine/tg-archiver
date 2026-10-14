@@ -49,6 +49,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
 
+from config.platform_config import get_override
 from config.settings import settings
 from models.base import AsyncSessionLocal
 from models.message import Message
@@ -221,7 +222,8 @@ class MessageProcessor:
                 # Step 5: Media Archival
                 media_file_ids = []
 
-                if message.media_type:
+                # storage.media_enabled: admin can switch archiving off (cached lookup)
+                if message.media_type and await get_override("storage.media_enabled") is not False:
                     if self.media_archiver and self.telegram_client:
                         try:
                             if message.album_message_ids and len(message.album_message_ids) > 1:

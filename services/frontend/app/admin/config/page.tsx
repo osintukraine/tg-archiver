@@ -24,6 +24,7 @@ interface ConfigItem {
   is_secret: boolean;
   restart_required: boolean;
   last_modified_at: string | null;
+  applied: boolean;
 }
 
 interface EnvVarItem {
@@ -103,9 +104,7 @@ export default function ConfigPage() {
 
       setMessage({
         type: 'success',
-        text: data.restart_required
-          ? `Updated "${key}" - restart required`
-          : `Updated "${key}"`,
+        text: data.message ?? `Updated "${key}"`,
       });
       setEditingKey(null);
       refetch();
@@ -328,6 +327,9 @@ export default function ConfigPage() {
                         {item.is_secret && (
                           <Badge variant="warning" size="sm">secret</Badge>
                         )}
+                        {!item.applied && (
+                          <Badge variant="warning" size="sm">not applied</Badge>
+                        )}
                         {item.restart_required && (
                           <Badge variant="error" size="sm">restart</Badge>
                         )}
@@ -366,6 +368,8 @@ export default function ConfigPage() {
           <div className="text-sm text-text-secondary">
             <p className="font-medium text-text-primary mb-1">About Configuration</p>
             <ul className="list-disc list-inside space-y-1">
+              <li>Settings marked <Badge variant="warning" size="sm">not applied</Badge> are stored but no service uses them yet; changing them has no effect</li>
+              <li>Applied settings take effect within about a minute, no restart needed; until you save a value, the <code className="bg-bg-tertiary px-1 rounded-sm">.env</code> value is used</li>
               <li>Settings marked with <Badge variant="error" size="sm">restart</Badge> require a service restart to take effect</li>
               <li>Secret values are masked and need to be re-entered when editing</li>
               <li>Boolean toggles can be clicked directly to toggle</li>

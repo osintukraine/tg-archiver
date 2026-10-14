@@ -36,6 +36,7 @@ from telethon.utils import get_peer_id
 from telethon.tl.types import PeerChannel, InputPeerChannel
 
 from .backfill_service import BackfillService
+from config.platform_config import get_override
 from config.settings import settings
 from models.base import AsyncSessionLocal
 from models.channel import Channel
@@ -916,5 +917,6 @@ class ChannelDiscovery:
             except Exception as e:
                 logger.exception(f"Error in background sync: {e}")
 
-            # Wait for next sync
-            await asyncio.sleep(interval_seconds)
+            # Wait for next sync (admin override re-read each loop; values <= 0 ignored)
+            override = await get_override("telegram.folder_sync_interval")
+            await asyncio.sleep(override if override and override > 0 else interval_seconds)

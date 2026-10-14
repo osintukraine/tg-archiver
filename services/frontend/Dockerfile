@@ -35,7 +35,7 @@ ENV NODE_ENV=production
 # Must be set here, not just at runtime
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_MINIO_URL=http://localhost:9000/osint-media
-ARG NEXT_PUBLIC_BASE_URL=http://localhost:3000
+ARG NEXT_PUBLIC_BASE_URL=http://localhost
 ARG NEXT_PUBLIC_PLATFORM_NAME="tg-archiver"
 ARG NEXT_PUBLIC_AUTH_PROVIDER=none
 ARG NEXT_PUBLIC_KOFI_USERNAME=""

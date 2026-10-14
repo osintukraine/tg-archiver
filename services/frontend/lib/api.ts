@@ -137,11 +137,8 @@ function getMediaBaseUrl(): string {
   // Even during SSR, media URLs get embedded in HTML that browsers will render.
   // Docker-internal URLs (seaweedfs:8333) are NOT accessible from browsers.
   //
-  // For tg-archiver (simple setup without Caddy):
-  // - NEXT_PUBLIC_MINIO_URL points directly to MinIO: http://localhost:9000/tg-archive-media
-  //
-  // For OSINT platform (with Caddy):
-  // - NEXT_PUBLIC_MEDIA_URL for CDN or empty for relative URLs
+  // Behind Caddy leave both empty: media is then the relative /media/... path.
+  // NEXT_PUBLIC_MEDIA_URL (CDN) or NEXT_PUBLIC_MINIO_URL override the prefix.
   //
   // Priority: NEXT_PUBLIC_MEDIA_URL > NEXT_PUBLIC_MINIO_URL > empty (relative)
   return process.env.NEXT_PUBLIC_MEDIA_URL || process.env.NEXT_PUBLIC_MINIO_URL || '';
@@ -150,36 +147,28 @@ function getMediaBaseUrl(): string {
 /**
  * Convert S3 key to browser-accessible media URL
  *
- * S3 keys are stored as "media/ab/cd/hash.jpg"
+ * S3 keys are stored as "media/ab/cd/hash.jpg" and Caddy serves them at /media/ab/cd/hash.jpg
+ * (anonymous read, no redirect).
  *
- * URL generation:
- * - Normal: /media/ab/cd/hash.jpg (relative, Caddy routes to MinIO or buffer)
- * - OpenGraph: Uses direct MinIO path to bypass redirects (crawlers don't follow 307s)
+ * - Normal: relative /media/ab/cd/hash.jpg
+ * - forceExternal (OpenGraph/social crawlers): absolute ${NEXT_PUBLIC_BASE_URL}/media/...
  *
  * NOTE: Always returns browser-accessible URLs, even during SSR.
  * Docker-internal URLs would break when rendered to HTML.
  *
  * @param s3Key - The S3 key (e.g., "media/2f/a1/abc123.jpg")
- * @param forceExternal - If true, use absolute URL for social crawlers (OpenGraph).
- *                        Uses direct MinIO path to avoid 307 redirects.
+ * @param forceExternal - If true, return an absolute URL on the public origin.
  */
 export function getMediaUrl(s3Key: string | null, forceExternal = false): string | null {
   if (!s3Key) return null;
 
-  // Clean the key (remove leading slash if present)
   const cleanKey = s3Key.startsWith('/') ? s3Key.slice(1) : s3Key;
 
-  // For OpenGraph/social metadata, use direct MinIO path
-  // Social crawlers (Facebook, Twitter, Bluesky) don't follow 307 redirects
-  // Instead of /media/... (which redirects), use /minio-storage/osint-media/media/...
   if (forceExternal) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    // Use direct MinIO storage path to bypass Caddy's redirect logic
-    // Caddy proxies /minio-storage/* directly to MinIO without redirects
-    return `${baseUrl}/minio-storage/osint-media/${cleanKey}`;
+    const origin = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost').replace(/\/+$/, '');
+    return `${origin}/${cleanKey}`;
   }
 
-  // Normal case: use base URL (relative for client, MinIO for server)
   const baseUrl = getMediaBaseUrl();
   return baseUrl ? `${baseUrl}/${cleanKey}` : `/${cleanKey}`;
 }

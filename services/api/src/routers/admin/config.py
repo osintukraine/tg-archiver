@@ -5,7 +5,7 @@ Provides runtime platform configuration management.
 Settings are stored in the database and grouped by category.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
@@ -16,6 +16,7 @@ import re
 
 from ...database import get_db
 from ...dependencies import AdminUser
+from .message_actions import log_admin_action
 
 router = APIRouter(prefix="/api/admin/config", tags=["admin-config"])
 
@@ -224,6 +225,7 @@ async def update_config_item(
     key: str,
     request: ConfigUpdateRequest,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -290,6 +292,9 @@ async def update_config_item(
         SET value = :value, last_modified_at = NOW()
         WHERE key = :key
     """), {"key": key, "value": request.value})
+    await log_admin_action(db, "config.updated", 0, admin, http_request, {
+        "key": key, "value": mask_value(key, request.value),
+    }, resource_type="config")
     await db.commit()
 
     return {
@@ -307,6 +312,7 @@ async def update_config_item(
 async def bulk_update_config(
     admin: AdminUser,
     request: ConfigBulkUpdateRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -393,6 +399,10 @@ async def bulk_update_config(
         except Exception as e:
             errors.append({"key": key, "error": str(e)})
 
+    if updated:
+        await log_admin_action(db, "config.updated", 0, admin, http_request, {
+            "updates": {k: mask_value(k, request.updates[k]) for k in updated},
+        }, resource_type="config")
     await db.commit()
 
     return {

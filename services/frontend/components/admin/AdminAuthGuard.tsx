@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export function AdminAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isAdmin, isLoading } = useAuth();
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function AdminAuthGuard({ children }: { children: React.ReactNode }) {
 
     // If not authenticated, middleware should redirect, but double-check
     if (!isAuthenticated) {
-      router.push('/auth/login?returnTo=/admin');
+      router.push(`/auth/login?returnTo=${encodeURIComponent(pathname || '/admin')}`);
       return;
     }
 
@@ -29,7 +30,7 @@ export function AdminAuthGuard({ children }: { children: React.ReactNode }) {
     if (!isAdmin()) {
       router.push('/');
     }
-  }, [isAuthenticated, isAdmin, isLoading, router]);
+  }, [isAuthenticated, isAdmin, isLoading, router, pathname]);
 
   // Show loading state while checking auth
   if (isLoading) {

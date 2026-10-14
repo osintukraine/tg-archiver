@@ -126,20 +126,24 @@ async def log_admin_action(
     details: Optional[dict] = None,
     resource_type: str = "message",
 ):
-    """Log an admin action to the audit table."""
+    """Log an admin action to the audit table.
+
+    Runs in a savepoint so a failed insert never aborts the caller's transaction.
+    """
     try:
-        await db.execute(text("""
+        async with db.begin_nested():
+            await db.execute(text("""
             INSERT INTO admin_actions (action, resource_type, resource_id, details, admin_id, admin_email, ip_address, created_at)
             VALUES (:action, :resource_type, :resource_id, :details, :admin_id, :admin_email, :ip_address, NOW())
-        """), {
-            "action": action,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "details": json.dumps(details or {}),
-            "admin_id": str(admin.user_id) if admin.user_id else None,
-            "admin_email": admin.email if hasattr(admin, 'email') else None,
-            "ip_address": get_client_ip(request),
-        })
+            """), {
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "details": json.dumps(details or {}),
+                "admin_id": str(admin.user_id) if admin.user_id else None,
+                "admin_email": admin.email if hasattr(admin, 'email') else None,
+                "ip_address": get_client_ip(request),
+            })
     except Exception as e:
         logger.warning(f"Failed to log admin action: {e}")
 

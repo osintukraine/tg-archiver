@@ -4,12 +4,13 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeReturnTo } from '@/lib/safe-return-to';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, isLoading, error: authError } = useAuth();
-  const returnTo = searchParams.get('returnTo') || '/';
+  const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

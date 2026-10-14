@@ -9,7 +9,7 @@ Archive messages from Telegram channels with media storage, translation support,
 - **Real-time Archiving**: Monitor channels via Telegram folders - add channels by drag-and-drop
 - **Media Storage**: Photos, videos, documents with SHA-256 deduplication
 - **Translation**: Russian/Ukrainian posts are translated to English in a background worker (DeepL with a daily character cap, Google Translate as fallback); archiving never waits for it
-- **Full-Text Search**: PostgreSQL tsvector-powered search across content and translations
+- **Full-Text Search**: PostgreSQL full-text search across content and translations, with Russian and English stemming (searching "Украина" also finds "Украины", "Украине"; "drone" finds "drones")
 - **RSS Feeds**: Generate RSS/Atom/JSON feeds for archived channels
 - **Social Graph**: Track forwards, replies, comments, and engagement metrics
 - **Forward Chain Tracking**: Auto-discover channels via forwards, fetch original message context

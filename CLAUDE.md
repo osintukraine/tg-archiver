@@ -115,7 +115,7 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - To change the schema, add the next numbered migration; never edit an applied one (checksums are recorded but not verified). Migrations must be idempotent, and new ones must not contain their own `BEGIN`/`COMMIT` (the runner wraps each file)
 - SQLAlchemy models in `shared/python/models/`
 - Key tables: `messages`, `channels`, `media_files`, `message_media` (junction), `users`
-- Full-text search via PostgreSQL tsvector on `messages.search_vector`
+- Full-text search via PostgreSQL tsvector on `messages.search_vector` (content + translation), built with the `russian` config (migration 009): Cyrillic words get Russian stemming, Latin words English stemming, so inflected forms match. The API queries with the same config (`SEARCH_CONFIG` in `routers/messages.py`); change both together. No Ukrainian stemmer exists in Postgres; stopwords are not searchable
 - `top_forwarded_messages`, `channel_interactions` and `channel_influence_network` are plain views over `messages` (migration 005)
 - `infrastructure/postgres/tests/test_schema_drift.py` compares every ORM model with the live schema
 

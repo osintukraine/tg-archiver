@@ -25,8 +25,10 @@ start_pg() {
     docker run -d --name "$PG" --network "$NET" -e POSTGRES_PASSWORD=pw -e POSTGRES_USER=archiver \
         -e POSTGRES_DB=tg_archiver -v "$HERE/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
         "$IMAGE" >/dev/null
-    # initdb restarts the server once; wait for the real one
-    until docker exec "$PG" sh -c 'test -f /tmp/.up || { psql -U archiver -d tg_archiver -Atc "select 1 from schema_migrations limit 1" >/dev/null 2>&1 && touch /tmp/.up; }' 2>/dev/null; do sleep 1; done
+    # The image runs init.sql on a temporary socket-only server, then restarts
+    # it. Connect over TCP: only the final server listens there, so this can't
+    # pass during the init phase and race the restart (flaky exit 2 in CI).
+    until docker exec -e PGPASSWORD=pw "$PG" psql -h 127.0.0.1 -U archiver -d tg_archiver -Atc "select 1 from schema_migrations limit 1" >/dev/null 2>&1; do sleep 1; done
 }
 psql_pg() { docker exec "$PG" psql -U archiver -d tg_archiver -Atq "$@"; }
 migrate() { # $1 = migrations dir on host

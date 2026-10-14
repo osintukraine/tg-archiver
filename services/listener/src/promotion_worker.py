@@ -23,6 +23,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# XREADGROUP blocks up to BLOCK_MS. redis-py 8 times out socket reads after ~5s
+# unless socket_timeout is set, which killed every blocking read; keep the socket
+# timeout comfortably above the block time.
+BLOCK_MS = 5000
+REDIS_SOCKET_TIMEOUT_S = BLOCK_MS / 1000 + 10
+
 
 class PromotionWorker:
     """
@@ -56,6 +62,7 @@ class PromotionWorker:
             self.redis_client = redis.from_url(
                 settings.REDIS_URL,
                 decode_responses=True,
+                socket_timeout=REDIS_SOCKET_TIMEOUT_S,
             )
             await self.redis_client.ping()
             logger.info("Promotion worker connected to Redis")
@@ -112,7 +119,7 @@ class PromotionWorker:
                     consumername=self._consumer_name,
                     streams={self.STREAM_PROMOTE: ">"},
                     count=1,
-                    block=5000,  # 5 second block
+                    block=BLOCK_MS,
                 )
 
                 if not messages:

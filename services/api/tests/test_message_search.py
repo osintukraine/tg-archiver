@@ -16,6 +16,7 @@ from src.routers.messages import router
 
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
+CHANNEL_ID = 990_001
 CHANNEL_TG_ID = 990_000_001
 MESSAGES = {
     1: ("Войска Украины продвигаются", None),
@@ -38,12 +39,13 @@ async def seed():
     # Pooled connections from other test modules belong to their event loops
     await engine.dispose()
     async with AsyncSessionLocal() as s:
-        await s.execute(text("DELETE FROM messages WHERE channel_id IN "
-                             "(SELECT id FROM channels WHERE telegram_id = :t)"), {"t": CHANNEL_TG_ID})
-        await s.execute(text("DELETE FROM channels WHERE telegram_id = :t"), {"t": CHANNEL_TG_ID})
+        # Fixed id: other suites insert channels with explicit ids without advancing the sequence
+        await s.execute(text("DELETE FROM messages WHERE channel_id = :id"), {"id": CHANNEL_ID})
+        await s.execute(text("DELETE FROM channels WHERE id = :id OR telegram_id = :t"),
+                        {"id": CHANNEL_ID, "t": CHANNEL_TG_ID})
         channel_id = (await s.execute(text(
-            "INSERT INTO channels (telegram_id, name) VALUES (:t, 'search-test') RETURNING id"
-        ), {"t": CHANNEL_TG_ID})).scalar_one()
+            "INSERT INTO channels (id, telegram_id, name) VALUES (:id, :t, 'search-test') RETURNING id"
+        ), {"id": CHANNEL_ID, "t": CHANNEL_TG_ID})).scalar_one()
         for msg_id, (content, translated) in MESSAGES.items():
             await s.execute(text("""
                 INSERT INTO messages (channel_id, message_id, content, content_translated)

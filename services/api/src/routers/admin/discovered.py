@@ -13,13 +13,14 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
 from ...dependencies import AdminUser
+from .message_actions import log_admin_action
 from config.settings import settings
 
 router = APIRouter(prefix="/api/admin/discovered", tags=["admin-discovered"])
@@ -382,6 +383,7 @@ async def promote_channel(
     channel_id: int,
     request: PromoteRequest,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -495,6 +497,7 @@ async def promote_channel(
             "admin_id": admin.user_id,
         })
 
+        await log_admin_action(db, "discovered.promoted", channel_id, admin, http_request, {"username": dc["username"], "folder": promotion_result.get("folder_name")}, resource_type="discovered_channel")
         await db.commit()
 
         return {
@@ -521,6 +524,7 @@ async def ignore_channel(
     channel_id: int,
     request: IgnoreRequest,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -548,6 +552,7 @@ async def ignore_channel(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Discovered channel not found")
 
+    await log_admin_action(db, "discovered.ignored", channel_id, admin, http_request, {"reason": request.reason}, resource_type="discovered_channel")
     await db.commit()
 
     return {"success": True, "message": "Channel marked as ignored"}
@@ -557,6 +562,7 @@ async def ignore_channel(
 async def approve_join(
     channel_id: int,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -583,6 +589,7 @@ async def approve_join(
     if result.rowcount == 0:
         await _raise_not_found_or_conflict(db, channel_id, "approved")
 
+    await log_admin_action(db, "discovered.approved", channel_id, admin, http_request, None, resource_type="discovered_channel")
     await db.commit()
 
     return {"success": True, "message": "Channel approved for joining"}
@@ -592,6 +599,7 @@ async def approve_join(
 async def unapprove_join(
     channel_id: int,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """Revoke join approval for a channel that has not been joined yet."""
@@ -608,6 +616,7 @@ async def unapprove_join(
     if result.rowcount == 0:
         await _raise_not_found_or_conflict(db, channel_id, "unapproved")
 
+    await log_admin_action(db, "discovered.unapproved", channel_id, admin, http_request, None, resource_type="discovered_channel")
     await db.commit()
 
     return {"success": True, "message": "Join approval revoked"}
@@ -632,6 +641,7 @@ async def _raise_not_found_or_conflict(
 async def retry_join(
     channel_id: int,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -654,6 +664,7 @@ async def retry_join(
             detail="Channel not found or not in retriable status"
         )
 
+    await log_admin_action(db, "discovered.retried", channel_id, admin, http_request, None, resource_type="discovered_channel")
     await db.commit()
 
     return {"success": True, "message": "Channel reset to pending for retry"}
@@ -663,6 +674,7 @@ async def retry_join(
 async def delete_discovered(
     channel_id: int,
     admin: AdminUser,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -678,6 +690,7 @@ async def delete_discovered(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Discovered channel not found")
 
+    await log_admin_action(db, "discovered.deleted", channel_id, admin, http_request, None, resource_type="discovered_channel")
     await db.commit()
 
     return {"success": True, "message": "Discovered channel deleted"}

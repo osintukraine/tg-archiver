@@ -14,13 +14,16 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import redis.asyncio as redis
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel
 from redis.exceptions import RedisError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 
+from ...database import get_db
 from ...dependencies import AdminUser
+from .message_actions import log_admin_action
 
 logger = logging.getLogger(__name__)
 
@@ -134,10 +137,21 @@ async def _get_entry(r: redis.Redis, dlq_id: str) -> Dict[str, str]:
     return entries[0][1]
 
 
+async def _audit(db: AsyncSession, action: str, admin, request: Request, details: Dict[str, Any]) -> None:
+    """Record a DLQ action in admin_actions; never fails the request."""
+    try:
+        await log_admin_action(db, action, 0, admin, request, details, resource_type="dlq")
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"DLQ audit log failed: {e}")
+
+
 @router.post("/{dlq_id}/replay")
 async def replay_dlq_entry(
     admin: AdminUser,
+    request: Request,
     dlq_id: str = Path(..., pattern=STREAM_ID_PATTERN),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """Re-queue the stored original payload on its original stream, then remove the DLQ entry."""
     r = get_dlq_redis()
@@ -160,13 +174,16 @@ async def replay_dlq_entry(
         raise HTTPException(status_code=503, detail="Redis unavailable")
 
     logger.info(f"DLQ entry {dlq_id} replayed to {stream} as {new_id} by {admin.username}")
+    await _audit(db, "dlq.replayed", admin, request, {"dlq_id": dlq_id, "stream": stream})
     return {"replayed": True, "dlq_id": dlq_id, "stream": stream, "new_stream_id": new_id}
 
 
 @router.delete("/{dlq_id}")
 async def discard_dlq_entry(
     admin: AdminUser,
+    request: Request,
     dlq_id: str = Path(..., pattern=STREAM_ID_PATTERN),
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
     """Discard a DLQ entry permanently."""
     r = get_dlq_redis()
@@ -178,4 +195,5 @@ async def discard_dlq_entry(
         raise HTTPException(status_code=503, detail="Redis unavailable")
 
     logger.info(f"DLQ entry {dlq_id} discarded by {admin.username}")
+    await _audit(db, "dlq.discarded", admin, request, {"dlq_id": dlq_id})
     return {"deleted": True, "dlq_id": dlq_id}

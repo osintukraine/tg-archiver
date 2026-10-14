@@ -201,3 +201,23 @@ async def test_not_awaiting_outside_approval_mode(http, monkeypatch):
     await insert(501)
     items = (await http.get("/api/admin/discovered/", headers=ADMIN_H)).json()["items"]
     assert items[0]["awaiting_approval"] is False
+
+
+async def test_approve_and_unapprove_are_audited(http):
+    db_id = await insert(601)
+    async with AsyncSessionLocal() as s:
+        await s.execute(text("DELETE FROM admin_actions WHERE resource_type = 'discovered_channel'"))
+        await s.commit()
+
+    assert (await http.post(f"/api/admin/discovered/{db_id}/approve", headers=ADMIN_H)).status_code == 200
+    assert (await http.post(f"/api/admin/discovered/{db_id}/unapprove", headers=ADMIN_H)).status_code == 200
+
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(text("""
+            SELECT action, resource_id, admin_id FROM admin_actions
+            WHERE resource_type = 'discovered_channel' ORDER BY id
+        """))).all()
+    assert [(r.action, r.resource_id, r.admin_id) for r in rows] == [
+        ("discovered.approved", db_id, "1"),
+        ("discovered.unapproved", db_id, "1"),
+    ]

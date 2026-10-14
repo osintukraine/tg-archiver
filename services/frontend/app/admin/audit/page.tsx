@@ -2,25 +2,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { adminApi } from '@/lib/admin-api'
+import { type AdminAction, actorName, resourceTarget } from '@/lib/audit-format'
 
 /**
  * Admin Audit Log
  *
- * View admin moderation actions on messages.
- * Tracks hide/unhide, topic changes, etc.
+ * Admin actions (moderation, config, discovered channels, DLQ) and system events.
  */
-
-interface AdminAction {
-  id: number
-  action: string
-  resource_type: string
-  resource_id: number
-  details: Record<string, unknown>
-  admin_id: string | null
-  admin_email: string | null
-  ip_address: string | null
-  created_at: string
-}
 
 interface AdminActionsStats {
   total_actions: number
@@ -40,7 +28,20 @@ const ACTION_LABELS: Record<string, { label: string; color: string; icon: string
   'message.topic_changed': { label: 'Topic Changed', color: 'bg-purple-500/20 text-purple-400', icon: '🏷️' },
   'message.importance_changed': { label: 'Importance Changed', color: 'bg-indigo-500/20 text-indigo-400', icon: '⭐' },
   'message.reprocessed': { label: 'Reprocessed', color: 'bg-cyan-500/20 text-cyan-400', icon: '🔄' },
+  'config.updated': { label: 'Config Updated', color: 'bg-amber-500/20 text-amber-400', icon: '⚙️' },
+  'discovered.promoted': { label: 'Channel Promoted', color: 'bg-green-500/20 text-green-400', icon: '⬆️' },
+  'discovered.approved': { label: 'Join Approved', color: 'bg-green-500/20 text-green-400', icon: '✅' },
+  'discovered.unapproved': { label: 'Approval Revoked', color: 'bg-gray-500/20 text-gray-400', icon: '↩️' },
+  'discovered.ignored': { label: 'Channel Ignored', color: 'bg-gray-500/20 text-gray-400', icon: '🚫' },
+  'discovered.retried': { label: 'Join Retried', color: 'bg-blue-500/20 text-blue-400', icon: '🔁' },
+  'discovered.deleted': { label: 'Discovery Deleted', color: 'bg-red-500/20 text-red-400', icon: '🗑️' },
+  'dlq.replayed': { label: 'DLQ Replayed', color: 'bg-cyan-500/20 text-cyan-400', icon: '🔄' },
+  'dlq.discarded': { label: 'DLQ Discarded', color: 'bg-red-500/20 text-red-400', icon: '🗑️' },
+  'channel.discovered': { label: 'Channel Added', color: 'bg-teal-500/20 text-teal-400', icon: '📡' },
+  'channel.sync_completed': { label: 'Folder Sync', color: 'bg-teal-500/20 text-teal-400', icon: '🔃' },
+  'system.service_started': { label: 'Service Started', color: 'bg-slate-500/20 text-slate-400', icon: '🚀' },
 }
+
 
 export default function AuditPage() {
   const [stats, setStats] = useState<AdminActionsStats | null>(null)
@@ -90,7 +91,7 @@ export default function AuditPage() {
   }, [actionFilter, reloadKey])
 
   const getActionInfo = (action: string) => {
-    return ACTION_LABELS[action] || { label: action, color: 'bg-gray-500/20 text-gray-400', icon: '❓' }
+    return ACTION_LABELS[action] || { label: action.replace(/[._]/g, ' '), color: 'bg-gray-500/20 text-gray-400', icon: '•' }
   }
 
   const formatDetails = (details: Record<string, unknown>) => {
@@ -118,7 +119,7 @@ export default function AuditPage() {
       <div>
         <h1 className="text-3xl font-bold text-text-primary">Audit Log</h1>
         <p className="text-text-secondary mt-1">
-          View admin moderation actions on messages
+          Admin actions and system events (channel sync, service starts)
         </p>
       </div>
 
@@ -144,18 +145,21 @@ export default function AuditPage() {
           <div className="glass p-6">
             <h3 className="text-text-tertiary text-sm">Top Action</h3>
             <p className="text-xl font-bold text-text-primary">
-              {Object.entries(stats.by_action_type || {})[0]?.[0]?.replace('message.', '') || 'None'}
+              {(() => {
+                const top = Object.entries(stats.by_action_type || {})[0]?.[0]
+                return top ? getActionInfo(top).label : 'None'
+              })()}
             </p>
             <p className="text-sm text-text-tertiary">
               {Object.entries(stats.by_action_type || {})[0]?.[1] || 0} times
             </p>
           </div>
           <div className="glass p-6">
-            <h3 className="text-text-tertiary text-sm">Active Admins</h3>
+            <h3 className="text-text-tertiary text-sm">Actors</h3>
             <p className="text-3xl font-bold text-text-primary">
               {Object.keys(stats.by_admin || {}).length}
             </p>
-            <p className="text-sm text-text-tertiary">with actions</p>
+            <p className="text-sm text-text-tertiary">admins and services</p>
           </div>
         </div>
       )}
@@ -190,12 +194,13 @@ export default function AuditPage() {
       <div className="space-y-4">
         {actions.length === 0 ? (
           <div className="glass p-12 text-center text-text-secondary">
-            No admin actions recorded yet. Take actions from message detail pages to see them here.
+            No actions recorded yet.
           </div>
         ) : (
           actions.map((a) => {
             const actionInfo = getActionInfo(a.action)
             const details = formatDetails(a.details)
+            const target = resourceTarget(a)
 
             return (
               <div key={a.id} className="glass overflow-hidden">
@@ -210,13 +215,17 @@ export default function AuditPage() {
                         <span className={`px-3 py-1 rounded-sm text-sm font-medium ${actionInfo.color}`}>
                           {actionInfo.icon} {actionInfo.label}
                         </span>
-                        <Link
-                          href={`/messages/${a.resource_id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-blue-400 hover:underline"
-                        >
-                          Message #{a.resource_id}
-                        </Link>
+                        {target?.href ? (
+                          <Link
+                            href={target.href}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-400 hover:underline"
+                          >
+                            {target.text}
+                          </Link>
+                        ) : target ? (
+                          <span className="text-text-primary">{target.text}</span>
+                        ) : null}
                         <span className="text-text-tertiary text-sm">
                           {new Date(a.created_at).toLocaleString()}
                         </span>
@@ -225,7 +234,7 @@ export default function AuditPage() {
                       <div className="flex items-center gap-2 text-sm text-text-secondary ml-1">
                         <span>by</span>
                         <span className="font-medium text-text-primary">
-                          {a.admin_email || a.admin_id?.slice(0, 8) || 'Unknown'}
+                          {actorName(a)}
                         </span>
                         {a.ip_address && (
                           <>

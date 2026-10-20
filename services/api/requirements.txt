@@ -5,7 +5,7 @@
 
 # Web framework
 # Updated 2026-10-11
-fastapi==0.143.0
+fastapi==0.143.3
 uvicorn[standard]==0.54.0
 
 # Authentication

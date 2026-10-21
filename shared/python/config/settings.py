@@ -74,6 +74,9 @@ class Settings(BaseSettings):
         default="tg-archive-media", description="S3 bucket name"
     )
     MINIO_SECURE: bool = Field(default=False, description="Use HTTPS for MinIO")
+    MEDIA_RETENTION_DAYS: int = Field(
+        default=0, ge=0, description="Delete media older than N days (0 = keep forever; dev only)"
+    )
 
     # =============================================================================
     # TELEGRAM

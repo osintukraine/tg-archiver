@@ -24,12 +24,10 @@ class MediaFile(Base):
     Deduplication: If the same file is posted multiple times,
     it's only stored once with multiple references.
 
-    Storage flow:
-    1. Download to local buffer (.tmp/)
-    2. Atomic move to buffer path
-    3. Queue sync job to Redis
-    4. Background worker uploads to Hetzner/MinIO
-    5. Update synced_at, clear local_path
+    Storage flow (local buffer is transit only):
+    1. Download to local buffer (.tmp/), atomic move to the buffer path
+    2. Upload to S3; on success delete the buffer file, set synced_at, clear local_path
+    3. On failure synced_at stays NULL and local_path set; the processor retry worker retries
 
     Storage path: media/{sha256[:2]}/{sha256[2:4]}/{sha256}.ext
     Example: media/ab/cd/abcdef123...789.jpg

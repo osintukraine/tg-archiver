@@ -4,35 +4,29 @@ Media Archiver - Content-Addressed Storage with SHA-256 Deduplication
 Archives Telegram media files using content-addressed storage with local buffer.
 Saves 30-40% storage costs by storing each unique file only once.
 
-Architecture (with local buffer for low-latency serving):
+Architecture (the local buffer is transit only):
 1. Download media from Telegram to local buffer .tmp/
 2. Calculate SHA-256 hash
 3. Check if file already exists (by hash)
 4. If exists: increment reference_count, skip
-5. If new: atomic move to local buffer, create MediaFile record, queue sync job
-6. Background sync worker uploads to MinIO/Hetzner and updates synced_at
+5. If new: move to the buffer, create MediaFile record, upload to S3, then delete the
+   buffer copy and set synced_at. If the upload fails the file stays in the buffer and the
+   processor retry worker (media_buffer.py) uploads it later (DB is the retry queue).
 
 Storage Paths:
 - Local buffer: /var/cache/tg-media-buffer/tg-media/media/{hash[:2]}/{hash[2:4]}/{hash}.ext
 - MinIO/Hetzner: media/{hash[:2]}/{hash[2:4]}/{hash}.ext
 
-Benefits:
-- Low latency: Media available immediately in browser (local buffer)
-- Durability: Async sync to Hetzner for permanent storage
-- Deduplication: Same file posted multiple times = stored once
-- Integrity: SHA-256 hash verifies file integrity
-- Resilient: Works even when Hetzner mount is unavailable
+Deduplication: the same file posted many times is stored once (SHA-256).
 """
 
 import asyncio
 import hashlib
-import json
 import logging
 import mimetypes
 import os
 import shutil
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
@@ -50,6 +44,7 @@ from telethon.tl.types import Message as TelegramMessage
 from config.platform_config import get_override
 from config.settings import settings
 from models.media import MediaFile, MessageMedia
+from media_buffer import mark_synced, upload_and_release
 from models.message import Message
 
 # Storage box selection simplified for tg-archiver
@@ -60,9 +55,6 @@ MEDIA_BUFFER_PATH = os.environ.get("MEDIA_BUFFER_PATH", "/var/cache/media-buffer
 BUFFER_BUCKET_NAME = os.environ.get("MINIO_BUCKET_NAME", "tg-archive-media")
 LOCAL_BUFFER_ROOT = Path(MEDIA_BUFFER_PATH) / BUFFER_BUCKET_NAME
 LOCAL_BUFFER_TMP = Path(MEDIA_BUFFER_PATH) / ".tmp"
-
-# Redis sync queue
-MEDIA_SYNC_QUEUE = "media:sync:pending"
 
 # Import Prometheus metrics
 from observability.metrics import (
@@ -80,7 +72,7 @@ class MediaArchiver:
     Archives Telegram media with content-addressed storage.
 
     Uses SHA-256 hashing for deduplication.
-    Writes to local buffer first, then queues async sync to Hetzner.
+    Writes to the local buffer first, uploads to S3, then releases the buffer copy.
     """
 
     def __init__(
@@ -113,7 +105,6 @@ class MediaArchiver:
         self.files_downloaded = 0
         self.files_uploaded = 0
         self.files_deduplicated = 0
-        self.files_queued_for_sync = 0
         self.bytes_saved = 0
 
     def _ensure_local_buffer(self):
@@ -150,39 +141,67 @@ class MediaArchiver:
         """
         return LOCAL_BUFFER_ROOT / "media" / sha256[:2] / sha256[2:4] / f"{sha256}{extension}"
 
-    async def _queue_sync_job(
-        self, sha256: str, s3_key: str, local_path: str, file_size: int, storage_box_id: str
-    ):
+    async def _store_new_file(
+        self,
+        session: AsyncSession,
+        telegram_message: TelegramMessage,
+        temp_path: Path,
+        sha256: str,
+    ) -> int:
         """
-        Queue a sync job to Redis for background upload to Hetzner.
+        Store a file not seen before: buffer -> MediaFile row -> S3 -> release buffer.
 
-        Args:
-            sha256: File hash
-            s3_key: S3 object key
-            local_path: Path in local buffer
-            file_size: File size in bytes
-            storage_box_id: Target storage box ID for sync
+        The buffer is transit only. After a successful S3 upload the local copy is deleted,
+        synced_at is set and local_path cleared. On failure (or no S3 client) the file stays
+        in the buffer with synced_at NULL; the processor's retry worker (media_buffer.py)
+        picks it up from the database.
+
+        Returns the MediaFile id (flushed, not committed).
         """
-        if not self.redis:
-            logger.warning("Redis not configured, skipping sync job queue")
-            return
+        s3_key = self._get_s3_key(sha256, temp_path)
+        file_size = temp_path.stat().st_size
+        mime_type = self._get_mime_type(temp_path)
+        extension = temp_path.suffix or ".bin"
+        selected_box_id = self._select_storage_box()
 
-        job = {
-            "sha256": sha256,
-            "s3_key": s3_key,
-            "local_path": local_path,
-            "storage_box_id": storage_box_id,
-            "file_size": file_size,
-            "queued_at": datetime.utcnow().isoformat(),
-        }
+        local_buffer_path = self._get_local_buffer_path(sha256, extension)
+        local_buffer_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(temp_path), str(local_buffer_path))
 
-        try:
-            await self.redis.lpush(MEDIA_SYNC_QUEUE, json.dumps(job))
-            self.files_queued_for_sync += 1
-            logger.debug(f"Queued sync job for {sha256[:16]}... to {storage_box_id}")
-        except Exception as e:
-            logger.error(f"Failed to queue sync job: {e}")
-            # Don't raise - file is still in local buffer and accessible
+        media_file = MediaFile(
+            sha256=sha256,
+            s3_key=s3_key,
+            file_size=file_size,
+            mime_type=mime_type,
+            storage_box_id=selected_box_id,
+            local_path=str(local_buffer_path),
+            synced_at=None,
+            telegram_file_id=getattr(telegram_message.media, 'file_id', None),
+            telegram_url=None,  # Telegram URLs expire
+            reference_count=1,
+        )
+        session.add(media_file)
+        await session.flush()  # Get the ID
+
+        if self.minio:
+            try:
+                await asyncio.to_thread(
+                    upload_and_release, self.minio, self.bucket_name, local_buffer_path, s3_key, mime_type
+                )
+                mark_synced(media_file)
+                logger.info(f"Uploaded to S3, buffer copy released: {s3_key}")
+            except Exception as e:
+                logger.error(f"S3 upload failed, kept in buffer for retry: {e}", exc_info=True)
+        else:
+            logger.warning("S3 client not available, kept in buffer for retry")
+
+        self.files_uploaded += 1
+        media_type_label = mime_type.split('/')[0] if '/' in mime_type else "unknown"
+        media_storage_bytes_total.labels(media_type=media_type_label).inc(file_size)
+        logger.info(
+            f"Media archived: {sha256[:16]}... ({file_size} bytes, {mime_type}, box={selected_box_id})"
+        )
+        return media_file.id
 
     def _select_storage_box(self) -> str:
         """
@@ -257,75 +276,8 @@ class MediaArchiver:
                 )
 
             else:
-                # New file - write to local buffer, queue sync to Hetzner
-                s3_key = self._get_s3_key(sha256, temp_path)
-                file_size = temp_path.stat().st_size
-                mime_type = self._get_mime_type(temp_path)
-                extension = temp_path.suffix or ".bin"
-
-                # Select storage box (dynamic or fixed)
-                selected_box_id = self._select_storage_box()
-
-                # Move to local buffer (atomic operation)
-                local_buffer_path = self._get_local_buffer_path(sha256, extension)
-                local_buffer_path.parent.mkdir(parents=True, exist_ok=True)
-
-                # Atomic move from temp to final location
-                shutil.move(str(temp_path), str(local_buffer_path))
-                temp_path = None  # Mark as moved (don't delete later)
-
-                logger.info(f"Media written to local buffer: {local_buffer_path}")
-
-                # Create MediaFile record with local_path (synced_at=NULL means pending sync)
-                media_file = MediaFile(
-                    sha256=sha256,
-                    s3_key=s3_key,
-                    file_size=file_size,
-                    mime_type=mime_type,
-                    storage_box_id=selected_box_id,
-                    local_path=str(local_buffer_path),
-                    synced_at=None,  # Will be set when sync worker uploads to Hetzner
-                    telegram_file_id=getattr(telegram_message.media, 'file_id', None),
-                    telegram_url=None,  # Telegram URLs expire
-                    reference_count=1,
-                )
-
-                session.add(media_file)
-                await session.flush()  # Get the ID
-
-                media_file_id = media_file.id
-
-                # Upload directly to MinIO
-                # Note: For remote storage with Hetzner SSHFS, use media-sync worker instead
-                if self.minio:
-                    try:
-                        await self._upload_to_minio(local_buffer_path, s3_key, mime_type)
-                        logger.info(f"Uploaded to MinIO: {s3_key}")
-                    except Exception as e:
-                        logger.error(f"MinIO upload failed: {e}", exc_info=True)
-                        # Queue sync job as fallback
-                        await self._queue_sync_job(
-                            sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
-                        )
-                else:
-                    logger.warning("MinIO client not available, queuing for sync")
-                    # Queue sync job as fallback
-                    await self._queue_sync_job(
-                        sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
-                    )
-
-                self.files_uploaded += 1
-
-                # Record storage metrics
-                media_type_label = mime_type.split('/')[0] if '/' in mime_type else "unknown"
-                media_storage_bytes_total.labels(
-                    media_type=media_type_label
-                ).inc(file_size)
-
-                logger.info(
-                    f"Media archived to local buffer: {sha256[:16]}... "
-                    f"({file_size} bytes, {mime_type}, box={selected_box_id})"
-                )
+                media_file_id = await self._store_new_file(session, telegram_message, temp_path, sha256)
+                temp_path = None  # moved into the buffer by _store_new_file
 
             # Return media_file_id so caller can create MessageMedia relationship
             # AFTER the message is persisted to the database
@@ -476,70 +428,8 @@ class MediaArchiver:
                 )
 
             else:
-                # New file - write to local buffer, queue sync to Hetzner
-                s3_key = self._get_s3_key(sha256, temp_path)
-                file_size = temp_path.stat().st_size
-                mime_type = self._get_mime_type(temp_path)
-                extension = temp_path.suffix or ".bin"
-
-                # Select storage box (dynamic or fixed)
-                selected_box_id = self._select_storage_box()
-
-                # Move to local buffer (atomic operation)
-                local_buffer_path = self._get_local_buffer_path(sha256, extension)
-                local_buffer_path.parent.mkdir(parents=True, exist_ok=True)
-
-                # Atomic move from temp to final location
-                shutil.move(str(temp_path), str(local_buffer_path))
-                temp_path = None  # Mark as moved
-
-                # Create MediaFile record with local_path
-                media_file = MediaFile(
-                    sha256=sha256,
-                    s3_key=s3_key,
-                    file_size=file_size,
-                    mime_type=mime_type,
-                    storage_box_id=selected_box_id,
-                    local_path=str(local_buffer_path),
-                    synced_at=None,
-                    telegram_file_id=getattr(telegram_message.media, 'file_id', None),
-                    telegram_url=None,  # Telegram URLs expire
-                    reference_count=1,
-                )
-
-                session.add(media_file)
-                await session.flush()  # Get the ID
-
-                media_file_id = media_file.id
-
-                # Upload directly to MinIO (tg-archiver simplified mode)
-                if self.minio:
-                    try:
-                        await self._upload_to_minio(local_buffer_path, s3_key, mime_type)
-                        logger.info(f"Uploaded to MinIO: {s3_key}")
-                    except Exception as e:
-                        logger.error(f"MinIO upload failed: {e}", exc_info=True)
-                        await self._queue_sync_job(
-                            sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
-                        )
-                else:
-                    logger.warning("MinIO client not available, queuing for sync")
-                    await self._queue_sync_job(
-                        sha256, s3_key, str(local_buffer_path), file_size, selected_box_id
-                    )
-
-                self.files_uploaded += 1
-
-                # Record storage metrics
-                media_type_label = mime_type.split('/')[0] if '/' in mime_type else "unknown"
-                media_storage_bytes_total.labels(
-                    media_type=media_type_label
-                ).inc(file_size)
-
-                logger.info(
-                    f"Media archived to local buffer: {sha256[:16]}... "
-                    f"({file_size} bytes, {mime_type}, box={selected_box_id})"
-                )
+                media_file_id = await self._store_new_file(session, telegram_message, temp_path, sha256)
+                temp_path = None  # moved into the buffer by _store_new_file
 
             # Clean up temp file (if not moved to buffer)
             if temp_path:
@@ -772,32 +662,6 @@ class MediaArchiver:
         """
         mime_type, _ = mimetypes.guess_type(str(file_path))
         return mime_type or "application/octet-stream"
-
-    async def _upload_to_minio(self, file_path: Path, s3_key: str, mime_type: str):
-        """
-        Upload file to MinIO.
-
-        Args:
-            file_path: Local file path
-            s3_key: S3 object key
-            mime_type: MIME type
-
-        Raises:
-            S3Error: If upload fails
-        """
-        try:
-            self.minio.fput_object(
-                bucket_name=self.bucket_name,
-                object_name=s3_key,
-                file_path=str(file_path),
-                content_type=mime_type,
-            )
-
-            logger.debug(f"Uploaded to MinIO: {s3_key} ({mime_type})")
-
-        except S3Error as e:
-            logger.error(f"Failed to upload to MinIO: {e}")
-            raise
 
     def get_stats(self) -> dict:
         """

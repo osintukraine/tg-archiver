@@ -418,6 +418,19 @@ deletes and listings require the access key.
 | `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files. Caddy hardcodes `/tg-archive-media`, so keep the default |
 | `PUBLIC_BASE_URL` | `http://localhost` | Public site origin (what browsers and feed readers use). Media links in the API, RSS/Atom/JSON feeds and OpenGraph tags are `<origin>/media/...` (Caddy proxies `/media/*` to SeaweedFS). The API prefers the origin of the incoming request and falls back to this value; the frontend bakes it in as `NEXT_PUBLIC_BASE_URL`, so rebuild the frontend after changing it |
 | `MINIO_PUBLIC_URL` | (empty) | Optional direct public S3 endpoint (e.g. `http://localhost:8333` with the port published). When set, API and feed media URLs become `{MINIO_PUBLIC_URL}/{bucket}/{key}` instead of Caddy paths |
+| `MEDIA_RETENTION_DAYS` | `0` | Delete media (S3 object and DB rows; messages stay) older than N days, checked hourly by the processor. `0` = keep forever. Dev: e.g. `3`. Messages whose media was deleted simply show no media |
+
+The local media buffer (`MEDIA_BUFFER_PATH`, `data/media-buffer`) is transit only: a file is deleted
+as soon as it is uploaded to S3. Failed uploads stay there and the processor retries them every
+minute; partial downloads in `.tmp` older than 1 h are removed. To clean up a buffer left by older
+versions (dry run first; it prints counts and bytes only):
+
+```bash
+docker compose build processor && docker compose up -d --force-recreate processor
+docker compose exec processor python /app/scripts/media_buffer_cleanup.py            # dry run
+docker compose exec processor python /app/scripts/media_buffer_cleanup.py --apply    # delete files already in S3, upload the rest, clean .tmp
+docker compose exec processor python /app/scripts/media_buffer_cleanup.py --apply --delete-orphans  # also files with no DB row and not in S3
+```
 
 ### Translation
 

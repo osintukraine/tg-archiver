@@ -6,7 +6,7 @@ python-dotenv>=1.2.4
 
 # Configuration management
 pydantic>=2.14.1
-pydantic-settings>=2.15.0
+pydantic-settings>=2.16.0
 
 # Database
 sqlalchemy[asyncio]>=2.1.5

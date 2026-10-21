@@ -35,6 +35,11 @@ export function resourceTarget(a: AdminAction): { text: string; href?: string } 
       const username = asText(d.username)
       return { text: username ? `@${username}` : `Discovered channel #${a.resource_id}` }
     }
+    case 'submission': {
+      const username = asText(d.username)
+      const label = username ? (username.startsWith('@') ? username : `@${username}`) : `Suggestion #${a.resource_id}`
+      return { text: label, href: '/admin/submissions' }
+    }
     case 'config':
       return { text: asText(d.key) || 'Settings' }
     case 'dlq':

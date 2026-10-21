@@ -22,7 +22,8 @@ from telethon import TelegramClient
 
 from config.secrets_check import require_secrets
 from config.settings import settings
-from media_archiver import MediaArchiver
+from media_archiver import LOCAL_BUFFER_TMP, MediaArchiver
+from media_buffer import housekeeping_loop, retention_loop
 
 # Structured logging for Loki aggregation
 from observability import setup_logging, get_logger, LogContext
@@ -155,6 +156,7 @@ async def main() -> NoReturn:
     pattern_reload_task = None
     translation_task = None
     translation_worker = None
+    media_tasks = []
 
     try:
         # 1. Initialize Redis consumer
@@ -275,6 +277,19 @@ async def main() -> NoReturn:
         if translation_worker:
             translation_task = asyncio.create_task(translation_worker.run(shutdown_event))
 
+        # 11b. Media buffer: retry failed uploads, clean old .tmp files; optional dev retention
+        media_tasks.append(asyncio.create_task(housekeeping_loop(
+            AsyncSessionLocal, minio_client, settings.MINIO_BUCKET_NAME, LOCAL_BUFFER_TMP, shutdown_event
+        )))
+        if settings.MEDIA_RETENTION_DAYS > 0:
+            logger.warning(
+                f"MEDIA_RETENTION_DAYS={settings.MEDIA_RETENTION_DAYS}: media older than that is deleted"
+            )
+            media_tasks.append(asyncio.create_task(retention_loop(
+                AsyncSessionLocal, minio_client, settings.MINIO_BUCKET_NAME,
+                settings.MEDIA_RETENTION_DAYS, shutdown_event
+            )))
+
         # 12. Start processing messages
         logger.info("Starting message processing...")
 
@@ -339,6 +354,13 @@ async def main() -> NoReturn:
             translation_task.cancel()
             try:
                 await translation_task
+            except asyncio.CancelledError:
+                pass
+
+        for task in media_tasks:
+            task.cancel()
+            try:
+                await task
             except asyncio.CancelledError:
                 pass
 

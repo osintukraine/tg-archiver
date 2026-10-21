@@ -36,6 +36,9 @@ COPY shared/python /shared/python
 # Copy service code
 COPY services/processor/src ./src
 
+# One-off buffer cleanup: docker compose exec processor python /app/scripts/media_buffer_cleanup.py
+COPY scripts/media_buffer_cleanup.py /app/scripts/media_buffer_cleanup.py
+
 # PYTHONPATH: src first (for service-specific modules), then shared
 ENV PYTHONPATH="/app/src:/shared/python:${PYTHONPATH}"
 

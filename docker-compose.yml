@@ -175,6 +175,7 @@ services:
       - MINIO_BUCKET_NAME=${MINIO_BUCKET:-tg-archive-media}
       - MINIO_SECURE=false
       - MEDIA_BUFFER_PATH=/var/cache/media-buffer
+      - MEDIA_RETENTION_DAYS=${MEDIA_RETENTION_DAYS:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}
       # Failed messages are retried after this idle time (3 attempts, then DLQ)

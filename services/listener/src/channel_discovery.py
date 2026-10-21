@@ -623,9 +623,10 @@ class ChannelDiscovery:
                     )
                     return
 
-                # Run backfill
+                # Run backfill from the date requested via the API (backfill_from_date);
+                # None falls back to BACKFILL_START_DATE
                 stats = await self.backfill_service.backfill_channel(
-                    db_channel, from_date=None, session=session  # Use configured start date
+                    db_channel, from_date=db_channel.backfill_from_date, session=session
                 )
 
                 logger.info(

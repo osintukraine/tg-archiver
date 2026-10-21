@@ -18,6 +18,7 @@ from models.channel import Channel
 from models.message import Message
 
 from ..database import get_db
+from ..dependencies import AdminUser
 from ..schemas import BackfillRequest, BackfillResponse, ChannelDetail, ChannelList, ChannelStats
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
@@ -184,6 +185,7 @@ async def get_channel_stats(channel_id: int, db: AsyncSession = Depends(get_db))
 @router.post("/{channel_id}/backfill", response_model=BackfillResponse)
 async def trigger_backfill(
     channel_id: int,
+    admin: AdminUser,  # backfill drives Telegram API traffic: admins only
     request: BackfillRequest = Body(default=None),
     db: AsyncSession = Depends(get_db),
 ):

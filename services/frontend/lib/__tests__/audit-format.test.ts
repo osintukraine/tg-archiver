@@ -27,6 +27,13 @@ describe('audit-format', () => {
     expect(resourceTarget(row({ resource_type: 'message', resource_id: 0 }))).toBeNull()
   })
 
+  it('links channel suggestions to the review page', () => {
+    expect(resourceTarget(row({ resource_type: 'submission', resource_id: 3, details: { username: 'some_chan' } })))
+      .toEqual({ text: '@some_chan', href: '/admin/submissions' })
+    expect(resourceTarget(row({ resource_type: 'submission', resource_id: 3, details: {} })))
+      .toEqual({ text: 'Suggestion #3', href: '/admin/submissions' })
+  })
+
   it('names config keys without a link', () => {
     expect(resourceTarget(row({ resource_type: 'config', details: { key: 'feed.max_limit' } })))
       .toEqual({ text: 'feed.max_limit' })

@@ -35,6 +35,8 @@ const ACTION_LABELS: Record<string, { label: string; color: string; icon: string
   'discovered.ignored': { label: 'Channel Ignored', color: 'bg-gray-500/20 text-gray-400', icon: '🚫' },
   'discovered.retried': { label: 'Join Retried', color: 'bg-blue-500/20 text-blue-400', icon: '🔁' },
   'discovered.deleted': { label: 'Discovery Deleted', color: 'bg-red-500/20 text-red-400', icon: '🗑️' },
+  'submission.approved': { label: 'Suggestion Approved', color: 'bg-green-500/20 text-green-400', icon: '✅' },
+  'submission.rejected': { label: 'Suggestion Rejected', color: 'bg-red-500/20 text-red-400', icon: '🚫' },
   'dlq.replayed': { label: 'DLQ Replayed', color: 'bg-cyan-500/20 text-cyan-400', icon: '🔄' },
   'dlq.discarded': { label: 'DLQ Discarded', color: 'bg-red-500/20 text-red-400', icon: '🗑️' },
   'channel.discovered': { label: 'Channel Added', color: 'bg-teal-500/20 text-teal-400', icon: '📡' },

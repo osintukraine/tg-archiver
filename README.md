@@ -364,6 +364,8 @@ POST /api/admin/discovered/{id}/retry    # Retry failed join
 DELETE /api/admin/discovered/{id}        # Remove a discovered channel
 ```
 
+**Suggested channels:** channels submitted through the public form are reviewed at **Admin** → **Suggestions** (`/admin/submissions`); approving adds the channel to the archive folder (same listener path as promotion), rejecting records a reason.
+
 ---
 
 ## Configuration Reference
@@ -882,8 +884,6 @@ docker run --rm -v tg-archiver_seaweedfs_data:/data -v $(pwd):/backup \
 
 These are current gaps in the code, documented here so they don't surprise you:
 
-- **Suggest-channel review:** submissions are stored and listable by admins
-  (`GET /api/admin/channel-submissions`), but there is no admin UI or accept/reject workflow yet.
 - **Unpopulated tables:** `message_engagement_timeline` and `message_replies` are queried but
   nothing writes them (endpoints return empty results), and the media-status check in
   `/api/system` reads a `messages.media_archived` column that nothing sets.

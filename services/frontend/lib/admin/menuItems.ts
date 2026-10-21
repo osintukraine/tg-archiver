@@ -42,6 +42,7 @@ export const ADMIN_MENU_SECTIONS: AdminMenuSection[] = [
     items: [
       { href: '/admin/channels', title: 'Channels', icon: 'channels', description: 'Telegram channel management' },
       { href: '/admin/import', title: 'Import Channels', icon: 'import', description: 'Bulk channel import from CSV' },
+      { href: '/admin/submissions', title: 'Suggestions', icon: 'import', description: 'Review suggested channels' },
       { href: '/admin/media', title: 'Media Gallery', icon: 'media' },
       { href: '/admin/kanban', title: 'Message Board', icon: 'kanban', description: 'Engagement lanes' },
       { href: '/admin/messages', title: 'Message Browser', icon: 'messages', description: 'Table view with editing' },

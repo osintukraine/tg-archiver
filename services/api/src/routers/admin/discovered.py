@@ -5,14 +5,10 @@ Provides management for channels discovered via message forwards.
 Allows admins to view, promote to full archiving, or ignore discovered channels.
 """
 
-import asyncio
-import json
-import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -20,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
 from ...dependencies import AdminUser
+from ...utils.promotion import request_promotion
 from .message_actions import log_admin_action
 from config.settings import settings
 
@@ -429,60 +426,10 @@ async def promote_channel(
             detail="Channel already exists in monitored channels"
         )
 
-    # Send promotion request to listener via Redis
-    request_id = str(uuid.uuid4())
-    redis_client = None
-
     try:
-        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-
-        # Send promotion request
-        await redis_client.xadd(
-            "channels:promote",
-            {
-                "request_id": request_id,
-                "username": dc["username"],
-                "folder": request.folder or settings.FOLDER_ARCHIVE_ALL_PATTERN,
-                "discovered_channel_id": str(channel_id),
-            },
+        promotion_result = await request_promotion(
+            dc["username"], request.folder, discovered_channel_id=channel_id
         )
-
-        # Wait for result (with timeout)
-        result_received = False
-        promotion_result = None
-
-        for _ in range(30):  # 30 seconds timeout
-            await asyncio.sleep(1)
-
-            # Check for result
-            messages = await redis_client.xread(
-                {"channels:promote:result": "0"},
-                count=100,
-            )
-
-            for stream_name, stream_messages in messages:
-                for msg_id, data in stream_messages:
-                    if data.get("request_id") == request_id:
-                        promotion_result = json.loads(data.get("result", "{}"))
-                        result_received = True
-                        break
-                if result_received:
-                    break
-
-            if result_received:
-                break
-
-        if not result_received:
-            raise HTTPException(
-                status_code=504,
-                detail="Promotion request timed out - listener may be unavailable"
-            )
-
-        if not promotion_result.get("success"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Promotion failed: {promotion_result.get('error', 'Unknown error')}"
-            )
 
         # Update discovered_channels to mark as promoted
         await db.execute(text("""
@@ -514,9 +461,6 @@ async def promote_channel(
             status_code=500,
             detail=f"Failed to promote channel: {str(e)}"
         )
-    finally:
-        if redis_client:
-            await redis_client.aclose()
 
 
 @router.post("/{channel_id}/ignore")

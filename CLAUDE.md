@@ -87,6 +87,7 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 ### API Structure
 - Routers in `services/api/src/routers/` (e.g. messages, channels, rss, social_graph, auth, media, channel_submissions, admin/*; full list in `services/api/src/main.py`)
 - Public `POST /api/channel-submissions` (suggest-a-channel form) is CSRF-protected, limited to 3/min per IP, and verifies Cloudflare Turnstile when `TURNSTILE_SECRET_KEY` is set; admins list submissions at `GET /api/admin/channel-submissions`
+- Admin review of suggestions (UI at `/admin/submissions`): `GET /api/admin/channel-submissions?status=pending|approved|rejected|all` (never returns `submitted_by_ip`), `POST …/{id}/approve` (`{folder?}`) and `POST …/{id}/reject` (`{reason?}`), audited as `submission.approved` / `submission.rejected`; 409 if already reviewed. Approve reuses the discovered-channel promotion path via `services/api/src/utils/promotion.py:request_promotion` (`channels:promote` → listener `promotion_worker`, 504 if the listener is silent for 30 s); the row stays pending on failure, and invite-link submissions (no public username) get 400
 - Schemas in `services/api/src/schemas.py` (Pydantic models)
 - Auth middleware in `services/api/src/middleware/auth_unified.py`
 - Dependencies: `CurrentUser`, `AuthenticatedUser`, `AdminUser` from `services/api/src/dependencies/`

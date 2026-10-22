@@ -143,7 +143,9 @@ export function VideoPlayer({
           }}
         />
       ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
         <img
+          decoding="async"
           src={mediaUrl}
           alt=""
           className="max-w-full max-h-full object-contain"

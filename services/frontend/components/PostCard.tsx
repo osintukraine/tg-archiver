@@ -12,7 +12,7 @@
  */
 
 import { useState, useSyncExternalStore } from 'react';
-import { format } from 'date-fns';
+import { formatUtc } from '@/lib/utils';
 import { getMediaUrl } from '@/lib/api';
 import type { PostCardProps, MessageTag, DensityMode } from '@/lib/types';
 
@@ -363,7 +363,9 @@ export function PostCard({
 
               if (fileType === 'image') {
                 return (
+                  // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                   <img
+                    decoding="async"
                     src={firstMediaUrl}
                     alt="Media preview"
                     className="w-full h-full object-cover"
@@ -500,8 +502,8 @@ export function PostCard({
                 mode="compact"
               />
             </div>
-            <span className="shrink-0" title={`Posted on Telegram: ${format(new Date(message.telegram_date || message.created_at), 'MMMM d, yyyy at HH:mm')}`}>
-              {format(new Date(message.telegram_date || message.created_at), 'MMM d, HH:mm')}
+            <span className="shrink-0" title={`Posted on Telegram: ${formatUtc(message.telegram_date || message.created_at, 'MMMM d, yyyy at HH:mm')}`}>
+              {formatUtc(message.telegram_date || message.created_at, 'MMM d, HH:mm')}
             </span>
           </div>
         </div>
@@ -544,9 +546,9 @@ export function PostCard({
               </div>
             )}
             <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <span title="When this message was archived in our system">{format(new Date(message.created_at), 'MMM d, yyyy • HH:mm')}</span>
+              <span title="When this message was archived in our system">{formatUtc(message.created_at, 'MMM d, yyyy • HH:mm')}</span>
               {message.telegram_date && (
-                <span title="Original posting time on Telegram">• Telegram: {format(new Date(message.telegram_date), 'HH:mm')}</span>
+                <span title="Original posting time on Telegram">• Telegram: {formatUtc(message.telegram_date, 'HH:mm')}</span>
               )}
               {message.is_backfilled && (
                 <span
@@ -663,7 +665,9 @@ export function PostCard({
               return (
                 <div key={index} className="relative">
                   {fileType === 'image' && (
+                    // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                     <img
+                      decoding="async"
                       src={url}
                       alt={`Media ${index + 1} of ${mediaUrls.length}`}
                       className={`w-full h-auto object-contain cursor-pointer hover:opacity-90 transition-opacity ${hasMultipleMedia ? 'max-h-64 rounded-lg' : 'max-h-96'}`}
@@ -915,7 +919,7 @@ export function PostCard({
                     <div className="text-text-secondary">
                       Channel ID: {message.forward_from_channel_id}
                       {message.forward_from_message_id && ` • Msg: ${message.forward_from_message_id}`}
-                      {message.forward_date && ` • ${format(new Date(message.forward_date), 'MMM d, yyyy')}`}
+                      {message.forward_date && ` • ${formatUtc(message.forward_date, 'MMM d, yyyy')}`}
                     </div>
                   </div>
                 )}
@@ -961,7 +965,7 @@ export function PostCard({
                 </div>
                 <div className="text-text-secondary font-mono">
                   {message.telegram_date
-                    ? format(new Date(message.telegram_date), 'MMM d, yyyy HH:mm:ss')
+                    ? formatUtc(message.telegram_date, 'MMM d, yyyy HH:mm:ss')
                     : 'N/A'}
                 </div>
               </div>
@@ -973,7 +977,7 @@ export function PostCard({
                   Archived
                 </div>
                 <div className="text-text-secondary font-mono">
-                  {format(new Date(message.created_at), 'MMM d, yyyy HH:mm:ss')}
+                  {formatUtc(message.created_at, 'MMM d, yyyy HH:mm:ss')}
                 </div>
               </div>
             </div>
@@ -1233,7 +1237,9 @@ export function PostCard({
                   return (
                     <div key={index} className="relative rounded-lg overflow-hidden">
                       {fileType === 'image' && (
+                        // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                         <img
+                          decoding="async"
                           src={url}
                           alt={`Media ${index + 1} of ${mediaUrls.length}`}
                           className="w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
@@ -1380,7 +1386,7 @@ export function PostCard({
                     Telegram Date
                   </div>
                   <div className="text-sm text-text-primary">
-                    {format(new Date(message.telegram_date), 'MMM d, yyyy • HH:mm:ss')}
+                    {formatUtc(message.telegram_date, 'MMM d, yyyy • HH:mm:ss')}
                   </div>
                 </div>
               )}
@@ -1393,7 +1399,7 @@ export function PostCard({
                   Archived Date
                 </div>
                 <div className="text-sm text-text-primary">
-                  {format(new Date(message.created_at), 'MMM d, yyyy • HH:mm:ss')}
+                  {formatUtc(message.created_at, 'MMM d, yyyy • HH:mm:ss')}
                 </div>
               </div>
 
@@ -1405,7 +1411,7 @@ export function PostCard({
                   Last Updated
                 </div>
                 <div className="text-sm text-text-primary">
-                  {format(new Date(message.updated_at), 'MMM d, yyyy • HH:mm:ss')}
+                  {formatUtc(message.updated_at, 'MMM d, yyyy • HH:mm:ss')}
                 </div>
               </div>
 

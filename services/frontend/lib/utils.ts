@@ -2,6 +2,18 @@
  * Utility functions for Telegram Archiver
  */
 
+import { format } from 'date-fns';
+
+/**
+ * Format a date in UTC. date-fns `format` uses the runtime's local timezone, so
+ * SSR (container UTC) and the browser disagree and React reports hydration error #418.
+ */
+export function formatUtc(date: Date | string | number, pattern: string): string {
+  const d = new Date(date);
+  // Shift so the local-time fields of the shifted date equal the UTC fields.
+  return format(new Date(d.getTime() + d.getTimezoneOffset() * 60000), pattern);
+}
+
 /**
  * Format large numbers with K/M suffixes
  * @param num - Number to format

@@ -278,7 +278,9 @@ export function ContentView({ message }: ContentViewProps) {
                   )}
 
                   {fileType === 'image' && (
+                    // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                     <img
+                      decoding="async"
                       src={mediaUrl}
                       alt={`Message attachment ${idx + 1}`}
                       className="w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"

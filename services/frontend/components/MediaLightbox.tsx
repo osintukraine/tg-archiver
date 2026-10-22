@@ -194,7 +194,9 @@ export function MediaLightbox({
         )}
 
         {currentMediaType === 'image' && (
+          // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
           <img
+            decoding="async"
             src={currentUrl}
             alt={`Media ${currentIndex + 1} of ${mediaUrls.length}`}
             className={`max-w-[90vw] max-h-[90vh] object-contain transition-opacity duration-200 ${
@@ -261,7 +263,9 @@ export function MediaLightbox({
                 title={`View media ${index + 1}`}
               >
                 {thumbType === 'image' && (
+                  // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                   <img
+                    decoding="async"
                     src={url}
                     alt={`Thumbnail ${index + 1}`}
                     className="w-full h-full object-cover"

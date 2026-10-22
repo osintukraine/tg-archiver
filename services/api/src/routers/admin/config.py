@@ -284,7 +284,7 @@ async def update_config_item(
         elif data_type == "float":
             float(request.value)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid value for type {data_type}: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid value for type {data_type}: {str(e)}") from e
 
     # Update
     await db.execute(text("""

@@ -205,7 +205,7 @@ class CommentTranslator:
         self._google_backoff = min(
             self.google_backoff_max, self._google_backoff * 2 or self.google_backoff_base
         )
-        delay = min(self.google_backoff_max, self._google_backoff * random.uniform(1.0, 1.2))
+        delay = min(self.google_backoff_max, self._google_backoff * random.uniform(1.0, 1.2))  # noqa: S311  retry jitter, not crypto
         self._google_blocked_until = self._clock() + delay
         return delay
 

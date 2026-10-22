@@ -8,7 +8,7 @@ Handles serialization, validation, and documentation.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # =============================================================================
@@ -619,8 +619,6 @@ Social Graph API Schemas
 Pydantic models for social graph endpoints.
 Handles author attribution, forward chains, reactions, comments, and influence networks.
 """
-
-from pydantic import BaseModel, Field, ConfigDict
 
 
 # =============================================================================

@@ -4,7 +4,6 @@ Admin RSS Feeds Management Router - Simplified
 Basic CRUD operations for RSS feed sources.
 """
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 from xml.etree.ElementTree import Element, ParseError
 
@@ -171,7 +170,7 @@ async def get_feed_stats(
     total_feeds = total_result.scalar() or 0
 
     active_result = await db.execute(
-        select(func.count(RSSFeed.id)).where(RSSFeed.is_active == True)
+        select(func.count(RSSFeed.id)).where(RSSFeed.is_active.is_(True))
     )
     active_feeds = active_result.scalar() or 0
 

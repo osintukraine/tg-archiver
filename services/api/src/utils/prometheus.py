@@ -7,9 +7,7 @@ Used by /api/metrics/* endpoints to fetch real-time operational metrics.
 
 import httpx
 from typing import Optional, Any
-from datetime import datetime, timedelta
-import asyncio
-from functools import lru_cache
+from datetime import datetime
 
 from config.settings import settings
 from observability import get_logger

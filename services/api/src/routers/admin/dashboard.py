@@ -5,15 +5,18 @@ Provides aggregated statistics and system health for the admin dashboard.
 """
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 from ...database import get_db
 from ...dependencies import AdminUser
 from models import Message, Channel, MediaFile
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -127,7 +130,7 @@ async def get_dashboard(admin: AdminUser, db: AsyncSession = Depends(get_db)):
                 description=f"New channel added: {row[0]}"
             ))
     except Exception:
-        pass
+        logger.debug("Recent-channels activity query failed", exc_info=True)
 
     return DashboardResponse(
         stats=stats,

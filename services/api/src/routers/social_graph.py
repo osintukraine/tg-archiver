@@ -12,9 +12,8 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text, func
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from sqlalchemy import select, text
+from typing import Dict, Any
 
 from ..database import get_db
 from models import Message
@@ -85,7 +84,6 @@ async def get_message_social_graph(
         AND table_name IN ('message_forwards', 'message_replies')
     """))
     existing_tables = {row[0] for row in tables_check}
-    has_forwards_table = 'message_forwards' in existing_tables
     has_replies_table = 'message_replies' in existing_tables
 
     nodes = []
@@ -766,7 +764,7 @@ async def get_influence_network(
         raise HTTPException(
             status_code=500,
             detail="Could not fetch influence network. Please try again later."
-        )
+        ) from e
 
     # Format relationships
     relationships = []
@@ -1003,7 +1001,7 @@ async def get_message_comments(
             WHERE parent_message_id = :message_id
             ORDER BY comment_date {sort_order}
             LIMIT :limit OFFSET :offset
-        """)
+        """)  # noqa: S608  ASC/DESC picked from a fixed pair; values are bound params
 
         comments_result = await db.execute(
             comments_query,
@@ -1127,7 +1125,7 @@ async def get_top_forwarded_messages(
         raise HTTPException(
             status_code=500,
             detail="Could not fetch virality data. Please try again later."
-        )
+        ) from e
 
     # Format messages
     messages_list = []

@@ -460,7 +460,7 @@ async def promote_channel(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to promote channel: {str(e)}"
-        )
+        ) from e
 
 
 @router.post("/{channel_id}/ignore")

@@ -26,11 +26,10 @@ from config.settings import settings
 setup_logging(service_name="api")
 logger = get_logger(__name__)
 
-from .auth.factory import init_auth_config, get_auth_config
+from .auth.factory import init_auth_config
 from .middleware.auth_unified import AuthMiddleware
 from .middleware.rate_limit import RateLimitMiddleware
 from .middleware.csrf import CSRFMiddleware, CSRF_ENABLED
-from .dependencies import CurrentUser, AuthenticatedUser, AdminUser
 from .routers import (
     about_router,
     api_keys_router,

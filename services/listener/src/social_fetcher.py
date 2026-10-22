@@ -36,14 +36,12 @@ from telethon.tl.functions.messages import (
 from telethon.tl.types import (
     Message as TelegramMessage,
     PeerChannel,
-    InputPeerChannel,
-    Updates,
     UpdateMessageReactions,
 )
 
 from config.settings import settings
 from models.base import AsyncSessionLocal
-from .social_graph_utils import extract_reactions, upsert_reactions
+from .social_graph_utils import upsert_reactions
 
 logger = logging.getLogger(__name__)
 

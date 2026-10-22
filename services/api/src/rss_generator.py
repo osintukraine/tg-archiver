@@ -124,22 +124,22 @@ class RSSFeedGenerator:
 
         # Original content
         if message.content:
-            description_parts.append(f"<p><strong>Content:</strong></p>")
+            description_parts.append("<p><strong>Content:</strong></p>")
             description_parts.append(f"<p>{self._escape_html(message.content)}</p>")
 
         # Translated content
         if message.content_translated:
-            description_parts.append(f"<p><strong>Translation:</strong></p>")
+            description_parts.append("<p><strong>Translation:</strong></p>")
             description_parts.append(f"<p>{self._escape_html(message.content_translated)}</p>")
 
         # Classification metadata
         if message.topic:
-            description_parts.append(f"<p><strong>Classification:</strong></p>")
+            description_parts.append("<p><strong>Classification:</strong></p>")
             description_parts.append(f"<p>Topic: {message.topic}</p>")
 
         # Entities
         if message.entities:
-            description_parts.append(f"<p><strong>Entities:</strong></p>")
+            description_parts.append("<p><strong>Entities:</strong></p>")
             description_parts.append(f"<pre>{self._format_entities(message.entities)}</pre>")
 
         # Channel info

@@ -87,7 +87,7 @@ async def _verify_turnstile(token: str, ip: str) -> None:
         ok = r.status_code == 200 and r.json().get("success") is True
     except (httpx.HTTPError, ValueError) as e:
         logger.warning("Turnstile verification failed to run: %s", e)
-        raise HTTPException(status_code=503, detail="Captcha verification unavailable")
+        raise HTTPException(status_code=503, detail="Captcha verification unavailable") from e
     if not ok:
         raise HTTPException(status_code=400, detail="Captcha verification failed")
 
@@ -156,11 +156,11 @@ async def list_channel_submissions(
             {where}
             ORDER BY s.created_at DESC, s.id DESC
             LIMIT :limit OFFSET :offset
-        """),
+        """),  # noqa: S608  WHERE fragment is a constant; status/limit/offset are bound params
         params,
     )
     total = await db.scalar(
-        text(f"SELECT COUNT(*) FROM channel_submissions s {where}"), {"status": flt}
+        text(f"SELECT COUNT(*) FROM channel_submissions s {where}"), {"status": flt}  # noqa: S608  WHERE fragment is a constant; status/limit/offset are bound params
     )
     return {"items": [dict(r._mapping) for r in rows], "total": total}
 
@@ -235,7 +235,7 @@ async def approve_channel_submission(
     submission_id: int,
     admin: AdminUser,
     request: Request,
-    body: ApproveBody = ApproveBody(),
+    body: ApproveBody = ApproveBody(),  # noqa: B008  fresh model per signature; FastAPI copies it
     db: AsyncSession = Depends(get_db),
 ):
     """Add the suggested channel to the archive folder (via the listener), then mark approved."""
@@ -254,7 +254,7 @@ async def reject_channel_submission(
     submission_id: int,
     admin: AdminUser,
     request: Request,
-    body: RejectBody = RejectBody(),
+    body: RejectBody = RejectBody(),  # noqa: B008  fresh model per signature; FastAPI copies it
     db: AsyncSession = Depends(get_db),
 ):
     row = await _get_pending(db, submission_id)

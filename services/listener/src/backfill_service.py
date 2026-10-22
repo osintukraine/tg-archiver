@@ -25,14 +25,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
-from telethon.tl.types import Channel as TelegramChannel, Message as TelegramMessage
+from telethon.tl.types import Message as TelegramMessage
 
 from config.settings import settings
 from .media_utils import get_media_type
 from .social_graph_utils import extract_social_metadata
 from .metrics import (
     record_backfill_complete,
-    record_backfill_media,
     record_backfill_message,
     update_backfill_status,
 )
@@ -591,7 +590,7 @@ class BackfillService:
             select(Message.telegram_date)
             .where(
                 Message.channel_id == channel.id,
-                Message.is_backfilled == True
+                Message.is_backfilled.is_(True)
             )
             .order_by(Message.telegram_date.desc())
             .limit(1)

@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
 from models.message import Message
-from models.media import MessageMedia, MediaFile
 
 from ..database import get_db
 from ..schemas import MediaGalleryResult, MediaItem

@@ -7,14 +7,13 @@ Provides media browsing and management for archived photos/videos.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta
+from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional
 from enum import Enum
 
 from ...database import get_db
 from ...dependencies import AdminUser
-from config.settings import settings
 
 router = APIRouter(prefix="/api/admin/media", tags=["admin-media"])
 

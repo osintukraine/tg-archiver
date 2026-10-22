@@ -17,21 +17,19 @@ from __future__ import annotations
 import asyncio
 import getpass
 import os
-import shutil
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
+from telethon.tl.functions.messages import GetDialogFiltersRequest
 
 # Project root
 project_root = Path(__file__).parent.parent
 
 # Load .env file
 load_dotenv(project_root / ".env")
-
-from telethon import TelegramClient
-from telethon.errors import SessionPasswordNeededError
-from telethon.tl.functions.messages import GetDialogFiltersRequest
 
 
 def get_credentials() -> tuple[int, str]:
@@ -90,7 +88,7 @@ async def show_folders(client: TelegramClient):
     else:
         print(f"⚠️  Target folder '{folder_pattern}' NOT FOUND")
         print(f"   Create a folder named '{folder_pattern}' in your Telegram app")
-        print(f"   and add channels to archive.")
+        print("   and add channels to archive.")
 
     return found_target
 

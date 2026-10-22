@@ -261,7 +261,7 @@ class ChannelJoinWorker:
                 {approval_clause}
                 ORDER BY discovery_count DESC, discovered_at ASC
                 LIMIT :batch_size
-            """)
+            """)  # noqa: S608  approval_clause is a constant picked from settings; values are bound params
 
             result = await session.execute(query, {
                 'now': now,

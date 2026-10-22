@@ -20,6 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.services.api_key_service import ApiKeyService
 from src.auth.models import AuthUser
 from src.utils.rate_limit import get_client_ip
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def has_api_key(request: Request) -> bool:
@@ -98,4 +101,5 @@ async def _update_usage_background(db: AsyncSession, key_id, client_ip: str):
         api_key_service = ApiKeyService(db)
         await api_key_service.update_usage(key_id, client_ip)
     except Exception:
-        pass  # Fire-and-forget, don't fail the request
+        # Fire-and-forget, don't fail the request
+        logger.debug("API key usage update failed", exc_info=True)

@@ -234,9 +234,9 @@ class ChannelDiscovery:
             filters: list[DialogFilter] = result.filters
         except TypeNotFoundError as e:
             logger.warning(
-                f"Telegram API schema mismatch (Constructor ID error). "
-                f"This usually means Telegram updated their API but Telethon hasn't caught up yet. "
-                f"Folder discovery temporarily disabled. Update Telethon to fix: pip install -U telethon"
+                "Telegram API schema mismatch (Constructor ID error). "
+                "This usually means Telegram updated their API but Telethon hasn't caught up yet. "
+                "Folder discovery temporarily disabled. Update Telethon to fix: pip install -U telethon"
             )
             logger.debug(f"Full error: {e}")
             return []  # Return empty list, will use existing database channels
@@ -352,7 +352,7 @@ class ChannelDiscovery:
             # Step 1: Mark all channels as inactive (will be re-activated if still in folders)
             # Folder is the single source of truth - channels not in folder are deactivated
             result = await session.execute(
-                select(Channel).where(Channel.active == True)
+                select(Channel).where(Channel.active.is_(True))
             )
             existing_active = result.scalars().all()
 
@@ -417,8 +417,8 @@ class ChannelDiscovery:
             result = await session.execute(
                 select(Channel).where(
                     and_(
-                        Channel.active == False,
-                        Channel.removed_at == None,
+                        Channel.active.is_(False),
+                        Channel.removed_at.is_(None),
                     )
                 )
             )
@@ -445,7 +445,7 @@ class ChannelDiscovery:
             await session.commit()
 
             # Count total active channels
-            result = await session.execute(select(Channel).where(Channel.active == True))
+            result = await session.execute(select(Channel).where(Channel.active.is_(True)))
             stats["total_active"] = len(result.scalars().all())
 
             logger.info(
@@ -708,8 +708,8 @@ class ChannelDiscovery:
         result = await session.execute(
             select(Channel).where(
                 and_(
-                    Channel.active == True,
-                    Channel.last_message_at != None,
+                    Channel.active.is_(True),
+                    Channel.last_message_at.is_not(None),
                     Channel.last_message_at < threshold_time,
                     # Skip channels already being backfilled
                     Channel.backfill_status.notin_(["pending", "in_progress"]),

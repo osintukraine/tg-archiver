@@ -118,7 +118,7 @@ async def list_dlq(
         )
     except RedisError as e:
         logger.error(f"DLQ list failed: {e}")
-        raise HTTPException(status_code=503, detail="Redis unavailable")
+        raise HTTPException(status_code=503, detail="Redis unavailable") from e
 
     items = [_to_item(dlq_id, data) for dlq_id, data in entries]
     next_before = items[-1].dlq_id if len(items) == limit else None
@@ -131,7 +131,7 @@ async def _get_entry(r: redis.Redis, dlq_id: str) -> Dict[str, str]:
         entries = await r.xrange(DLQ_STREAM_KEY, min=dlq_id, max=dlq_id, count=1)
     except RedisError as e:
         logger.error(f"DLQ read failed: {e}")
-        raise HTTPException(status_code=503, detail="Redis unavailable")
+        raise HTTPException(status_code=503, detail="Redis unavailable") from e
     if not entries:
         raise HTTPException(status_code=404, detail="DLQ entry not found")
     return entries[0][1]
@@ -171,7 +171,7 @@ async def replay_dlq_entry(
         await r.xdel(DLQ_STREAM_KEY, dlq_id)
     except RedisError as e:
         logger.error(f"DLQ replay failed for {dlq_id}: {e}")
-        raise HTTPException(status_code=503, detail="Redis unavailable")
+        raise HTTPException(status_code=503, detail="Redis unavailable") from e
 
     logger.info(f"DLQ entry {dlq_id} replayed to {stream} as {new_id} by {admin.username}")
     await _audit(db, "dlq.replayed", admin, request, {"dlq_id": dlq_id, "stream": stream})
@@ -192,7 +192,7 @@ async def discard_dlq_entry(
         await r.xdel(DLQ_STREAM_KEY, dlq_id)
     except RedisError as e:
         logger.error(f"DLQ discard failed for {dlq_id}: {e}")
-        raise HTTPException(status_code=503, detail="Redis unavailable")
+        raise HTTPException(status_code=503, detail="Redis unavailable") from e
 
     logger.info(f"DLQ entry {dlq_id} discarded by {admin.username}")
     await _audit(db, "dlq.discarded", admin, request, {"dlq_id": dlq_id})

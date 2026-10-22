@@ -125,7 +125,7 @@ class PromotionWorker:
                 if not messages:
                     continue
 
-                for stream_name, stream_messages in messages:
+                for _stream_name, stream_messages in messages:
                     for message_id, data in stream_messages:
                         await self._process_promotion(message_id, data)
 

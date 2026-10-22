@@ -22,18 +22,16 @@ Telethon Message Properties Used:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any, Dict, Optional
 
-from sqlalchemy import select, text
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import text
 from telethon.tl.types import (
     Message as TelegramMessage,
     MessageFwdHeader,
     MessageReplyHeader,
     MessageReplies,
     MessageReactions,
-    ReactionCount,
     ReactionEmoji,
     ReactionCustomEmoji,
     ReactionPaid,

@@ -7,7 +7,7 @@ Provides login endpoints for JWT authentication and user management.
 import logging
 import os
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.base import get_db
 from ..auth.factory import get_auth_config, AuthProvider
-from ..auth.models import AuthConfig, AuthUser
+from ..auth.models import AuthConfig
 from ..dependencies import AdminUser, AuthenticatedUser  # Dependency versions
 from ..auth.jwt import (
     authenticate_user,
@@ -48,7 +48,7 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     """JWT token response."""
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105  OAuth token type, not a credential
     expires_in: int  # seconds
 
 
@@ -158,7 +158,7 @@ async def login(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
+        token_type="bearer",  # noqa: S106  OAuth token type, not a credential
         expires_in=JWT_EXPIRATION_MINUTES * 60  # Convert minutes to seconds
     )
 
@@ -233,7 +233,7 @@ async def create_user_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
-        )
+        ) from e
 
 
 @router.get("/users/me", response_model=UserResponse)

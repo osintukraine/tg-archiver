@@ -13,7 +13,6 @@ import logging
 from typing import Optional
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
 from telethon.errors import FloodWaitError
 from telethon.tl.functions.messages import GetDialogFiltersRequest, UpdateDialogFilterRequest

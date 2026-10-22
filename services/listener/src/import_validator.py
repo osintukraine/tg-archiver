@@ -12,7 +12,6 @@ Consumes from Redis stream 'import:validate' or polls database directly.
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import and_, select, update
@@ -177,7 +176,6 @@ class ImportValidator:
                     await asyncio.sleep(self.BATCH_DELAY_SECONDS)
 
             # Update job counters and status
-            total = stats["validated"] + stats["failed"] + stats["skipped"]
             await session.execute(
                 update(ImportJob)
                 .where(ImportJob.id == job_id)
@@ -262,7 +260,7 @@ class ImportValidator:
 
             # Check if we're already a member
             try:
-                full_entity = await self.client.get_entity(entity.id)
+                await self.client.get_entity(entity.id)
                 validation_data["already_member"] = True
             except ChannelPrivateError:
                 validation_data["already_member"] = False

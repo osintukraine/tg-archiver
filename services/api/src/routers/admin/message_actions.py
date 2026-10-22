@@ -7,7 +7,6 @@ Simplified for tg-archiver (no AI/enrichment features).
 
 import json
 import logging
-from datetime import datetime
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -272,7 +271,7 @@ async def get_audit_actions(
         }
     except Exception as e:
         logger.error(f"Error in get_audit_actions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # =============================================================================
@@ -385,7 +384,7 @@ async def quarantine_message(
     db: AsyncSession = Depends(get_db),
 ):
     """Move message to quarantine."""
-    msg = await get_message_or_404(db, message_id)
+    await get_message_or_404(db, message_id)
 
     # Copy to quarantine table
     await db.execute(text("""
@@ -481,7 +480,7 @@ async def set_message_topic(
     db: AsyncSession = Depends(get_db),
 ):
     """Set or clear topic for a message."""
-    msg = await get_message_or_404(db, message_id)
+    await get_message_or_404(db, message_id)
 
     # Get previous topic
     result = await db.execute(text(

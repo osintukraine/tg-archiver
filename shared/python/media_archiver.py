@@ -43,9 +43,15 @@ from telethon.tl.types import Message as TelegramMessage
 
 from config.platform_config import get_override
 from config.settings import settings
-from models.media import MediaFile, MessageMedia
+from models.media import MediaFile
 from media_buffer import mark_synced, upload_and_release
-from models.message import Message
+# Import Prometheus metrics
+from observability.metrics import (
+    media_download_duration_seconds,
+    media_storage_bytes_total,
+    media_deduplication_saves_total,
+    media_errors_total,
+)
 
 # Storage box selection simplified for tg-archiver
 # (BoxSelector was removed - it was OSINT-specific multi-box routing)
@@ -55,14 +61,6 @@ MEDIA_BUFFER_PATH = os.environ.get("MEDIA_BUFFER_PATH", "/var/cache/media-buffer
 BUFFER_BUCKET_NAME = os.environ.get("MINIO_BUCKET_NAME", "tg-archive-media")
 LOCAL_BUFFER_ROOT = Path(MEDIA_BUFFER_PATH) / BUFFER_BUCKET_NAME
 LOCAL_BUFFER_TMP = Path(MEDIA_BUFFER_PATH) / ".tmp"
-
-# Import Prometheus metrics
-from observability.metrics import (
-    media_download_duration_seconds,
-    media_storage_bytes_total,
-    media_deduplication_saves_total,
-    media_errors_total,
-)
 
 logger = logging.getLogger(__name__)
 

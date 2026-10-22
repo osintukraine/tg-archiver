@@ -69,7 +69,7 @@ async def list_topics(
         {where_clause}
         GROUP BY mt.id, mt.name, mt.label, mt.color, mt.description, mt.sort_order, mt.is_active
         ORDER BY mt.sort_order, mt.label
-    """))
+    """))  # noqa: S608  fixed WHERE fragment / SET list of column literals; values are bound params
 
     return [
         TopicResponse(
@@ -172,7 +172,7 @@ async def update_topic(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    query = f"UPDATE message_topics SET {', '.join(updates)} WHERE id = :id"
+    query = f"UPDATE message_topics SET {', '.join(updates)} WHERE id = :id"  # noqa: S608  fixed WHERE fragment / SET list of column literals; values are bound params
     await db.execute(text(query), params)
     await db.commit()
 

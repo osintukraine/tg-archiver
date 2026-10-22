@@ -44,8 +44,6 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from minio import Minio
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
 
@@ -58,7 +56,7 @@ from models.message_forward import MessageForward
 
 from .entity_extractor import EntityExtractor
 from media_archiver import MediaArchiver  # From shared/python
-from .message_router import MessageRouter, ProcessingRule
+from .message_router import MessageRouter
 from .redis_consumer import ProcessedMessage
 from .translation_worker import plan_translation
 
@@ -72,7 +70,6 @@ from observability.metrics import (
     record_media_archived,
     record_message_archived_timestamp,
     messages_archived_total,
-    messages_skipped_total,
     processing_duration_seconds,
 )
 
@@ -186,7 +183,6 @@ class MessageProcessor:
 
                 channel_username = channel_row[0] if channel_row else None
                 channel_rule = channel_row[1] if channel_row else "archive_all"
-                channel_name = channel_row[2] if channel_row else None
 
                 # Step 2: Get routing decision (for translation setting)
                 routing_decision = await self.message_router.get_routing_decision(
@@ -547,7 +543,7 @@ class MessageProcessor:
             session: Database session
         """
         from sqlalchemy.dialects.postgresql import insert
-        from sqlalchemy import select, update
+        from sqlalchemy import select
 
         try:
             # Step 1: Upsert discovered channel

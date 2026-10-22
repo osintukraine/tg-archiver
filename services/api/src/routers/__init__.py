@@ -52,6 +52,7 @@ __all__ = [
     "health_router",
     "bookmarks_router",
     "channels_router",
+    "channel_submissions_router",
     "comments_router",
     "feed_tokens_router",
     "media_router",

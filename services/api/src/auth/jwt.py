@@ -30,7 +30,7 @@ from fastapi import HTTPException, Request, status
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 import bcrypt
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as aioredis
 
@@ -73,7 +73,7 @@ JWT_ADMIN_EMAIL = os.getenv("JWT_ADMIN_EMAIL", "admin@tg-archiver.local")
 JWT_ADMIN_PASSWORD = os.getenv("JWT_ADMIN_PASSWORD", "")
 
 # Token blacklist key prefix
-TOKEN_BLACKLIST_PREFIX = "jwt:blacklist:"
+TOKEN_BLACKLIST_PREFIX = "jwt:blacklist:"  # noqa: S105  Redis key prefix, not a credential
 
 # Token blacklist fail mode: "open" (allow if Redis down) or "closed" (deny if Redis down)
 # "open" prioritizes availability, "closed" prioritizes security
@@ -160,7 +160,7 @@ async def is_token_blacklisted(token: str) -> bool:
         - "open": Allow requests if Redis unavailable (availability)
         - "closed": Deny requests if Redis unavailable (security)
     """
-    fail_closed = TOKEN_BLACKLIST_FAIL_MODE == "closed"
+    fail_closed = TOKEN_BLACKLIST_FAIL_MODE == "closed"  # noqa: S105  mode name, not a credential
 
     try:
         redis_client = await get_redis_client()

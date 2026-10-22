@@ -10,8 +10,6 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
-logger = logging.getLogger(__name__)
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
@@ -19,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
 from ...dependencies import AdminUser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/extraction", tags=["admin-extraction"])
 
@@ -263,7 +263,7 @@ async def update_pattern(
         updates.append("sort_order = :sort_order")
         params["sort_order"] = update.sort_order
 
-    query = f"UPDATE extraction_patterns SET {', '.join(updates)} WHERE id = :id"
+    query = f"UPDATE extraction_patterns SET {', '.join(updates)} WHERE id = :id"  # noqa: S608  SET list built from fixed column literals; values are bound params
     await db.execute(text(query), params)
     await db.commit()
 
@@ -485,4 +485,4 @@ async def reload_patterns(
         raise HTTPException(
             status_code=500,
             detail="Failed to send reload signal. Check Redis connection."
-        )
+        ) from e

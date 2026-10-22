@@ -12,7 +12,6 @@ NO LLM classification - all messages from monitored channels are archived.
 """
 
 import asyncio
-import os
 import signal
 import sys
 from typing import NoReturn
@@ -26,7 +25,7 @@ from media_archiver import LOCAL_BUFFER_TMP, MediaArchiver
 from media_buffer import housekeeping_loop, retention_loop
 
 # Structured logging for Loki aggregation
-from observability import setup_logging, get_logger, LogContext
+from observability import setup_logging, get_logger
 
 from .entity_extractor import EntityExtractor
 from .message_processor import MessageProcessor
@@ -38,12 +37,13 @@ from observability.metrics import processor_metrics_server, record_queue_depth
 
 # Import audit logger for platform events
 from audit.audit_logger import AuditLogger
-audit = AuditLogger("processor")
 
 # Import translation service from shared modules
 from translation import build_translator
 
 from .translation_worker import TranslationWorker
+
+audit = AuditLogger("processor")
 
 # Initialize structured logging
 setup_logging(service_name="processor")

@@ -18,7 +18,6 @@ Configuration (reuses SOCIAL_FETCH_* settings):
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text

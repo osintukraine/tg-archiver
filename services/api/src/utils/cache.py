@@ -6,9 +6,7 @@ Used by /api/metrics/* and /api/analytics/* endpoints.
 """
 
 import json
-import hashlib
 from typing import Optional, Any, Callable, TypeVar
-from datetime import datetime
 from functools import wraps
 
 import redis.asyncio as redis

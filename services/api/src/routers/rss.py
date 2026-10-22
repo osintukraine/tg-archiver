@@ -230,7 +230,7 @@ async def feed_search(
         filters.append(Message.forwards >= min_forwards)
 
     # Always exclude hidden messages in feeds
-    filters.append(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))
+    filters.append(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))
 
     # Date filters
     if days:
@@ -404,7 +404,7 @@ async def feed_channel(
 
     # Apply filters
     filters = [
-        or_(Message.is_hidden == False, Message.is_hidden.is_(None))  # Exclude hidden messages
+        or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None))  # Exclude hidden messages
     ]
 
     if days:
@@ -529,7 +529,7 @@ async def feed_topic(
 
     # Build query with eager loading
     filters = [
-        or_(Message.is_hidden == False, Message.is_hidden.is_(None)),  # Exclude hidden messages
+        or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)),  # Exclude hidden messages
         Message.topic == topic,
     ]
 

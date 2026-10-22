@@ -434,7 +434,7 @@ def record_llm_request(
     llm_response_duration_seconds.labels(model=model).observe(duration_seconds)
 
     if tokens > 0:
-        llm_tokens_total.labels(model=model, token_type="total").inc(tokens)
+        llm_tokens_total.labels(model=model, token_type="total").inc(tokens)  # noqa: S106  metric label, not a credential
 
 
 def record_topic(topic: str) -> None:

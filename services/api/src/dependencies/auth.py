@@ -35,7 +35,7 @@ async def _resolve_api_key(request: Request, db: AsyncSession) -> Optional[AuthU
     api_key = await api_key_service.validate_key(pending_key)
 
     if not api_key:
-        logger.debug(f"Invalid API key attempted")
+        logger.debug("Invalid API key attempted")
         return None
 
     # Store validated key for rate limiting
@@ -71,7 +71,8 @@ async def _update_usage_background(key_id: int):
             await api_key_service.update_usage(key_id)
             await db.commit()
     except Exception:
-        pass  # Fire-and-forget
+        # Fire-and-forget
+        logger.debug("API key usage update failed", exc_info=True)
 
 
 async def get_current_user(

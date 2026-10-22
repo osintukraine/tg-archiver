@@ -149,7 +149,7 @@ async def update_category(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    query = f"UPDATE channel_categories SET {', '.join(updates)} WHERE id = :id"
+    query = f"UPDATE channel_categories SET {', '.join(updates)} WHERE id = :id"  # noqa: S608  SET list built from fixed column literals; values are bound params
     await db.execute(text(query), params)
     await db.commit()
 

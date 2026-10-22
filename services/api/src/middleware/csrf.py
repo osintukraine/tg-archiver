@@ -8,7 +8,7 @@ Works alongside JWT authentication for state-changing requests.
 import logging
 import os
 import secrets
-from typing import Optional, Set
+from typing import Set
 
 from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware

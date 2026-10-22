@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import text, update
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -245,7 +245,7 @@ async def translate_comment(
         raise
     except Exception as e:
         logger.exception(f"Translation error for comment {comment_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Translation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Translation error: {str(e)}") from e
 
 
 @router.get("/{comment_id}", response_model=CommentResponse)

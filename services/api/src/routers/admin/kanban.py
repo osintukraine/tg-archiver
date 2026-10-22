@@ -13,7 +13,6 @@ from typing import List, Optional, Dict
 
 from ...database import get_db
 from ...dependencies import AdminUser
-from config.settings import settings
 
 router = APIRouter(prefix="/api/admin/kanban", tags=["admin-kanban"])
 
@@ -80,7 +79,7 @@ async def get_kanban_board(
             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY COALESCE(views, 0)) as p50_views
         FROM messages
         {date_filter}
-    """
+    """  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     threshold_result = await db.execute(text(threshold_query), {"days": days})
     thresholds = threshold_result.fetchone()
     p90_views = thresholds[0] or 10000
@@ -118,7 +117,7 @@ async def get_kanban_board(
             LEFT JOIN message_media mm ON mm.message_id = m.id
             LEFT JOIN media_files mf ON mf.id = mm.media_file_id
             {date_filter}
-    """
+    """  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
 
     params = {
         "days": days,
@@ -209,7 +208,7 @@ async def get_kanban_stats(
             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY COALESCE(views, 0)) as p50_views
         FROM messages
         {date_filter}
-    """
+    """  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     threshold_result = await db.execute(text(threshold_query), {"days": days})
     thresholds = threshold_result.fetchone()
     p90_views = thresholds[0] or 10000
@@ -229,7 +228,7 @@ async def get_kanban_stats(
         FROM messages
         {date_filter}
         GROUP BY 1
-    """), {"days": days, "p90_views": p90_views, "p90_forwards": p90_forwards, "p50_views": p50_views})
+    """), {"days": days, "p90_views": p90_views, "p90_forwards": p90_forwards, "p50_views": p50_views})  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     by_lane = {row[0]: row[1] for row in lane_result.fetchall()}
 
     # Total messages
@@ -237,7 +236,7 @@ async def get_kanban_stats(
         SELECT COUNT(*)
         FROM messages
         {date_filter}
-    """), {"days": days})
+    """), {"days": days})  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     total_messages = total_result.scalar() or 0
 
     # With media
@@ -246,7 +245,7 @@ async def get_kanban_stats(
         SELECT COUNT(*)
         FROM messages
         {media_filter}
-    """), {"days": days})
+    """), {"days": days})  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     with_media = media_result.scalar() or 0
 
     return BoardStatsResponse(

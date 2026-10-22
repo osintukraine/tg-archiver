@@ -39,7 +39,6 @@ from typing import Optional, Tuple
 
 import redis.asyncio as redis
 from fastapi import HTTPException, Request, Response
-from starlette.responses import JSONResponse
 
 from config.settings import settings
 from observability import get_logger
@@ -201,7 +200,7 @@ class RateLimiter:
                 retry_after = window_seconds
 
                 logger.warning(
-                    f"Rate limit exceeded",
+                    "Rate limit exceeded",
                     extra={
                         "client_id": client_id,
                         "endpoint": endpoint,
@@ -231,7 +230,7 @@ class RateLimiter:
         except redis.RedisError as e:
             # Fail open on Redis errors - log warning but allow request
             logger.warning(
-                f"Rate limit Redis error (failing open)",
+                "Rate limit Redis error (failing open)",
                 extra={"error": str(e), "client_id": client_id, "endpoint": endpoint}
             )
 
@@ -244,7 +243,7 @@ class RateLimiter:
         except Exception as e:
             # Unexpected error - fail open
             logger.error(
-                f"Rate limit unexpected error",
+                "Rate limit unexpected error",
                 extra={"error": str(e), "client_id": client_id, "endpoint": endpoint}
             )
 

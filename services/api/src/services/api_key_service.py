@@ -97,7 +97,7 @@ class ApiKeyService:
         count = await self.db.scalar(
             select(func.count(ApiKey.id))
             .where(ApiKey.user_id == user_id)
-            .where(ApiKey.is_active == True)
+            .where(ApiKey.is_active.is_(True))
         )
         if count and count >= ApiKeyService.MAX_KEYS_PER_USER:
             raise ValueError(
@@ -164,7 +164,7 @@ class ApiKeyService:
         query = select(ApiKey).where(ApiKey.user_id == user_id)
 
         if not include_inactive:
-            query = query.where(ApiKey.is_active == True)
+            query = query.where(ApiKey.is_active.is_(True))
 
         query = query.order_by(ApiKey.created_at.desc())
 
@@ -191,7 +191,7 @@ class ApiKeyService:
             .where(
                 ApiKey.id == key_id,
                 ApiKey.user_id == user_id,
-                ApiKey.is_active == True,
+                ApiKey.is_active.is_(True),
             )
             .values(is_active=False)
             .returning(ApiKey.id)
@@ -233,7 +233,7 @@ class ApiKeyService:
             select(ApiKey)
             .where(
                 ApiKey.key_hash == key_hash,
-                ApiKey.is_active == True,
+                ApiKey.is_active.is_(True),
                 or_(
                     ApiKey.expires_at.is_(None),
                     ApiKey.expires_at > func.now(),
@@ -281,7 +281,7 @@ class ApiKeyService:
         count = await self.db.scalar(
             select(func.count(ApiKey.id))
             .where(ApiKey.user_id == user_id)
-            .where(ApiKey.is_active == True)
+            .where(ApiKey.is_active.is_(True))
         )
         return count or 0
 

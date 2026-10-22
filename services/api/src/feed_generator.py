@@ -511,12 +511,12 @@ class FeedGenerator:
 
         # Original content
         if message.content:
-            parts.append(f"<p><strong>Content:</strong></p>")
+            parts.append("<p><strong>Content:</strong></p>")
             parts.append(f"<p>{self._escape_html(message.content)}</p>")
 
         # Translation
         if message.content_translated:
-            parts.append(f"<p><strong>Translation (EN):</strong></p>")
+            parts.append("<p><strong>Translation (EN):</strong></p>")
             parts.append(f"<p>{self._escape_html(message.content_translated)}</p>")
 
         # Classification metadata
@@ -531,7 +531,7 @@ class FeedGenerator:
 
         # Entities
         if message.entities:
-            parts.append(f"<p><strong>Entities:</strong></p>")
+            parts.append("<p><strong>Entities:</strong></p>")
             parts.append(f"<pre>{self._format_entities(message.entities)}</pre>")
 
         # Engagement stats

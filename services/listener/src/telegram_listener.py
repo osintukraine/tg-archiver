@@ -39,7 +39,6 @@ from telethon import TelegramClient, events
 from telethon.errors import (
     FloodWaitError,
     SessionPasswordNeededError,
-    UnauthorizedError,
 )
 from telethon.tl.types import Channel as TelegramChannel
 from telethon.tl.types import InputPeerChannel
@@ -182,7 +181,7 @@ class TelegramListener:
         Keys are RAW channel IDs (without -100 prefix) to match message.peer_id.channel_id.
         """
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(Channel).where(Channel.active == True))
+            result = await session.execute(select(Channel).where(Channel.active.is_(True)))
             channels = result.scalars().all()
 
             # Use raw channel ID as key (convert from marked -100xxx format)

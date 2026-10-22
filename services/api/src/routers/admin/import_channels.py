@@ -425,10 +425,10 @@ async def upload_csv(
             content, file.filename
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"CSV parsing error: {e}")
-        raise HTTPException(status_code=400, detail="Failed to parse CSV file")
+        raise HTTPException(status_code=400, detail="Failed to parse CSV file") from e
 
     if not channels:
         raise HTTPException(
@@ -588,7 +588,7 @@ async def get_import_job(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(
         select(ImportJob)
@@ -622,7 +622,7 @@ async def update_channels(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     # Verify job exists and is in a valid state for updates
     result = await db.execute(
@@ -643,7 +643,7 @@ async def update_channels(
     try:
         channel_uuids = [uuid.UUID(cid) for cid in update_request.channel_ids]
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid channel ID format")
+        raise HTTPException(status_code=400, detail="Invalid channel ID format") from None
 
     if not channel_uuids:
         raise HTTPException(status_code=400, detail="No channel IDs provided")
@@ -717,7 +717,7 @@ async def get_job_log(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     # Verify job exists
     job_result = await db.execute(
@@ -787,7 +787,7 @@ async def delete_import_job(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(
         select(ImportJob).where(ImportJob.id == job_uuid)
@@ -861,7 +861,7 @@ async def trigger_validation(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(select(ImportJob).where(ImportJob.id == job_uuid))
     job = result.scalar_one_or_none()
@@ -950,7 +950,7 @@ async def start_import(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(select(ImportJob).where(ImportJob.id == job_uuid))
     job = result.scalar_one_or_none()
@@ -969,7 +969,7 @@ async def start_import(
         select(func.count(ImportJobChannel.id)).where(
             and_(
                 ImportJobChannel.import_job_id == job_uuid,
-                ImportJobChannel.selected == True,
+                ImportJobChannel.selected.is_(True),
                 ImportJobChannel.status == "validated",
             )
         )

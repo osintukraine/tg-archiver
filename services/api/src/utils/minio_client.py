@@ -6,7 +6,6 @@ S3 (SeaweedFS) client plus the single place that builds browser-facing media URL
 
 import os
 import logging
-from functools import lru_cache
 from typing import Optional
 
 from minio import Minio

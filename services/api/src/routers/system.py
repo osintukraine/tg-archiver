@@ -4,13 +4,13 @@ Used by About page for live architecture visualization.
 """
 
 import asyncio
-import os
 from datetime import datetime
 from typing import Any, Dict, List
 
 import httpx
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends
+from models.base import AsyncSessionLocal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -623,8 +623,6 @@ async def check_media_status(db: AsyncSession) -> Dict[str, Any]:
 # =============================================================================
 # Standalone versions that create their own DB sessions (for pipeline endpoint)
 # =============================================================================
-
-from models.base import AsyncSessionLocal
 
 
 async def check_processing_status_standalone() -> Dict[str, Any]:

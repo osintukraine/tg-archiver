@@ -16,7 +16,6 @@ import logging
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-from typing import Optional
 
 from prometheus_client import Counter, Gauge, Histogram, Info, start_http_server
 
@@ -226,7 +225,7 @@ def check_message_activity() -> tuple[bool, str]:
 
     # Check if we've received any messages
     if _last_message_time == 0:
-        return False, f"UNHEALTHY: No messages received since startup"
+        return False, "UNHEALTHY: No messages received since startup"
 
     # Check message age
     message_age = now - _last_message_time
@@ -279,7 +278,7 @@ class MetricsServer:
             logger.info(f"Prometheus metrics server started on port {self.port}")
 
             # Start health check server on separate port
-            self._health_server = HTTPServer(("0.0.0.0", self.health_port), HealthCheckHandler)
+            self._health_server = HTTPServer(("0.0.0.0", self.health_port), HealthCheckHandler)  # noqa: S104  health endpoint inside the container, port not published
             self._health_thread = Thread(target=self._health_server.serve_forever, daemon=True)
             self._health_thread.start()
             logger.info(f"Health check server started on port {self.health_port}")

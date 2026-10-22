@@ -18,10 +18,10 @@ Tiered Processing:
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional, Dict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -502,7 +502,7 @@ async def get_export_job(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(select(ExportJob).where(ExportJob.id == job_uuid))
     job = result.scalar_one_or_none()
@@ -531,7 +531,7 @@ async def download_export(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(select(ExportJob).where(ExportJob.id == job_uuid))
     job = result.scalar_one_or_none()
@@ -631,13 +631,13 @@ async def download_export(
         raise HTTPException(
             status_code=500,
             detail="MinIO client not available",
-        )
+        ) from None
     except Exception as e:
         logger.error(f"Error downloading export {job.s3_key}: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to download export: {str(e)}",
-        )
+        ) from e
 
 
 @router.delete("/{job_id}")
@@ -655,7 +655,7 @@ async def delete_export_job(
     try:
         job_uuid = uuid.UUID(job_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid job ID format") from None
 
     result = await db.execute(select(ExportJob).where(ExportJob.id == job_uuid))
     job = result.scalar_one_or_none()

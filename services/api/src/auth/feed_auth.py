@@ -89,7 +89,7 @@ async def verify_feed_token(
     feed_token = await service.verify_token(token)
 
     if not feed_token:
-        logger.warning(f"Token not found or revoked")
+        logger.warning("Token not found or revoked")
         if auth_required:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

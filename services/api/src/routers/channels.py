@@ -4,7 +4,6 @@ Channels Router
 Provides endpoints for channel information and statistics.
 """
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -48,7 +47,7 @@ async def list_channels(
 
     # Apply filters
     if active_only:
-        query = query.where(Channel.active == True)
+        query = query.where(Channel.active.is_(True))
 
     if rule:
         query = query.where(Channel.rule == rule)
@@ -59,7 +58,7 @@ async def list_channels(
         query = query.where(Channel.folder.ilike(f"%{folder_escaped}%"))
 
     if verified_only:
-        query = query.where(Channel.verified == True)
+        query = query.where(Channel.verified.is_(True))
 
     # Order by last message (most recent first)
     query = query.order_by(desc(Channel.last_message_at)).limit(limit)

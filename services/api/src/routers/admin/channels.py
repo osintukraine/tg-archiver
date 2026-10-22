@@ -390,7 +390,7 @@ async def update_channel(
 
     updates.append("updated_at = NOW()")
 
-    query = f"UPDATE channels SET {', '.join(updates)} WHERE id = :channel_id RETURNING id"
+    query = f"UPDATE channels SET {', '.join(updates)} WHERE id = :channel_id RETURNING id"  # noqa: S608  SET list built from fixed column literals; values are bound params
     result = await db.execute(text(query), params)
     await db.commit()
 

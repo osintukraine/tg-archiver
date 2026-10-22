@@ -16,18 +16,15 @@ from sqlalchemy.orm import selectinload
 from models.message import Message
 from models.channel import Channel
 from models.media import MessageMedia, MediaFile
-from models.tag import MessageTag
 
 from ..database import get_db
 from ..schemas import (
     MessageDetail,
     MessageList,
-    SearchParams,
     SearchResult,
     AlbumMediaResponse,
     AlbumMediaItem,
     AdjacentMessages,
-    MediaItemSimple,
 )
 from ..utils import get_media_url
 
@@ -130,7 +127,7 @@ async def get_adjacent_messages(
     prev_result = await db.execute(
         select(Message.id)
         .where(Message.telegram_date < message.telegram_date)
-        .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
+        .where(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))  # Skip hidden messages
         .order_by(desc(Message.telegram_date))
         .limit(1)
     )
@@ -140,7 +137,7 @@ async def get_adjacent_messages(
     next_result = await db.execute(
         select(Message.id)
         .where(Message.telegram_date > message.telegram_date)
-        .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
+        .where(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))  # Skip hidden messages
         .order_by(Message.telegram_date.asc())
         .limit(1)
     )
@@ -200,7 +197,7 @@ async def get_message_album(
             .join(MessageMedia, Message.id == MessageMedia.message_id)
             .join(MediaFile, MessageMedia.media_file_id == MediaFile.id)
             .where(Message.grouped_id == message.grouped_id)
-            .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
+            .where(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))  # Skip hidden messages
             .order_by(Message.id.asc())  # Chronological within album
         )
     else:
@@ -210,7 +207,7 @@ async def get_message_album(
             .join(MessageMedia, Message.id == MessageMedia.message_id)
             .join(MediaFile, MessageMedia.media_file_id == MediaFile.id)
             .where(Message.id == message_id)
-            .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
+            .where(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))  # Skip hidden messages
         )
 
     result = await db.execute(query)
@@ -380,7 +377,7 @@ async def get_message(message_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Message)
         .where(Message.id == message_id)
-        .where(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))  # Skip hidden messages
+        .where(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))  # Skip hidden messages
         .options(
             selectinload(Message.media).selectinload(MessageMedia.media_file),
             selectinload(Message.channel),
@@ -555,9 +552,6 @@ async def search_messages(
     # Apply filters
     filters = []
 
-    # Track if we need to join Channel table
-    needs_channel_join = bool(channel_username or channel_folder)
-
     # Full-text search (whitespace-only means no query)
     q = q.strip() if q else None
     if q:
@@ -607,7 +601,7 @@ async def search_messages(
         filters.append(Message.media_type == media_type)
 
     # Hidden messages filter (always exclude from public search)
-    filters.append(or_(Message.is_hidden == False, Message.is_hidden.is_(None)))
+    filters.append(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))
 
     # Language filter
     if language:

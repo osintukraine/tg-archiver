@@ -113,7 +113,7 @@ class ImportProcessor:
                 select(ImportJobChannel).where(
                     and_(
                         ImportJobChannel.import_job_id == job_id,
-                        ImportJobChannel.selected == True,
+                        ImportJobChannel.selected.is_(True),
                         ImportJobChannel.status == "validated",
                     )
                 )
@@ -212,7 +212,7 @@ class ImportProcessor:
 
                 # Rate limiting delay (except for last channel)
                 if i < len(channels) - 1:
-                    delay = random.randint(self.MIN_DELAY_SECONDS, self.MAX_DELAY_SECONDS)
+                    delay = random.randint(self.MIN_DELAY_SECONDS, self.MAX_DELAY_SECONDS)  # noqa: S311  human-like delay jitter, not crypto
                     logger.debug(f"Rate limit delay: {delay}s before next channel")
                     await asyncio.sleep(delay)
 

@@ -7,9 +7,8 @@ Provides endpoints for system administration:
 - Basic audit log (platform actions)
 """
 
-import asyncio
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, Query
@@ -21,6 +20,9 @@ from config.settings import settings
 
 from ...database import get_db
 from ...dependencies import AdminUser
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/admin/system", tags=["Admin - System"])
@@ -98,7 +100,7 @@ async def get_workers(admin: AdminUser):
                                 idle_time_ms=consumer.get("idle", 0),
                             ))
                     except Exception:
-                        pass
+                        logger.debug("xinfo_consumers failed for %s", stream, exc_info=True)
 
                     groups.append(ConsumerGroupInfo(
                         name=group_name,
@@ -129,7 +131,7 @@ async def get_workers(admin: AdminUser):
             timestamp=datetime.utcnow().isoformat(),
         )
 
-    except Exception as e:
+    except Exception:
         return WorkersResponse(
             groups=[],
             total_consumers=0,
@@ -168,7 +170,7 @@ async def get_worker_stats(admin: AdminUser):
                 total_pending += group.get("pending", 0)
                 total_lag += group.get("lag", 0)
         except Exception:
-            pass
+            logger.debug("xinfo_groups failed", exc_info=True)
 
         await redis_client.close()
 

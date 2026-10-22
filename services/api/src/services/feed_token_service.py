@@ -108,7 +108,7 @@ class FeedTokenService:
         result = await self.db.execute(
             select(FeedToken).where(
                 FeedToken.id == token_id,
-                FeedToken.is_active == True,
+                FeedToken.is_active.is_(True),
             )
         )
         return result.scalar_one_or_none()
@@ -128,7 +128,7 @@ class FeedTokenService:
             select(FeedToken)
             .where(
                 FeedToken.user_id == user_id,
-                FeedToken.is_active == True,
+                FeedToken.is_active.is_(True),
             )
             .order_by(FeedToken.created_at.desc())
         )
@@ -154,7 +154,7 @@ class FeedTokenService:
             .where(
                 FeedToken.id == token_id,
                 FeedToken.user_id == user_id,
-                FeedToken.is_active == True,
+                FeedToken.is_active.is_(True),
             )
             .values(is_active=False)
             .returning(FeedToken.id)
@@ -197,7 +197,7 @@ class FeedTokenService:
         result = await self.db.execute(
             select(FeedToken).where(
                 FeedToken.token_hash == token_hash,
-                FeedToken.is_active == True,
+                FeedToken.is_active.is_(True),
             )
         )
         return result.scalar_one_or_none()

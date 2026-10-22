@@ -7,7 +7,7 @@ User management endpoints for local JWT authentication.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +18,6 @@ from ...auth.jwt import (
     create_user,
     list_users,
     delete_user,
-    update_user_password,
-    get_user_by_username,
     get_password_hash,
 )
 from sqlalchemy import select
@@ -183,7 +181,7 @@ async def create_user_admin(
         raise HTTPException(
             status_code=409,
             detail=str(e),
-        )
+        ) from e
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
@@ -216,7 +214,7 @@ async def update_user_admin(
     # Check if demoting last admin
     if body.is_admin is False and user.is_admin:
         admin_count_result = await db.execute(
-            select(User).where(User.is_admin == True)
+            select(User).where(User.is_admin.is_(True))
         )
         admins = admin_count_result.scalars().all()
         if len(admins) <= 1:
@@ -280,7 +278,7 @@ async def delete_user_admin(
 
     if user.is_admin:
         admin_count_result = await db.execute(
-            select(User).where(User.is_admin == True)
+            select(User).where(User.is_admin.is_(True))
         )
         admins = admin_count_result.scalars().all()
         if len(admins) <= 1:

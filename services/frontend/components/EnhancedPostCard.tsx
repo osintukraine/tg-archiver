@@ -10,6 +10,7 @@ import {
   Code
 } from 'lucide-react';
 import type { Message } from '@/lib/types';
+import { formatUtc } from '@/lib/utils';
 
 // Tab view components
 import { ContentView } from './tabs/ContentView';
@@ -46,7 +47,7 @@ export function EnhancedPostCard({ message, className = '' }: EnhancedPostCardPr
             )}
           </div>
           <span className="text-xs text-muted-foreground dark:text-gray-400" title="Original posting date on Telegram">
-            {new Date(message.telegram_date || message.created_at).toLocaleString()}
+            {formatUtc(message.telegram_date || message.created_at, 'MMM d, yyyy, HH:mm')}
           </span>
         </div>
       </CardHeader>

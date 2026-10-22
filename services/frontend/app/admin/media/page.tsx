@@ -199,7 +199,9 @@ export default function MediaPage() {
             >
               <div className="aspect-square relative bg-bg-tertiary">
                 {item.media_url && item.mime_type?.startsWith('image/') ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                   <img
+                    decoding="async"
                     src={getMediaUrl(item.media_url) || ''}
                     alt={item.caption || 'Media'}
                     className="w-full h-full object-cover"
@@ -295,7 +297,9 @@ export default function MediaPage() {
             </div>
             <div className="p-4">
               {selectedItem.media_url && selectedItem.mime_type?.startsWith('image/') ? (
+                // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                 <img
+                  decoding="async"
                   src={getMediaUrl(selectedItem.media_url) || ''}
                   alt={selectedItem.caption || 'Media'}
                   className="max-w-full max-h-[60vh] mx-auto"

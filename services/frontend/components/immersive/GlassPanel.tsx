@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { formatUtc } from '@/lib/utils';
 import Link from 'next/link';
 import type { Message } from '@/lib/types';
 
@@ -15,7 +15,7 @@ export function GlassPanel({ message }: GlassPanelProps) {
 
   const channelName = message.channel?.name || `Channel ${message.channel_id}`;
   const timestamp = message.telegram_date
-    ? format(new Date(message.telegram_date), 'MMM d, HH:mm')
+    ? formatUtc(message.telegram_date, 'MMM d, HH:mm')
     : '';
 
   const content = message.content_translated || message.content || '';

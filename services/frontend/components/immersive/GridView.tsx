@@ -66,7 +66,9 @@ function GridThumbnail({ message, onClick }: GridThumbnailProps) {
       className={`relative aspect-square rounded-lg overflow-hidden bg-gray-900 group transition-all ${countryBorderClass}`}
     >
       {thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
         <img
+          decoding="async"
           src={thumbnailUrl}
           alt=""
           className="w-full h-full object-cover"

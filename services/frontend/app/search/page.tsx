@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { searchMessages, getChannels, getTopics, getCategories, getFolders } from '@/lib/api';
 import type { Message, SearchParams, SearchResult, Channel, MessageTopic, ChannelCategory, TelegramFolder } from '@/lib/types';
+import { formatUtc } from '@/lib/utils';
 
 /**
  * Search Page - Message Search with Advanced Filters
@@ -15,12 +16,7 @@ import type { Message, SearchParams, SearchResult, Channel, MessageTopic, Channe
 function MessageCard({ message }: { message: Message }) {
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '';
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatUtc(dateStr, 'MMM d, HH:mm');
   };
 
   return (

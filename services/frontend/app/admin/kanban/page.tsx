@@ -255,7 +255,9 @@ export default function KanbanPage() {
                               onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                             />
                           ) : (
+                            // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                             <img
+                              decoding="async"
                               src={getMediaUrl(item.thumbnail_url) || ''}
                               alt=""
                               className="w-full h-full object-cover"
@@ -349,7 +351,9 @@ export default function KanbanPage() {
                       preload="metadata"
                     />
                   ) : (
+                    // eslint-disable-next-line @next/next/no-img-element -- archived media served from /media (Caddy -> SeaweedFS); unknown dimensions, bypass the Next optimizer
                     <img
+                      decoding="async"
                       src={getMediaUrl(selectedItem.thumbnail_url) || ''}
                       alt=""
                       className="max-w-full rounded-sm"

@@ -35,6 +35,11 @@ jobs:
         run: |
           pip install pyyaml
           python scripts/env_audit.py --env-file .env.example --strict
+      - name: Prometheus config, rules and rule tests
+        run: |
+          PT="docker run --rm --entrypoint promtool -v $PWD/infrastructure/prometheus:/etc/prometheus:ro prom/prometheus:v3.15.0"
+          $PT check config /etc/prometheus/prometheus.yml
+          $PT test rules /etc/prometheus/tests/alerts_test.yml
       - name: Gitleaks (working tree and history)
         run: |
           GL="docker run --rm -v $PWD:/repo zricethezav/gitleaks:v8.30.1"

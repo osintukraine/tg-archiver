@@ -1,0 +1,66 @@
+# No notifications yet (no Alertmanager): alerts are visible in the Prometheus UI under Alerts.
+# DeepLNearCap is intentionally absent: the daily character cap is not exported as a metric.
+groups:
+  - name: tg-archiver
+    rules:
+      - alert: ListenerQuiet
+        expr: time() - max(telegram_last_message_timestamp > 0) > 900
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Listener has received no Telegram message for 15 minutes
+          description: Last message seen {{ $value | humanizeDuration }} ago. Check the listener logs and Telegram session.
+
+      - alert: ArchiveStalled
+        expr: time() - max(tg_message_last_archived_timestamp > 0) > 900
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: No message archived for 15 minutes
+          description: Last archive write was {{ $value | humanizeDuration }} ago. Check the processor and the queue backlog.
+
+      - alert: DLQNotEmpty
+        expr: sum(tg_dlq_messages) > 0
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: Dead-letter queue holds failed messages
+          description: "{{ $value }} message(s) in telegram:messages:dlq. Inspect and replay via /api/admin/dlq."
+
+      - alert: DLQGrowing
+        expr: sum(increase(tg_dlq_messages[30m])) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: Messages are still failing into the dead-letter queue
+          description: The DLQ grew by {{ $value }} in the last 30 minutes. Check processor logs.
+
+      - alert: QueueBacklog
+        expr: sum(tg_queue_depth) > 500
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: Redis stream backlog above 500 for 10 minutes
+          description: "{{ $value }} messages queued; the processor is not keeping up."
+
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Scrape target {{ $labels.job }} is down"
+          description: "Prometheus cannot scrape {{ $labels.instance }} (job {{ $labels.job }}) for 2 minutes."
+
+      - alert: FloodWaits
+        expr: increase(telegram_flood_waits_total[1h]) > 5
+        labels: {severity: warning}
+        annotations:
+          summary: Telegram FloodWait hit more than 5 times in an hour
+          description: "{{ $value }} FloodWaits in the last hour. Reduce join/fetch rates."
+
+      - alert: MediaErrors
+        expr: sum(rate(tg_media_errors_total[15m])) > 0.1
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: Media download/upload errors sustained
+          description: "{{ $value | humanize }} media errors/s over 15 minutes. Check SeaweedFS and Telegram media access."

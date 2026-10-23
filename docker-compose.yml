@@ -333,10 +333,32 @@ services:
       - seaweedfs
     restart: unless-stopped
 
+  # Optional metrics: docker compose --profile monitoring up -d (see README -> Monitoring)
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: tg-archiver-prometheus
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    volumes:
+      - ./infrastructure/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   postgres18_data:
   redis_data:
   seaweedfs_data:
+  prometheus_data:
 
 # To run:
 # 1. Copy .env.example to .env and fill in Telegram credentials

@@ -179,6 +179,22 @@ async def startup_auth():
             await ensure_admin_user(db)
             await db.commit()
 
+@app.on_event("startup")
+async def startup_db_pool_metrics():
+    """Export db_pool_* gauges (scraped from /metrics)."""
+    from models.base import engine
+    from .utils.db_metrics import start_pool_monitoring
+
+    await start_pool_monitoring(engine)
+
+
+@app.on_event("shutdown")
+async def shutdown_db_pool_metrics():
+    from .utils.db_metrics import stop_pool_monitoring
+
+    await stop_pool_monitoring()
+
+
 # Rate limiting for auth endpoints (before auth middleware)
 app.add_middleware(RateLimitMiddleware)
 

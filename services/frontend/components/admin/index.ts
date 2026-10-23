@@ -14,3 +14,5 @@ export { Modal } from './Modal';
 export type { ModalProps } from './Modal';
 export { StatCard } from './StatCard';
 export type { StatCardProps } from './StatCard';
+export { LiveMetricsBanner } from './LiveMetricsBanner';
+export type { LiveMetrics } from './LiveMetricsBanner';

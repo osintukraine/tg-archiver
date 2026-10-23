@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 import httpx
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends
+from redis.exceptions import ResponseError
 from models.base import AsyncSessionLocal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,29 @@ from config.settings import settings
 from ..database import get_db
 
 router = APIRouter(prefix="/api/system", tags=["system"])
+
+# Must match processor RedisConsumer (STREAM_* and CONSUMER_GROUP)
+STREAMS = ("telegram:messages:realtime", "telegram:messages:backfill", "telegram:messages")
+CONSUMER_GROUP = "processor-workers"
+
+
+async def get_stream_backlog(client: redis.Redis) -> Dict[str, Any]:
+    """Sum the processor group's lag/pending/consumers over the real streams."""
+    total = {"found": False, "length": 0, "lag": 0, "pending": 0, "consumers": 0}
+    for stream in STREAMS:
+        try:
+            groups = await client.xinfo_groups(stream)
+            total["length"] += await client.xlen(stream)
+        except ResponseError:
+            continue  # stream does not exist yet
+        for group in groups:
+            if group.get("name") != CONSUMER_GROUP:
+                continue
+            total["found"] = True
+            total["lag"] += group.get("lag") or 0
+            total["pending"] += group.get("pending", 0)
+            total["consumers"] += group.get("consumers", 0)
+    return total
 
 
 @router.get("/config")
@@ -156,13 +180,13 @@ async def get_llm_health() -> Dict[str, Any]:
 async def check_redis_health() -> Dict[str, Any]:
     """Check Redis connection and queue depth."""
     try:
-        redis_client = redis.from_url(settings.REDIS_URL)
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
         await redis_client.ping()
 
-        # Get queue depth
+        # Backlog = not yet delivered + delivered but unacknowledged
         try:
-            stream_info = await redis_client.xinfo_stream("telegram_messages")
-            queue_depth = stream_info.get("length", 0)
+            backlog = await get_stream_backlog(redis_client)
+            queue_depth = backlog["lag"] + backlog["pending"]
         except Exception:
             queue_depth = 0
 
@@ -252,17 +276,16 @@ async def check_listener_health(db: AsyncSession) -> Dict[str, Any]:
 async def check_processor_health() -> Dict[str, Any]:
     """Check processor health via Redis consumer group lag."""
     try:
-        redis_client = redis.from_url(settings.REDIS_URL)
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-        # Get consumer group info
         try:
-            groups = await redis_client.xinfo_groups("telegram_messages")
-            workers_active = len(groups)
-
-            # Calculate total lag
-            total_lag = sum(group.get("lag", 0) for group in groups)
-
-            status = "healthy" if total_lag < 100 else "degraded"
+            backlog = await get_stream_backlog(redis_client)
+            workers_active = backlog["consumers"]
+            total_lag = backlog["lag"]
+            if not backlog["found"]:
+                status = "unknown"
+            else:
+                status = "healthy" if total_lag < 100 else "degraded"
         except Exception:
             workers_active = 0
             total_lag = 0
@@ -320,13 +343,6 @@ async def check_minio_health() -> Dict[str, Any]:
 
 
 # Application Services
-async def check_enricher_health() -> Dict[str, Any]:
-    """Check enricher service health (process-based, no HTTP endpoint)."""
-    # Enricher is a background service without HTTP endpoint
-    # We can infer health from database activity
-    return {"name": "enricher", "status": "unknown"}
-
-
 async def check_api_health() -> Dict[str, Any]:
     """Check API service health."""
     return await _check_http_health("api", "http://localhost:8000/health")
@@ -335,96 +351,6 @@ async def check_api_health() -> Dict[str, Any]:
 async def check_frontend_health() -> Dict[str, Any]:
     """Check Next.js frontend health."""
     return await _check_http_health("frontend", "http://frontend:3000/", expected_status=200)
-
-
-async def check_nocodb_health() -> Dict[str, Any]:
-    """Check NocoDB database UI health."""
-    return await _check_http_health("nocodb", "http://nocodb:8080/api/v1/health")
-
-
-async def check_rss_ingestor_health() -> Dict[str, Any]:
-    """Check RSS ingestor service health (background service)."""
-    return {"name": "rss-ingestor", "status": "unknown"}
-
-
-
-
-# Monitoring Stack
-async def check_prometheus_health() -> Dict[str, Any]:
-    """Check Prometheus metrics server health."""
-    return await _check_http_health("prometheus", "http://prometheus:9090/-/healthy")
-
-
-async def check_grafana_health() -> Dict[str, Any]:
-    """Check Grafana dashboards health."""
-    return await _check_http_health("grafana", "http://grafana:3000/api/health")
-
-
-async def check_alertmanager_health() -> Dict[str, Any]:
-    """Check AlertManager health."""
-    return await _check_http_health("alertmanager", "http://alertmanager:9093/-/healthy")
-
-
-# Exporters
-async def check_postgres_exporter_health() -> Dict[str, Any]:
-    """Check PostgreSQL exporter health."""
-    return await _check_http_health("postgres-exporter", "http://postgres-exporter:9187/metrics")
-
-
-async def check_redis_exporter_health() -> Dict[str, Any]:
-    """Check Redis exporter health."""
-    return await _check_http_health("redis-exporter", "http://redis-exporter:9121/metrics")
-
-
-async def check_cadvisor_health() -> Dict[str, Any]:
-    """Check cAdvisor container metrics health."""
-    return await _check_http_health("cadvisor", "http://cadvisor:8080/healthz")
-
-
-async def check_node_exporter_health() -> Dict[str, Any]:
-    """Check node exporter health."""
-    return await _check_http_health("node-exporter", "http://node-exporter:9100/")
-
-
-# Infrastructure Services
-async def check_watchtower_health() -> Dict[str, Any]:
-    """Check Watchtower auto-update service (no health endpoint)."""
-    return {"name": "watchtower", "status": "unknown"}
-
-
-async def check_ntfy_health() -> Dict[str, Any]:
-    """Check ntfy notification server health."""
-    return await _check_http_health("ntfy", "http://ntfy:80/v1/health")
-
-
-async def check_keycloak_health() -> Dict[str, Any]:
-    """Check Keycloak IAM health."""
-    try:
-        # Keycloak health endpoint doesn't follow standard HTTP patterns
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get("http://keycloak:8080/health")
-            if response.status_code == 200:
-                return {"name": "keycloak", "status": "healthy"}
-            else:
-                return {"name": "keycloak", "status": "degraded"}
-    except Exception:
-        return {"name": "keycloak", "status": "down"}
-
-
-async def check_oauth2_proxy_health() -> Dict[str, Any]:
-    """Check OAuth2 Proxy health."""
-    return await _check_http_health("oauth2-proxy", "http://oauth2-proxy:4180/ping")
-
-
-async def check_caddy_health() -> Dict[str, Any]:
-    """Check Caddy reverse proxy health."""
-    return await _check_http_health("caddy", "http://caddy:2019/config/")
-
-
-async def check_dashy_health() -> Dict[str, Any]:
-    """Check Dashy dashboard health."""
-    # Dashy uses a custom healthcheck, check main page
-    return await _check_http_health("dashy", "http://dashy:8080/")
 
 
 # =============================================================================
@@ -480,22 +406,13 @@ async def get_pipeline_status() -> Dict[str, Any]:
 async def check_queue_status() -> Dict[str, Any]:
     """Check if message queue is caught up."""
     try:
-        redis_client = redis.from_url(settings.REDIS_URL)
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-        # Get stream length
-        stream_info = await redis_client.xinfo_stream("telegram:messages")
-        queue_length = stream_info.get("length", 0)
-
-        # Get consumer group lag
-        try:
-            groups = await redis_client.xinfo_groups("telegram:messages")
-            lag = sum(g.get("lag", 0) for g in groups)
-            pending = sum(g.get("pending", 0) for g in groups)
-            consumers = sum(g.get("consumers", 0) for g in groups)
-        except Exception:
-            lag = queue_length
-            pending = 0
-            consumers = 0
+        backlog = await get_stream_backlog(redis_client)
+        queue_length = backlog["length"]
+        lag = backlog["lag"]
+        pending = backlog["pending"]
+        consumers = backlog["consumers"]
 
         await redis_client.close()
 

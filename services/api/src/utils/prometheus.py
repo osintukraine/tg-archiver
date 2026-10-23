@@ -5,6 +5,8 @@ Utility for querying Prometheus HTTP API from the FastAPI service.
 Used by /api/metrics/* endpoints to fetch real-time operational metrics.
 """
 
+import math
+
 import httpx
 from typing import Optional, Any
 from datetime import datetime
@@ -15,7 +17,7 @@ from observability import get_logger
 logger = get_logger(__name__)
 
 # Prometheus server URL (internal Docker network)
-PROMETHEUS_URL = getattr(settings, 'PROMETHEUS_URL', 'http://prometheus:9090')
+PROMETHEUS_URL = settings.PROMETHEUS_URL
 
 
 class PrometheusClient:
@@ -136,7 +138,9 @@ class PrometheusClient:
             try:
                 # Handle vector result
                 value = result[0].get("value", [None, default])
-                return float(value[1]) if len(value) > 1 else default
+                number = float(value[1]) if len(value) > 1 else default
+                # histogram_quantile over no data is NaN; never hand that to callers
+                return number if math.isfinite(number) else default
             except (IndexError, ValueError, TypeError):
                 return default
         return default

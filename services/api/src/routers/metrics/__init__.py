@@ -1,18 +1,14 @@
 """
-Metrics API Router (tg-archiver - No AI)
+Metrics API Router (admin only)
 
-Operational Metrics - Real-time metrics from Prometheus
-Used for monitoring dashboards, alerting, and the About page architecture view.
+Operational metrics read from Prometheus (raw PromQL over the metrics the
+services export; see utils/prometheus_metrics.py). Redis-cached for 15 s.
 
-Performance target: <50ms (Prometheus-backed, in-memory)
-Caching: Redis with 15s TTL
+- /api/metrics/overview - headline numbers (admin dashboard banner)
+- /api/metrics/pipeline - per-stage health
+- /api/metrics/services - listener / processor / api up and throughput
 
-Endpoints:
-- /api/metrics/overview - High-level platform stats
-- /api/metrics/pipeline - Pipeline stages for architecture diagram
-- /api/metrics/services - Per-service health and performance
-
-NOTE: LLM metrics removed (no AI in tg-archiver)
+Without a reachable Prometheus every endpoint answers prometheus_available=false.
 """
 
 from fastapi import APIRouter
@@ -23,7 +19,6 @@ from .services import router as services_router
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
-# Include sub-routers (LLM router removed)
 router.include_router(overview_router)
 router.include_router(pipeline_router)
 router.include_router(services_router)

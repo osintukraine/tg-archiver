@@ -73,22 +73,19 @@ async def get_system_health(
     """
     services: List[Dict[str, Any]] = []
 
-    # Run all checks in parallel for better performance
-    tasks = [
-        # Core Infrastructure
-        check_postgres_health(db),
+    # The two DB checks share one AsyncSession, which forbids concurrent use: run them in turn.
+    # The others don't touch the session and run concurrently.
+    postgres = await check_postgres_health(db)
+    listener = await check_listener_health(db)
+    redis_, minio, processor, api, frontend = await asyncio.gather(
         check_redis_health(),
         check_minio_health(),
-
-        # Application Services
-        check_listener_health(db),
         check_processor_health(),
         check_api_health(),
         check_frontend_health(),
-    ]
-
-    # Execute all checks concurrently
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        return_exceptions=True,
+    )
+    results = [postgres, redis_, minio, listener, processor, api, frontend]
 
     # Filter out exceptions and add to services list
     for result in results:
@@ -240,29 +237,22 @@ async def check_postgres_health(db: AsyncSession) -> Dict[str, Any]:
 async def check_listener_health(db: AsyncSession) -> Dict[str, Any]:
     """Check listener health via recent message timestamps."""
     try:
-        # Check if we've received messages in the last 5 minutes
+        # Age of the newest archived message: healthy under 5 minutes, degraded above
         result = await db.execute(
-            text("""
-                SELECT MAX(created_at) as last_message
-                FROM messages
-                WHERE created_at > NOW() - INTERVAL '5 minutes'
-            """)
+            text("SELECT EXTRACT(EPOCH FROM NOW() - MAX(created_at)) FROM messages")
         )
-        row = result.fetchone()
-        last_message = row[0] if row else None
-
-        if last_message:
-            age_seconds = (datetime.utcnow() - last_message.replace(tzinfo=None)).total_seconds()
-            status = "healthy" if age_seconds < 300 else "degraded"
+        age = result.scalar()
+        if age is None:
+            age_seconds, status = None, "degraded"  # nothing archived yet
         else:
-            age_seconds = 999
-            status = "degraded"
+            age_seconds = max(0, int(age))
+            status = "healthy" if age_seconds < 300 else "degraded"
 
         return {
             "name": "listener",
             "status": status,
             "metrics": {
-                "last_message_age_seconds": int(age_seconds)
+                "last_message_age_seconds": age_seconds
             }
         }
     except Exception as e:

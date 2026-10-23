@@ -5,8 +5,6 @@ Tracks key operational metrics:
 - Messages received/processed
 - Active channels being monitored
 - Channel discovery operations
-- Translation usage
-- Queue depth
 - Error rates
 
 Metrics are exposed on port 8001 (/metrics endpoint).
@@ -16,6 +14,7 @@ import logging
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
+from typing import Optional
 
 from prometheus_client import Counter, Gauge, Histogram, Info, start_http_server
 
@@ -59,7 +58,7 @@ messages_failed = Counter(
 channels_discovered = Gauge(
     "telegram_channels_discovered",
     "Number of channels discovered from folders",
-    ["folder", "rule"],
+    ["folder"],
 )
 
 channels_active = Gauge(
@@ -76,41 +75,6 @@ discovery_duration = Histogram(
     "telegram_discovery_duration_seconds",
     "Time taken for channel discovery operation",
     buckets=[1, 5, 10, 30, 60, 120],  # seconds
-)
-
-# Translation metrics
-translations_total = Counter(
-    "translations_total",
-    "Total translation operations",
-    ["provider", "source_lang", "target_lang"],
-)
-
-translation_characters = Counter(
-    "translation_characters_total",
-    "Total characters translated",
-    ["provider"],
-)
-
-translation_cost_usd = Counter(
-    "translation_cost_usd_total",
-    "Total translation cost in USD",
-    ["provider"],
-)
-
-translation_duration = Histogram(
-    "translation_duration_seconds",
-    "Time taken for translation operation",
-    ["provider"],
-    buckets=[0.1, 0.5, 1, 2, 5, 10],  # seconds
-)
-
-# Queue metrics
-queue_depth = Gauge(
-    "redis_queue_depth", "Number of messages waiting in Redis queue"
-)
-
-queue_pending = Gauge(
-    "redis_queue_pending", "Number of messages pending acknowledgment"
 )
 
 # Connection metrics
@@ -345,51 +309,23 @@ def record_message_failed(channel_id: int, error_type: str):
 def record_discovery_operation(
     status: str,
     duration_seconds: float,
-    channels_found: int = 0,
+    channels_by_folder: Optional[dict[str, int]] = None,
 ):
     """
-    Record a channel discovery operation.
+    Record a channel discovery operation (one folder read, every sync interval).
 
     Args:
-        status: Operation status ("success" or "failed")
+        status: "success" or "failed"
         duration_seconds: Time taken in seconds
-        channels_found: Number of channels discovered
+        channels_by_folder: Channels found per Telegram folder (success only)
     """
     discovery_operations.labels(status=status).inc()
     discovery_duration.observe(duration_seconds)
 
     if status == "success":
-        channels_active.set(channels_found)
-
-
-def record_translation(
-    provider: str,
-    source_lang: str,
-    target_lang: str,
-    character_count: int,
-    cost_usd: float,
-    duration_seconds: float,
-):
-    """
-    Record a translation operation.
-
-    Args:
-        provider: Translation provider (deepl, google)
-        source_lang: Source language code
-        target_lang: Target language code
-        character_count: Number of characters translated
-        cost_usd: Cost in USD
-        duration_seconds: Time taken in seconds
-    """
-    translations_total.labels(
-        provider=provider,
-        source_lang=source_lang,
-        target_lang=target_lang,
-    ).inc()
-
-    translation_characters.labels(provider=provider).inc(character_count)
-    translation_cost_usd.labels(provider=provider).inc(cost_usd)
-    translation_duration.labels(provider=provider).observe(duration_seconds)
+        channels_discovered.clear()  # folders removed from Telegram must not linger
+        for folder, count in (channels_by_folder or {}).items():
+            channels_discovered.labels(folder=folder or "").set(count)
 
 
 def record_flood_wait(wait_seconds: int):
@@ -410,18 +346,6 @@ def record_flood_wait(wait_seconds: int):
         bucket = "3600+"
 
     flood_waits.labels(wait_seconds_bucket=bucket).inc()
-
-
-def update_queue_metrics(depth: int, pending: int):
-    """
-    Update queue depth metrics.
-
-    Args:
-        depth: Number of messages in queue
-        pending: Number of pending acknowledgments
-    """
-    queue_depth.set(depth)
-    queue_pending.set(pending)
 
 
 def record_connection_error(service: str):

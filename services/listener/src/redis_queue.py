@@ -36,6 +36,8 @@ from redis.exceptions import RedisError
 from config.settings import settings
 from observability import redact_url
 
+from .metrics import record_connection_error, redis_connections
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,6 +92,7 @@ class RedisQueue:
             await self.client.ping()
 
             self._connection_count += 1
+            redis_connections.set(1)
             logger.info(
                 f"Connected to Redis (connection #{self._connection_count}): "
                 f"{redact_url(settings.REDIS_URL)}"
@@ -100,12 +103,14 @@ class RedisQueue:
 
         except RedisError as e:
             logger.error(f"Failed to connect to Redis: {e}")
+            record_connection_error("redis")
             raise
 
     async def disconnect(self):
         """Disconnect from Redis."""
         if self.client:
             await self.client.close()
+            redis_connections.set(0)
             logger.info("Disconnected from Redis")
 
     async def _ensure_consumer_group(self):

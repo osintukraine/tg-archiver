@@ -67,6 +67,7 @@ from hashing import MessageHasher
 from observability.metrics import (
     record_message_processed,
     record_entity_extraction,
+    record_media_archival_failure,
     record_media_archived,
     record_message_archived_timestamp,
     messages_archived_total,
@@ -198,15 +199,14 @@ class MessageProcessor:
                 entity_extraction_duration = time.time() - entity_extraction_start
 
                 # Record entity extraction metrics
-                for entity_type, entity_list in entities.items():
-                    count = len(entity_list) if isinstance(entity_list, list) else 1
-                    if count > 0:
-                        record_entity_extraction(
-                            entity_type=entity_type,
-                            channel_id=message.channel_id,
-                            count=count,
-                            duration_seconds=entity_extraction_duration,
-                        )
+                record_entity_extraction(
+                    channel_id=message.channel_id,
+                    counts={
+                        entity_type: len(entity_list) if isinstance(entity_list, list) else 1
+                        for entity_type, entity_list in entities.items()
+                    },
+                    duration_seconds=entity_extraction_duration,
+                )
 
                 logger.debug(f"Extracted {entity_count} entities")
 
@@ -217,6 +217,7 @@ class MessageProcessor:
 
                 # Step 5: Media Archival
                 media_file_ids = []
+                media_failure_reason = None  # set when media is expected but nothing archived
 
                 # storage.media_enabled: admin can switch archiving off (cached lookup)
                 if message.media_type and await get_override("storage.media_enabled") is not False:
@@ -258,8 +259,12 @@ class MessageProcessor:
 
                         except Exception as e:
                             logger.error(f"Failed to archive media: {e}")
+                            media_failure_reason = "error"
+                        if not media_file_ids and media_failure_reason is None:
+                            media_failure_reason = "no_file"
                     else:
                         logger.warning("Media archival requested but archiver/client not available")
+                        media_failure_reason = "unavailable"
 
                 # Step 6: Persist to PostgreSQL
                 await self._persist_message(
@@ -287,9 +292,9 @@ class MessageProcessor:
                         record_media_archived(
                             media_type=message.media_type or "unknown",
                             channel_id=message.channel_id,
-                            size_bytes=0,
-                            deduplicated=False,
                         )
+                elif media_failure_reason:
+                    record_media_archival_failure(media_failure_reason, message.media_type)
 
                 # Observes tg_processing_duration_seconds exactly once
                 record_message_processed(

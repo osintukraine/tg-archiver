@@ -25,7 +25,6 @@ from .metrics import (
     record_entity_extraction,
     record_media_archived,
     record_message_processed,
-    record_topic,
     record_rss_generation,
     record_search_operation,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "api_metrics_server",
     # Helper functions
     "record_message_processed",
-    "record_topic",
     "record_entity_extraction",
     "record_media_archived",
     "record_search_operation",

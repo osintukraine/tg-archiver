@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from models.message import Message
 from models.channel import Channel
 from models.media import MessageMedia, MediaFile
+from observability.metrics import record_search_operation
 
 from ..database import get_db
 from ..schemas import (
@@ -638,9 +639,14 @@ async def search_messages(
         query = query.where(and_(*filters))
 
     # Count total results (before pagination)
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar_one()
+    search_kind = "fulltext" if q else "filters"
+    try:
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar_one()
+    except Exception:
+        record_search_operation(search_kind, "error")
+        raise
 
     # Apply sorting - default fallback to telegram_date (actual message time)
     # Use NULLS LAST to ensure messages with NULL dates don't appear at top
@@ -655,8 +661,13 @@ async def search_messages(
     query = query.limit(page_size).offset(offset)
 
     # Execute query
-    result = await db.execute(query)
-    messages = result.unique().scalars().all()  # .unique() needed for eager loading in SQLAlchemy 2.0
+    try:
+        result = await db.execute(query)
+        messages = result.unique().scalars().all()  # .unique() needed for eager loading in SQLAlchemy 2.0
+    except Exception:
+        record_search_operation(search_kind, "error")
+        raise
+    record_search_operation(search_kind, "ok", total)
 
     # Calculate pagination metadata
     total_pages = (total + page_size - 1) // page_size

@@ -106,5 +106,6 @@ def test_removed_osint_metrics_are_not_registered():
         "tg_llm_requests_total", "tg_rule_evaluations_total", "tg_messages_skipped_total",
         "tg_classifier_mode_total", "tg_api_requests_total", "tg_database_connections_active",
         "tg_pipeline_active", "tg_queue_depth_realtime", "tg_queue_consumer_lag_seconds",
+        "tg_topics_total", "tg_database_query_duration_seconds",
     ):
         assert gone not in REGISTRY._names_to_collectors, gone

@@ -61,13 +61,6 @@ processing_duration_seconds = Histogram(
     buckets=[0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10],
 )
 
-# Topic classification
-topics_total = Counter(
-    "tg_topics_total",
-    "Messages classified by topic",
-    ["topic"],  # news, announcement, discussion, media, important, archive, offtopic, other
-)
-
 # =============================================================================
 # ENTITY EXTRACTION METRICS
 # =============================================================================
@@ -121,8 +114,10 @@ media_errors_total = Counter(
 
 media_archival_failures_total = Counter(
     "tg_media_archival_failures_total",
-    "Messages with media_type but no media archived (silent failures)",
-    ["channel_id", "media_type"],
+    "Messages with media but no file archived. reason: no_file (download failed, empty or "
+    "skipped by the size cap), error (archiver raised), unavailable (no archiver/client). "
+    "Archiving switched off by the admin override is intended and not counted",
+    ["reason", "media_type"],
 )
 
 # =============================================================================
@@ -161,7 +156,7 @@ translation_errors_total = Counter(
 search_operations_total = Counter(
     "tg_search_operations_total",
     "Total search operations",
-    ["search_type"],  # text, channel, topic, entity
+    ["kind", "status"],  # kind: fulltext | filters; status: ok | error
 )
 
 search_results_count = Histogram(
@@ -174,25 +169,14 @@ search_results_count = Histogram(
 rss_feeds_generated_total = Counter(
     "tg_rss_feeds_generated_total",
     "Total RSS feeds generated",
-    ["feed_type"],  # search, channel, topic
+    ["format", "kind"],  # format: rss | atom | json; kind: search | channel | topic
 )
 
 rss_generation_duration_seconds = Histogram(
     "tg_rss_generation_duration_seconds",
     "RSS feed generation time",
-    ["feed_type"],
+    ["format", "kind"],
     buckets=[0.1, 0.5, 1, 2, 5, 10],
-)
-
-# =============================================================================
-# DATABASE METRICS (via PostgreSQL Exporter)
-# =============================================================================
-
-database_query_duration_seconds = Histogram(
-    "tg_database_query_duration_seconds",
-    "Database query duration",
-    ["query_type"],  # select, insert, update, delete
-    buckets=[0.001, 0.01, 0.05, 0.1, 0.5, 1, 5],
 )
 
 # =============================================================================
@@ -254,56 +238,47 @@ def record_message_processed(worker_id: str, channel_id: int, duration_seconds: 
     processing_duration_seconds.labels(stage="total").observe(duration_seconds)
 
 
-def record_topic(topic: str) -> None:
-    """Record topic classification."""
-    topics_total.labels(topic=topic).inc()
-
-
 def record_entity_extraction(
-    entity_type: str, channel_id: int, count: int, duration_seconds: float
+    channel_id: int, counts: dict[str, int], duration_seconds: float
 ) -> None:
-    """Record entity extraction."""
-    entities_extracted_total.labels(
-        entity_type=entity_type,
-        channel_id=str(channel_id),
-    ).inc(count)
+    """Record one entity-extraction run: entities per type, and its duration once."""
+    for entity_type, count in counts.items():
+        if count > 0:
+            entities_extracted_total.labels(
+                entity_type=entity_type,
+                channel_id=str(channel_id),
+            ).inc(count)
     entity_extraction_duration_seconds.observe(duration_seconds)
 
 
-def record_media_archived(
-    media_type: str, channel_id: int, size_bytes: int, deduplicated: bool
-) -> None:
-    """Record media archival."""
+def record_media_archived(media_type: str, channel_id: int) -> None:
+    """Count one archived media file for a message.
+
+    Bytes stored and dedup savings are recorded by MediaArchiver, where the size
+    and the dedup decision are known (recording them here too would double count).
+    """
     media_archived_total.labels(
         media_type=media_type,
         channel_id=str(channel_id),
     ).inc()
-    media_storage_bytes_total.labels(media_type=media_type).inc(size_bytes)
-
-    if deduplicated:
-        media_deduplication_saves_total.labels(media_type=media_type).inc(size_bytes)
 
 
-def record_media_archival_failure(channel_id: int, media_type: str) -> None:
-    """Record a media archival failure (message has media_type but no files archived)."""
-    media_archival_failures_total.labels(
-        channel_id=str(channel_id),
-        media_type=media_type,
-    ).inc()
+def record_media_archival_failure(reason: str, media_type: str) -> None:
+    """Record a message that has media but no file was archived."""
+    media_archival_failures_total.labels(reason=reason, media_type=media_type).inc()
 
 
-def record_search_operation(search_type: str, result_count: int) -> None:
-    """Record search operation."""
-    search_operations_total.labels(search_type=search_type).inc()
-    search_results_count.observe(result_count)
+def record_search_operation(kind: str, status: str, result_count: int | None = None) -> None:
+    """Record a message search; the result-size histogram only on success."""
+    search_operations_total.labels(kind=kind, status=status).inc()
+    if result_count is not None:
+        search_results_count.observe(result_count)
 
 
-def record_rss_generation(feed_type: str, duration_seconds: float) -> None:
-    """Record RSS feed generation."""
-    rss_feeds_generated_total.labels(feed_type=feed_type).inc()
-    rss_generation_duration_seconds.labels(feed_type=feed_type).observe(
-        duration_seconds
-    )
+def record_rss_generation(format: str, kind: str, duration_seconds: float) -> None:
+    """Record RSS/Atom/JSON feed generation."""
+    rss_feeds_generated_total.labels(format=format, kind=kind).inc()
+    rss_generation_duration_seconds.labels(format=format, kind=kind).observe(duration_seconds)
 
 
 def record_queue_depth(consumer_group: str, pending_count: int) -> None:

@@ -1,0 +1,73 @@
+rule_files:
+  - ../rules/alerts.yml
+evaluation_interval: 1m
+
+tests:
+  # Listener quiet: last message at epoch 100 and never again
+  - interval: 1m
+    input_series:
+      - series: 'telegram_last_message_timestamp{job="listener"}'
+        values: '100+0x40'
+      # unset gauge (0) must not alert
+      - series: 'tg_message_last_archived_timestamp{job="processor"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ListenerQuiet
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: ListenerQuiet
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Listener has received no Telegram message for 15 minutes
+              description: Last message seen 28m 20s ago. Check the listener logs and Telegram session.
+      - eval_time: 30m
+        alertname: ArchiveStalled
+        exp_alerts: []
+
+  # DLQ: empty for 6 minutes, then 3 messages
+  - interval: 1m
+    input_series:
+      - series: 'tg_dlq_messages{job="processor"}'
+        values: '0 0 0 0 0 0 3+0x34'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DLQGrowing
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: DLQGrowing
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: Messages are still failing into the dead-letter queue
+              description: The DLQ grew by 3 in the last 30 minutes. Check processor logs.
+      - eval_time: 9m
+        alertname: DLQNotEmpty
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: DLQNotEmpty
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Dead-letter queue holds failed messages
+              description: "3 message(s) in telegram:messages:dlq. Inspect and replay via /api/admin/dlq."
+
+  # Target down: listener down, api up
+  - interval: 1m
+    input_series:
+      - series: 'up{job="listener", instance="listener:8001"}'
+        values: '0+0x10'
+      - series: 'up{job="api", instance="api:8000"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: TargetDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: listener, instance: "listener:8001"}
+            exp_annotations:
+              summary: "Scrape target listener is down"
+              description: "Prometheus cannot scrape listener:8001 (job listener) for 2 minutes."

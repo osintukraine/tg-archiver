@@ -21,6 +21,8 @@ Only one folder is monitored.
 
 import asyncio
 import logging
+import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -36,6 +38,7 @@ from telethon.utils import get_peer_id
 from telethon.tl.types import PeerChannel, InputPeerChannel
 
 from .backfill_service import BackfillService
+from .metrics import channels_active, record_discovery_operation
 from config.platform_config import get_override
 from config.settings import settings
 from models.base import AsyncSessionLocal
@@ -216,7 +219,7 @@ class ChannelDiscovery:
 
     async def discover_channels(self) -> list[Channel]:
         """
-        Discover all channels from Telegram folders.
+        Discover all channels from Telegram folders and record discovery metrics.
 
         Returns:
             List of discovered Channel models (not yet saved to DB)
@@ -224,6 +227,22 @@ class ChannelDiscovery:
         Raises:
             FloodWaitError: If Telegram rate-limits us
         """
+        start = time.monotonic()
+        try:
+            channels = await self._discover_channels()
+        except Exception:
+            record_discovery_operation("failed", time.monotonic() - start)
+            raise
+        if channels is None:  # Telegram schema mismatch, see _discover_channels
+            record_discovery_operation("failed", time.monotonic() - start)
+            return []
+        record_discovery_operation(
+            "success", time.monotonic() - start, Counter(c.folder for c in channels)
+        )
+        return channels
+
+    async def _discover_channels(self) -> Optional[list[Channel]]:
+        """Read the folders; None when the Telegram API schema is out of date."""
         logger.info("Starting channel discovery from Telegram folders...")
 
         try:
@@ -239,7 +258,7 @@ class ChannelDiscovery:
                 "Folder discovery temporarily disabled. Update Telethon to fix: pip install -U telethon"
             )
             logger.debug(f"Full error: {e}")
-            return []  # Return empty list, will use existing database channels
+            return None  # caller returns [] and keeps the existing database channels
 
         logger.info(f"Found {len(filters)} Telegram folders")
 
@@ -447,6 +466,7 @@ class ChannelDiscovery:
             # Count total active channels
             result = await session.execute(select(Channel).where(Channel.active.is_(True)))
             stats["total_active"] = len(result.scalars().all())
+            channels_active.set(stats["total_active"])
 
             logger.info(
                 f"Database sync complete: "

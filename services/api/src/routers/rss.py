@@ -19,6 +19,7 @@ Specifications:
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -32,6 +33,7 @@ from config.platform_config import get_override
 from models.channel import Channel
 from models.message import Message
 from models.media import MessageMedia
+from observability.metrics import record_rss_generation
 
 from ..auth.feed_auth import FeedAuthResult, verify_feed_token
 from ..database import get_db
@@ -292,6 +294,7 @@ async def feed_search(
 
     # Generate feed
     generator = FeedGenerator(base_url)
+    started = time.perf_counter()
     feed_content = generator.generate(
         messages=list(messages),
         title=title,
@@ -299,6 +302,7 @@ async def feed_search(
         feed_url=feed_url,
         format=feed_format,
     )
+    record_rss_generation(feed_format.value, "search", time.perf_counter() - started)
 
     # Record subscription for authenticated access
     if feed_auth.authenticated and feed_auth.token:
@@ -422,13 +426,14 @@ async def feed_channel(
     base_url = str(request.base_url).rstrip("/")
     feed_url = f"{base_url}/rss/channel/{username}?format={format}"
 
-    title = f"@{username}"
+    title = f"{username}"
     if channel.name:
         title = f"{channel.name} (@{username})"
 
     description = channel.description or f"Feed for Telegram channel @{username}"
 
     generator = FeedGenerator(base_url)
+    started = time.perf_counter()
     feed_content = generator.generate(
         messages=list(messages),
         title=title,
@@ -436,6 +441,7 @@ async def feed_channel(
         feed_url=feed_url,
         format=feed_format,
     )
+    record_rss_generation(feed_format.value, "channel", time.perf_counter() - started)
 
     # Record subscription for authenticated access
     if feed_auth.authenticated and feed_auth.token:
@@ -560,6 +566,7 @@ async def feed_topic(
     description = f"Messages classified as '{topic}' from last {days} days"
 
     generator = FeedGenerator(base_url)
+    started = time.perf_counter()
     feed_content = generator.generate(
         messages=list(messages),
         title=title,
@@ -567,6 +574,7 @@ async def feed_topic(
         feed_url=feed_url,
         format=feed_format,
     )
+    record_rss_generation(feed_format.value, "topic", time.perf_counter() - started)
 
     # Record subscription for authenticated access
     if feed_auth.authenticated and feed_auth.token:

@@ -9,6 +9,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from prometheus_client import REGISTRY
 from sqlalchemy import text
 
 from models.base import AsyncSessionLocal, engine
@@ -80,3 +81,20 @@ async def test_exclusion_and_or(http, seed):
 
 async def test_whitespace_query_is_no_query(http, seed):
     assert await found(http, seed, "   ") == {1, 2, 3, 4}
+
+
+def ops(kind, status="ok"):
+    return REGISTRY.get_sample_value("tg_search_operations_total", {"kind": kind, "status": status}) or 0
+
+
+async def test_search_metrics_split_fulltext_and_filters(http, seed):
+    fulltext, filters = ops("fulltext"), ops("filters")
+    results = REGISTRY.get_sample_value("tg_search_results_count_sum") or 0
+
+    await found(http, seed, "Ukraine")  # 2 hits
+    resp = await http.get("/api/messages/", params={"channel_id": seed, "page_size": 100})
+    assert resp.status_code == 200  # 4 hits
+
+    assert ops("fulltext") == fulltext + 1
+    assert ops("filters") == filters + 1
+    assert REGISTRY.get_sample_value("tg_search_results_count_sum") == results + 2 + 4

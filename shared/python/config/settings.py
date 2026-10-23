@@ -193,26 +193,6 @@ class Settings(BaseSettings):
     )
 
     # =============================================================================
-    # OLLAMA (read by the API system router)
-    # =============================================================================
-    OLLAMA_BASE_URL: str = Field(
-        default="http://ollama:11434", description="Ollama API endpoint"
-    )
-    OLLAMA_MODEL: str = Field(
-        default="qwen2.5:3b", description="Ollama model to use (qwen2.5:3b recommended for multilingual content)"
-    )
-    OLLAMA_TIMEOUT: int = Field(default=30, description="LLM request timeout (seconds)")
-    # External LLM Endpoint Support
-    OLLAMA_API_KEY: Optional[str] = Field(
-        default=None,
-        description="API key for external Ollama endpoints (optional, for authenticated access)"
-    )
-    OLLAMA_EXTERNAL_MODE: bool = Field(
-        default=False,
-        description="Enable external endpoint mode (adds retry logic, longer timeouts)"
-    )
-
-    # =============================================================================
     # TRANSLATION (DeepL Pro - Free API)
     # =============================================================================
     TRANSLATION_ENABLED: bool = Field(default=True, description="Enable translation")

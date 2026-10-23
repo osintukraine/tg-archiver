@@ -70,7 +70,7 @@ from observability.metrics import (
     record_media_archived,
     record_message_archived_timestamp,
     messages_archived_total,
-    processing_duration_seconds,
+    record_message_processed_by_stream,
 )
 
 logger = logging.getLogger(__name__)
@@ -291,15 +291,13 @@ class MessageProcessor:
                             deduplicated=False,
                         )
 
-                processing_duration_seconds.labels(stage="total").observe(
-                    time.time() - process_start_time
-                )
-
+                # Observes tg_processing_duration_seconds exactly once
                 record_message_processed(
                     worker_id=worker_id,
                     channel_id=message.channel_id,
                     duration_seconds=time.time() - process_start_time,
                 )
+                record_message_processed_by_stream(message.source_stream or "")
 
                 logger.info(
                     f"Message archived: message_id={message.message_id}, "

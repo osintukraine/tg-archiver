@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     # =============================================================================
     # REDIS (Message Queue & Cache)
     # =============================================================================
+    PROMETHEUS_URL: str = Field(default="http://prometheus:9090", description="Prometheus base URL (api /api/metrics/*)")
     REDIS_HOST: str = Field(default="redis", description="Redis host")
     REDIS_PORT: int = Field(default=6379, description="Redis port")
     REDIS_PASSWORD: str = Field(..., description="Redis password")

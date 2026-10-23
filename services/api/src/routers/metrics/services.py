@@ -1,24 +1,27 @@
 """
-Services Metrics Endpoint
+Services Metrics Endpoint (admin only)
 
-GET /api/metrics/services - Per-service health and performance metrics
-Shows status of all platform services from Prometheus.
-
-Caching: Redis with 15s TTL
+GET /api/metrics/services - up/down and throughput of listener, processor, api.
 """
 
 import asyncio
 import math
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
+
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
-from typing import List, Optional, Any
-from datetime import datetime
-from enum import Enum
 
+from ...dependencies import AdminUser
+from ...utils.cache import CacheTTL, get_or_compute, make_cache_key
 from ...utils.prometheus import get_prometheus_client
-from ...utils.cache import get_or_compute, make_cache_key, CacheTTL
+from ...utils.prometheus_metrics import PrometheusMetrics as PM
+from .overview import set_metrics_headers
 
 router = APIRouter()
+
+QUEUE_DEGRADED_DEPTH = 1000
 
 
 class ServiceStatus(str, Enum):
@@ -29,83 +32,40 @@ class ServiceStatus(str, Enum):
 
 
 class ServiceMetric(BaseModel):
-    """Metrics for a single service."""
     name: str
     display_name: str
     status: ServiceStatus
-    category: str  # core, enrichment, monitoring, infrastructure
-
-    # Optional metrics (service-specific)
-    requests_per_second: Optional[float] = None
-    latency_ms: Optional[float] = None
-    queue_depth: Optional[int] = None
-    connections: Optional[int] = None
-    memory_mb: Optional[float] = None
-    error_rate: Optional[float] = None
-
-    # Uptime
-    up: bool = True
+    requests_per_second: float | None = None  # messages/s for listener and processor
+    queue_depth: int | None = None
+    up: bool = False
 
 
 class ServicesMetrics(BaseModel):
-    """All services metrics."""
     timestamp: str
-
-    # Summary
     total_services: int
     healthy_count: int
     degraded_count: int
     down_count: int
-
-    # Services by category
-    services: List[ServiceMetric]
-
-    # Metadata
+    services: list[ServiceMetric]
     prometheus_available: bool
     cached: bool = False
-    cache_ttl_seconds: int = 15
+    cache_ttl_seconds: int = CacheTTL.METRICS
 
 
-# Service definitions with their Prometheus metrics
+# Prometheus scrape job == service name
 SERVICE_DEFINITIONS = [
-    # Core services
-    {"name": "listener", "display": "Telegram Listener", "category": "core",
-     "up_metric": "up{job='listener'}", "rate_metric": "tg:messages_processed:rate5m"},
-    {"name": "processor", "display": "Processor Workers", "category": "core",
-     "up_metric": "up{job='processor'}", "rate_metric": "tg:messages_archived:rate5m"},
-    {"name": "api", "display": "REST API", "category": "core",
-     "up_metric": "up{job='api'}", "rate_metric": "rate(tg_api_requests_total[5m])"},
-    {"name": "frontend", "display": "Next.js Frontend", "category": "core",
-     "up_metric": "up{job='frontend'}"},
-
-    # Data stores
-    {"name": "postgres", "display": "PostgreSQL", "category": "infrastructure",
-     "up_metric": "pg_up", "conn_metric": "pg_stat_activity_count"},
-    {"name": "redis", "display": "Redis", "category": "infrastructure",
-     "up_metric": "redis_up", "mem_metric": "redis_memory_used_bytes"},
-    {"name": "seaweedfs", "display": "SeaweedFS Storage", "category": "infrastructure",
-     "up_metric": "up{job='seaweedfs'}"},
-
-    # Enrichment
-    {"name": "enrichment", "display": "Enrichment Workers", "category": "enrichment",
-     "up_metric": "up{job='enrichment'}", "queue_metric": "sum(enrichment_queue_depth)"},
-    {"name": "ollama", "display": "Ollama LLM", "category": "enrichment",
-     "up_metric": "up{job='ollama'}"},
-
-    # Monitoring
-    {"name": "prometheus", "display": "Prometheus", "category": "monitoring",
-     "up_metric": "up{job='prometheus'}"},
-    {"name": "grafana", "display": "Grafana", "category": "monitoring",
-     "up_metric": "up{job='grafana'}"},
+    {"name": "listener", "display": "Telegram Listener", "rate_metric": PM.MESSAGES_RECEIVED_RATE},
+    {"name": "processor", "display": "Processor", "rate_metric": PM.MESSAGES_ARCHIVED_RATE,
+     "queue_metric": PM.QUEUE_DEPTH},
+    {"name": "api", "display": "REST API", "rate_metric": PM.API_REQUESTS_RATE},
 ]
 
 
-async def _async_none():
-    """Return None as an async coroutine."""
+async def _absent() -> None:
     return None
 
 
-def _safe_metric(results: List[Any], idx: int) -> Any:
+def _safe_metric(results: list[Any], idx: int) -> Any:
     """Value at `idx` of gathered Prometheus results; None for missing, errors, NaN or inf."""
     if idx >= len(results):
         return None
@@ -118,9 +78,8 @@ def _safe_metric(results: List[Any], idx: int) -> Any:
 
 
 def _empty_services_metrics() -> dict:
-    """Return empty services metrics when Prometheus unavailable."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "total_services": 0,
         "healthy_count": 0,
         "degraded_count": 0,
@@ -132,80 +91,53 @@ def _empty_services_metrics() -> dict:
     }
 
 
-async def _fetch_services_metrics() -> dict:
-    """Fetch per-service metrics from Prometheus."""
-    prom = get_prometheus_client()
+def _service_status(up: float | None, queue: float | None) -> ServiceStatus:
+    """No `up` series = unknown, up == 0 = down, deep backlog = degraded."""
+    if up is None:
+        return ServiceStatus.unknown
+    if up == 0:
+        return ServiceStatus.down
+    if queue is not None and queue > QUEUE_DEGRADED_DEPTH:
+        return ServiceStatus.degraded
+    return ServiceStatus.healthy
 
+
+async def _fetch_services_metrics() -> dict:
+    prom = get_prometheus_client()
     if not await prom.is_healthy():
         return _empty_services_metrics()
 
     services = []
-    healthy = 0
-    degraded = 0
-    down = 0
-
     for svc in SERVICE_DEFINITIONS:
-        # Fetch metrics for this service
-        up_metric = svc.get("up_metric")
-        rate_metric = svc.get("rate_metric")
         queue_metric = svc.get("queue_metric")
-        mem_metric = svc.get("mem_metric")
-        conn_metric = svc.get("conn_metric")
-
-        # Build queries - only for metrics that exist
-        queries = [
-            prom.get_scalar(up_metric, 0) if up_metric else _async_none(),
-            prom.get_scalar(rate_metric, 0) if rate_metric else _async_none(),
-            prom.get_scalar(queue_metric, 0) if queue_metric else _async_none(),
-            prom.get_scalar(mem_metric, 0) if mem_metric else _async_none(),
-            prom.get_scalar(conn_metric, 0) if conn_metric else _async_none(),
-        ]
-
-        results = await asyncio.gather(*queries, return_exceptions=True)
-
-        is_up = _safe_metric(results, 0)
+        results = await asyncio.gather(
+            prom.query(PM.up(svc["name"])),
+            prom.get_scalar(svc["rate_metric"], 0),
+            prom.get_scalar(queue_metric, 0) if queue_metric else _absent(),
+            return_exceptions=True,
+        )
+        up_series = results[0] if isinstance(results[0], list) else []
+        up = float(up_series[0]["value"][1]) if up_series else None
         rate = _safe_metric(results, 1)
         queue = _safe_metric(results, 2)
-        memory = _safe_metric(results, 3)
-        conns = _safe_metric(results, 4)
-
-        # Determine status
-        if is_up is None or is_up == 0:
-            status = ServiceStatus.unknown
-        elif is_up == 1:
-            status = ServiceStatus.healthy
-        else:
-            status = ServiceStatus.degraded
-
-        # Special case: if we have queue depth, check for backpressure
-        if queue is not None and queue > 1000:
-            status = ServiceStatus.degraded
-
-        if status == ServiceStatus.healthy:
-            healthy += 1
-        elif status == ServiceStatus.degraded:
-            degraded += 1
-        elif status == ServiceStatus.down:
-            down += 1
-
         services.append({
             "name": svc["name"],
             "display_name": svc["display"],
-            "status": status.value,
-            "category": svc["category"],
-            "requests_per_second": round(rate, 2) if rate else None,
-            "queue_depth": int(queue) if queue else None,
-            "memory_mb": round(memory / (1024 * 1024), 1) if memory else None,
-            "connections": int(conns) if conns else None,
-            "up": is_up == 1 if is_up is not None else False,
+            "status": _service_status(up, queue).value,
+            "requests_per_second": round(rate, 2) if rate is not None else None,
+            "queue_depth": int(queue) if queue is not None else None,
+            "up": up == 1,
         })
 
+    def count(status: ServiceStatus) -> int:
+        return sum(1 for s in services if s["status"] == status.value)
+
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "total_services": len(services),
-        "healthy_count": healthy,
-        "degraded_count": degraded,
-        "down_count": down,
+        "healthy_count": count(ServiceStatus.healthy),
+        "degraded_count": count(ServiceStatus.degraded),
+        "down_count": count(ServiceStatus.down),
         "services": services,
         "prometheus_available": True,
         "cached": False,
@@ -214,36 +146,14 @@ async def _fetch_services_metrics() -> dict:
 
 
 @router.get("/services", response_model=ServicesMetrics)
-async def get_services_metrics(response: Response):
-    """
-    Get per-service health and performance metrics.
-
-    Returns status for all platform services including:
-    - Core: listener, processor, api, frontend
-    - Infrastructure: postgres, redis, minio
-    - Enrichment: enrichment workers, ollama
-    - Monitoring: prometheus, grafana
-
-    Response is cached in Redis for 15 seconds.
-
-    Use this endpoint for:
-    - Service health dashboards
-    - Infrastructure monitoring
-    - Alerting on service status
-    """
-    cache_key = make_cache_key("metrics", "services")
-
+async def get_services_metrics(response: Response, admin: AdminUser):
+    """Per-service health (listener, processor, api) from Prometheus `up` (admin only)."""
     data, was_cached = await get_or_compute(
-        cache_key=cache_key,
+        cache_key=make_cache_key("metrics", "services"),
         compute_fn=_fetch_services_metrics,
         ttl_seconds=CacheTTL.METRICS,
     )
-
     if was_cached:
         data["cached"] = True
-
-    response.headers["Cache-Control"] = f"public, max-age={CacheTTL.METRICS}"
-    response.headers["X-Cache-TTL"] = str(CacheTTL.METRICS)
-    response.headers["X-Cached"] = "true" if was_cached else "false"
-
+    set_metrics_headers(response, was_cached)
     return ServicesMetrics(**data)

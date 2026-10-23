@@ -1,57 +1,38 @@
 """
-Prometheus Metric Names
+PromQL used by /api/metrics/*.
 
-Centralized constants for all Prometheus metric names used in the API.
-This prevents typos and makes it easy to update metric names when
-recording rules change.
-
-Naming Convention:
-- Recording rules: tg:<metric>:<aggregation>
-- Raw metrics: tg_<metric_name>
+Raw PromQL over metrics the services really export (no recording rules).
+Scrape job names (phase 1 scrape config): listener, processor, api.
+tests/test_metrics_endpoints.py checks every metric name below against the exporters.
 """
 
 
 class PrometheusMetrics:
-    """
-    Centralized Prometheus metric name constants.
+    # Throughput (per second, summed over series)
+    MESSAGES_RECEIVED_RATE = "sum(rate(telegram_messages_received_total[5m]))"
+    MESSAGES_PROCESSED_RATE = "sum(rate(tg_messages_processed_total[5m]))"
+    MESSAGES_ARCHIVED_RATE = "sum(rate(tg_messages_archived_total[5m]))"
+    API_REQUESTS_RATE = "sum(rate(api_requests_total[5m]))"
 
-    Categories:
-    - THROUGHPUT_*: Message processing rates
-    - QUEUE_*: Queue depth and lag metrics
-    - LLM_*: LLM performance metrics
-    - RESOURCE_*: Database, Redis, etc.
-    - ERROR_*: Error rates
-    """
+    # Latency (seconds)
+    PROCESSING_P95 = (
+        "histogram_quantile(0.95, sum by (le) (rate(tg_processing_duration_seconds_bucket[5m])))"
+    )
+    API_P95 = "histogram_quantile(0.95, sum by (le) (rate(api_request_duration_seconds_bucket[5m])))"
 
-    # Throughput metrics (recording rules)
-    THROUGHPUT_MESSAGES_PROCESSED = "tg:messages_processed:rate5m"
-    THROUGHPUT_MESSAGES_ARCHIVED = "tg:messages_archived:rate5m"
-    THROUGHPUT_MESSAGES_SKIPPED = "tg:messages_skipped:rate5m"
+    # Queue
+    QUEUE_DEPTH = "sum(tg_queue_depth)"
+    QUEUE_PENDING = "sum(tg_queue_messages_pending)"
+    DLQ_MESSAGES = "sum(tg_dlq_messages)"
 
-    # Queue metrics
-    QUEUE_MESSAGES_PENDING = "tg_queue_messages_pending"
-    QUEUE_ENRICHMENT_DEPTH = "sum(enrichment_queue_depth)"
-    QUEUE_ENRICHMENT_LAG = "max(enrichment_queue_lag_seconds)"
+    # Freshness: seconds since the last message. `> 0` drops the 0 an unset gauge exports,
+    # so the series is absent until the first message
+    LISTENER_AGE = "time() - max(telegram_last_message_timestamp > 0)"
+    ARCHIVE_AGE = "time() - max(tg_message_last_archived_timestamp > 0)"
 
-    # LLM metrics (recording rules)
-    LLM_REQUESTS_RATE = "tg:llm_requests:rate5m"
-    LLM_AVG_LATENCY = "tg:llm_response:avg_duration_seconds"
-    LLM_SUCCESS_RATE = "tg:llm_success_rate:5m"
+    # Database pool (api)
+    DB_POOL_CHECKED_OUT = "sum(db_pool_checked_out)"
 
-    # Resource metrics
-    RESOURCE_DB_CONNECTIONS = "tg_database_connections_active"
-    RESOURCE_REDIS_MEMORY = "redis_memory_used_bytes"
-
-    # Error metrics
-    ERROR_ENRICHMENT_RATE = "rate(enrichment_errors_total[5m])"
-
-    # Service health metrics
-    SERVICE_LISTENER_UP = "up{job='listener'}"
-    SERVICE_PROCESSOR_UP = "up{job='processor'}"
-    SERVICE_ENRICHMENT_UP = "up{job='enrichment'}"
-    SERVICE_API_UP = "up{job='api'}"
-
-    # Pipeline stage metrics (recording rules from recording_rules.yml)
-    PIPELINE_QUEUE_DEPTH = "tg:enrichment_queue:total_depth"
-    PIPELINE_MAX_LAG = "tg:enrichment_queue:max_lag_seconds"
-    PIPELINE_PROCESSING_P95 = "tg:processing_duration:p95_seconds"
+    @staticmethod
+    def up(job: str) -> str:
+        return f"up{{job='{job}'}}"

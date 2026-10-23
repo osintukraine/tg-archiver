@@ -33,7 +33,7 @@ from .message_router import MessageRouter
 from .redis_consumer import RedisConsumer
 
 # Import Prometheus metrics server
-from observability.metrics import processor_metrics_server, record_queue_depth
+from observability.metrics import processor_metrics_server
 
 # Import audit logger for platform events
 from audit.audit_logger import AuditLogger
@@ -113,12 +113,7 @@ async def update_queue_depth(redis_consumer: RedisConsumer) -> None:
 
     while not shutdown_event.is_set():
         try:
-            pending_count = await redis_consumer.get_pending_count()
-            record_queue_depth(
-                consumer_group=redis_consumer.CONSUMER_GROUP,
-                pending_count=pending_count
-            )
-            logger.debug(f"Queue depth updated: {pending_count} pending messages")
+            await redis_consumer.update_queue_metrics()
         except Exception as e:
             logger.warning(f"Failed to update queue depth metric: {e}")
 

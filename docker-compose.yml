@@ -231,6 +231,8 @@ services:
       # Empty = media served via Caddy /media/*; set to a direct public S3 endpoint to override
       - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost}
+      # Prometheus for /api/metrics/* (only reachable when the monitoring profile exists; else the endpoints report unavailable)
+      - PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
       - MINIO_SECURE=false
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-json}

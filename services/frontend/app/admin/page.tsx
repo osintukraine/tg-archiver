@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getWidgets } from '@/lib/admin/widgets';
-import { StatCard } from '@/components/admin';
+import { LiveMetricsBanner, StatCard, type LiveMetrics } from '@/components/admin';
 import { adminApi } from '@/lib/admin-api';
 // Import widgets to trigger registration
 import '@/lib/admin/widgets';
@@ -16,20 +16,12 @@ import '@/lib/admin/widgets';
 
 // Overview Stats from /api/admin/stats/overview
 interface OverviewStats {
-  pipeline_active: boolean;
-  messages_per_second: number;
-  archive_rate: number;
-  queue_depth: number;
   total_messages: number;
   total_channels: number;
   total_media_files: number;
   messages_today: number;
   messages_this_week: number;
-  services_healthy: number;
-  services_degraded: number;
-  services_down: number;
   timestamp: string;
-  prometheus_available: boolean;
 }
 
 // Widgets self-register on import (see '@/lib/admin/widgets'), so the registry is
@@ -46,6 +38,7 @@ const TotalArchived = widgetsById.get('total-archived');
 
 export default function AdminDashboard() {
   const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [live, setLive] = useState<LiveMetrics | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -61,7 +54,16 @@ export default function AdminDashboard() {
         setStatsLoading(false);
       }
     };
+    const fetchLive = async () => {
+      try {
+        const result = await adminApi.get('/api/metrics/overview');
+        if (result) setLive(result as unknown as LiveMetrics);
+      } catch {
+        // Banner is supplementary; leave it hidden if the request itself fails
+      }
+    };
     fetchStats();
+    fetchLive();
   }, [reloadKey]);
 
   return (
@@ -82,27 +84,8 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Pipeline Status Banner (if Prometheus available) */}
-      {overview?.prometheus_available && (
-        <div className={`glass p-4 flex items-center justify-between ${
-          overview.pipeline_active ? 'border-green-500/50' : 'border-yellow-500/50'
-        } border`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${overview.pipeline_active ? 'bg-green-500' : 'bg-yellow-500'}`} />
-            <span className="font-medium">
-              Pipeline {overview.pipeline_active ? 'Active' : 'Idle'}
-            </span>
-          </div>
-          <div className="flex gap-6 text-sm">
-            <span>{overview.messages_per_second.toFixed(1)} msg/sec</span>
-            <span>{overview.archive_rate.toFixed(1)} archived/sec</span>
-            <span>Queue: {overview.queue_depth}</span>
-            <span className={overview.services_down > 0 ? 'text-red-400' : 'text-green-400'}>
-              Services: {overview.services_healthy}✓ {overview.services_down > 0 && `${overview.services_down}✗`}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Live pipeline numbers (Prometheus via /api/metrics/overview) */}
+      <LiveMetricsBanner metrics={live} />
 
       {/* Section 1: Key Metrics - Responsive grid that wraps naturally */}
       <section>

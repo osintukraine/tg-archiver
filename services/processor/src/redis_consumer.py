@@ -30,6 +30,7 @@ from redis.exceptions import RedisError
 
 from config.settings import settings
 from observability import redact_url
+from observability.metrics import dlq_messages, queue_depth, record_queue_depth, stream_label
 from config import Timeouts, RetryConfig
 from .dead_letter_queue import DeadLetterQueue
 
@@ -615,10 +616,12 @@ class RedisConsumer:
 
     async def get_queue_depths(self) -> dict[str, int]:
         """
-        Get queue depth (pending + unread) for each priority stream.
+        Backlog per priority stream: entries not yet delivered to the consumer
+        group (XINFO GROUPS ``lag``) plus delivered-but-unacknowledged ones.
 
-        Returns:
-            Dictionary mapping stream name to total messages waiting
+        Streams are only trimmed by length, so XLEN would count already
+        processed messages. Falls back to XLEN (an upper bound) when Redis
+        cannot compute the lag.
         """
         if not self.client:
             return {}
@@ -626,13 +629,26 @@ class RedisConsumer:
         depths = {}
         for stream_name in self.PRIORITY_STREAMS:
             try:
-                # Get stream length (all messages not yet trimmed)
-                stream_len = await self.client.xlen(stream_name)
-                depths[stream_name] = stream_len
+                groups = await self.client.xinfo_groups(stream_name)
+                group = next((g for g in groups if g.get("name") == self.CONSUMER_GROUP), None)
+                if group is None:
+                    depths[stream_name] = 0
+                elif group.get("lag") is None:
+                    depths[stream_name] = await self.client.xlen(stream_name)
+                else:
+                    depths[stream_name] = int(group["lag"]) + int(group.get("pending", 0))
             except RedisError:
                 depths[stream_name] = 0
 
         return depths
+
+    async def update_queue_metrics(self) -> None:
+        """Refresh the queue gauges (pending, per-stream backlog, DLQ size)."""
+        record_queue_depth(self.CONSUMER_GROUP, await self.get_pending_count())
+        for stream_name, depth in (await self.get_queue_depths()).items():
+            queue_depth.labels(stream=stream_label(stream_name)).set(depth)
+        if self.dlq:
+            dlq_messages.set(await self.dlq.get_dlq_count())
 
     def shutdown(self):
         """Signal consumer to stop consuming messages."""

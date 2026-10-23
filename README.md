@@ -419,6 +419,7 @@ deletes and listings require the access key.
 | `MINIO_SECRET_KEY` | `minioadmin` | S3 secret key (**change in production**) |
 | `MINIO_BUCKET` | `tg-archive-media` | Bucket for media files. Caddy hardcodes `/tg-archive-media`, so keep the default |
 | `PUBLIC_BASE_URL` | `http://localhost` | Public site origin (what browsers and feed readers use). Media links in the API, RSS/Atom/JSON feeds and OpenGraph tags are `<origin>/media/...` (Caddy proxies `/media/*` to SeaweedFS). The API prefers the origin of the incoming request and falls back to this value; the frontend bakes it in as `NEXT_PUBLIC_BASE_URL`, so rebuild the frontend after changing it |
+| `PROMETHEUS_URL` | `http://prometheus:9090` | Prometheus the admin-only `/api/metrics/*` endpoints query (api). Without a reachable Prometheus they return `prometheus_available: false` and the admin dashboard shows "Live metrics unavailable" |
 | `MINIO_PUBLIC_URL` | (empty) | Optional direct public S3 endpoint (e.g. `http://localhost:8333` with the port published). When set, API and feed media URLs become `{MINIO_PUBLIC_URL}/{bucket}/{key}` instead of Caddy paths |
 | `MEDIA_RETENTION_DAYS` | `0` | Delete media (S3 object and DB rows; messages stay) older than N days, checked hourly by the processor. `0` = keep forever. Dev: e.g. `3`. Messages whose media was deleted simply show no media |
 

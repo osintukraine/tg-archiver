@@ -6,7 +6,6 @@ Uses a real Redis (TEST_REDIS_URL; the database is flushed). Self-contained.
 import os
 from types import SimpleNamespace
 
-import pytest
 import pytest_asyncio
 import redis.asyncio as redis
 

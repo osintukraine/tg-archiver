@@ -5,7 +5,6 @@ the processing duration. Needs a REAL Redis 8 (TEST_REDIS_URL); the database is 
 
 import os
 
-import pytest
 import pytest_asyncio
 import redis.asyncio as redis
 from prometheus_client import REGISTRY

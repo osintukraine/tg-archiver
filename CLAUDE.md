@@ -92,6 +92,7 @@ PYTHONPATH=../../shared/python POSTGRES_HOST=localhost MINIO_ENDPOINT=localhost:
 - Auth middleware in `services/api/src/middleware/auth_unified.py`
 - Dependencies: `CurrentUser`, `AuthenticatedUser`, `AdminUser` from `services/api/src/dependencies/`
 - Health: `/api/health` (also `/health`). API docs at `http://localhost/docs` (role-filtered; FastAPI's built-in docs are disabled)
+- Monitoring: optional compose profile `monitoring` runs Prometheus (pinned image, `127.0.0.1:9090`; config, rules and `promtool` rule tests in `infrastructure/prometheus/`; job names `listener`/`processor`/`api` are queried by `/api/metrics/services`). CI runs `promtool check config` + `test rules`. Retention via `PROMETHEUS_RETENTION`
 - JWTs are accepted only from the `Authorization: Bearer` header (and the `access_token` cookie used by /docs), never from query parameters
 - Logout: the frontend `logout()` fires `POST /api/auth/logout` (Bearer + CSRF) without awaiting it, then clears local state. The API blacklists the JWT in Redis (`jwt:blacklist:<sha256[:32]>`, TTL = remaining lifetime) and `AuthMiddleware` rejects blacklisted tokens with 401 (Redis outage behaviour per `TOKEN_BLACKLIST_FAIL_MODE`)
 - Media URLs come from `services/api/src/utils/minio_client.py:get_media_url` → `<origin>/media/<key>` (Caddy serves `/media/*` from SeaweedFS); feed and album URLs use the request's origin, falling back to `PUBLIC_BASE_URL`. Presigned URLs were removed (the bucket is public-read behind Caddy)

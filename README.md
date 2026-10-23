@@ -544,6 +544,21 @@ docker-compose build
 docker-compose up -d
 ```
 
+### Monitoring (optional Prometheus)
+
+Prometheus ships as a compose profile; without the flag nothing changes.
+
+```bash
+docker-compose --profile monitoring up -d
+```
+
+- UI: http://127.0.0.1:9090 (bound to localhost only; there is no Caddy route). On a remote host use an SSH tunnel.
+- Scrapes `listener:8001`, `processor:8002` and `api:8000/metrics` every 15 s (`infrastructure/prometheus/prometheus.yml`).
+- Retention is 15 days; change it with `PROMETHEUS_RETENTION` in `.env` (for example `30d`). Data lives in the `prometheus_data` volume.
+- Once it runs, the admin dashboard banner goes live: the admin-only `/api/metrics/*` endpoints read from it (`PROMETHEUS_URL`, default `http://prometheus:9090`) and report `prometheus_available: true`.
+- Alerts (rules in `infrastructure/prometheus/rules/alerts.yml`, shown under Alerts in the UI; there are no notifications yet): `ListenerQuiet` and `ArchiveStalled` (no message received or archived for 15 min), `DLQNotEmpty`, `DLQGrowing`, `QueueBacklog` (over 500 queued for 10 min), `TargetDown`, `FloodWaits` (over 5 per hour), `MediaErrors`. There is no DeepL cap alert because the cap is not exported as a metric.
+- Check the config and rule tests with the pinned image (CI does the same): `docker run --rm --entrypoint promtool -v $PWD/infrastructure/prometheus:/etc/prometheus:ro prom/prometheus:v3.15.0 test rules /etc/prometheus/tests/alerts_test.yml`.
+
 ### Failed Messages and the Dead-Letter Queue
 
 If processing a message fails (for example a database error), the processor leaves it pending

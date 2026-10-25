@@ -136,21 +136,3 @@ async def get_dashboard(admin: AdminUser, db: AsyncSession = Depends(get_db)):
         stats=stats,
         recent_activity=recent_activity
     )
-
-
-@router.post("/actions/{action}")
-async def perform_action(action: str, admin: AdminUser, db: AsyncSession = Depends(get_db)):
-    """
-    Perform a quick action from the dashboard.
-
-    Available actions:
-    - sync-folders: Trigger Telegram folder sync
-    - clear-cache: Clear Redis cache
-    - rebuild-embeddings: Queue embedding regeneration
-    """
-    # For now, return success - actual implementation depends on service architecture
-    return {
-        "action": action,
-        "status": "queued",
-        "message": f"Action '{action}' has been queued for execution"
-    }

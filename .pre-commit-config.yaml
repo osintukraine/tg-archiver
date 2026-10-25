@@ -32,3 +32,13 @@ repos:
         exclude: ^services/frontend/(node_modules|\.next)/
         # requires `bun install` in services/frontend
         entry: bash -c 'cd services/frontend && exec bunx eslint "${@#services/frontend/}"' --
+
+      - id: pyright
+        name: pyright (Python type-check, whole repo, 0 errors)
+        language: system
+        # needs a local .venv with deps + pyright (see README -> Type checking).
+        # pass_filenames: false type-checks the whole repo on any .py change, so an
+        # edit can't silently break a caller in another file. Warnings pass; errors block.
+        entry: .venv/bin/pyright
+        pass_filenames: false
+        types: [python]

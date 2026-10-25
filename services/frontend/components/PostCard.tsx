@@ -819,7 +819,7 @@ export function PostCard({
           <div className="space-y-2">
             <div
               className="text-xs text-text-tertiary font-medium cursor-help"
-              title="AI-generated tags for classification and filtering - extracted by local LLM analysis"
+              title="Tags for classification and filtering"
             >
               AI Tags
             </div>
@@ -1540,7 +1540,7 @@ export function PostCard({
               <div className="space-y-3">
                 <div
                   className="text-xs text-text-tertiary font-medium cursor-help"
-                  title="AI-generated tags for classification and filtering - extracted by local LLM analysis"
+                  title="Tags for classification and filtering"
                 >
                   AI-Generated Tags
                 </div>

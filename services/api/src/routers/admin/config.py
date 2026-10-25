@@ -80,7 +80,7 @@ async def get_all_config(
 
     Args:
         admin: Authenticated admin user (from dependency injection)
-        category: Optional category filter (e.g., "llm", "telegram", "storage")
+        category: Optional category filter (e.g., "processing", "telegram", "storage")
         include_secrets: If True, returns unmasked secret values (default: False)
         db: Database session (from dependency injection)
 
@@ -147,7 +147,7 @@ async def get_categories(admin: AdminUser, db: AsyncSession = Depends(get_db)) -
 
     Returns:
         List of dicts with category, count, and secrets_count fields.
-        Example: [{"category": "llm", "count": 5, "secrets_count": 1}]
+        Example: [{"category": "processing", "count": 5, "secrets_count": 1}]
 
     Security:
         Only admin users can access this endpoint.
@@ -179,7 +179,7 @@ async def get_config_item(
     Useful for detailed inspection or editing UI.
 
     Args:
-        key: Configuration key name (e.g., "llm.default_model")
+        key: Configuration key name (e.g., "feed.default_limit")
         admin: Authenticated admin user (from dependency injection)
         include_secret: If True, returns unmasked secret value (default: False)
         db: Database session (from dependency injection)
@@ -237,14 +237,14 @@ async def update_config_item(
     platform_config table.
 
     Args:
-        key: Configuration key name (e.g., "llm.default_model")
+        key: Configuration key name (e.g., "feed.default_limit")
         request: Update request with new value
         admin: Authenticated admin user (from dependency injection)
         db: Database session (from dependency injection)
 
     Returns:
         Dict with success status, updated key, and restart_required flag.
-        Example: {"success": true, "key": "llm.model", "restart_required": true}
+        Example: {"success": true, "key": "feed.default_limit", "restart_required": true}
 
     Raises:
         HTTPException 404: Configuration key not found
@@ -332,7 +332,7 @@ async def bulk_update_config(
         Example:
         {
             "success": true,
-            "updated": ["llm.model", "storage.path"],
+            "updated": ["feed.default_limit", "storage.max_file_size_mb"],
             "errors": [{"key": "invalid.key", "error": "Key not found"}],
             "restart_required": true
         }

@@ -11,7 +11,7 @@ State-changing endpoints are covered by the CSRF middleware.
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
@@ -113,9 +113,10 @@ async def list_dlq(
     r = get_dlq_redis()
     try:
         total = await r.xlen(DLQ_STREAM_KEY)
-        entries = await r.xrevrange(
+        # redis-py types the reply Optional; xrevrange always returns a list
+        entries = cast(List[Any], await r.xrevrange(
             DLQ_STREAM_KEY, max=f"({before}" if before else "+", min="-", count=limit
-        )
+        ))
     except RedisError as e:
         logger.error(f"DLQ list failed: {e}")
         raise HTTPException(status_code=503, detail="Redis unavailable") from e
@@ -134,7 +135,7 @@ async def _get_entry(r: redis.Redis, dlq_id: str) -> Dict[str, str]:
         raise HTTPException(status_code=503, detail="Redis unavailable") from e
     if not entries:
         raise HTTPException(status_code=404, detail="DLQ entry not found")
-    return entries[0][1]
+    return cast(Dict[str, str], entries[0][1])  # decode_responses=True; fields never None
 
 
 async def _audit(db: AsyncSession, action: str, admin, request: Request, details: Dict[str, Any]) -> None:

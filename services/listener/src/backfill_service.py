@@ -538,6 +538,8 @@ class BackfillService:
         try:
             # Push to Redis queue for async processing
             # NOTE: Use channel.telegram_id (Telegram's ID), not message.channel_id (database FK)
+            if self.redis_queue is None:
+                raise RuntimeError("Redis queue not initialised")
             await self.redis_queue.push_message(
                 message_id=message.message_id,
                 channel_id=channel.telegram_id,  # Telegram channel ID, not database FK

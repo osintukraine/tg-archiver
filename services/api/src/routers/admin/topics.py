@@ -116,7 +116,7 @@ async def create_topic(
     })
     await db.commit()
 
-    row = result.fetchone()
+    row = result.one()
     return TopicResponse(
         id=row[0],
         name=row[1],
@@ -188,7 +188,7 @@ async def update_topic(
         GROUP BY mt.id
     """), {"id": topic_id})
 
-    row = result.fetchone()
+    row = result.one()
     return TopicResponse(
         id=row[0],
         name=row[1],
@@ -244,7 +244,7 @@ async def seed_default_topics(
     """
     # Check if topics exist
     check = await db.execute(text("SELECT COUNT(*) FROM message_topics"))
-    count = check.scalar()
+    count = check.scalar_one()
 
     if count > 0:
         return {"success": False, "message": f"Topics already exist ({count} found)"}

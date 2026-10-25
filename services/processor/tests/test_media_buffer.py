@@ -170,6 +170,7 @@ def load_script():
               Path(__file__).resolve().parents[min(3, len(Path(__file__).resolve().parents) - 1)] / "scripts" / "media_buffer_cleanup.py"):
         if p.is_file():
             spec = importlib.util.spec_from_file_location("media_buffer_cleanup", p)
+            assert spec is not None and spec.loader is not None
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod

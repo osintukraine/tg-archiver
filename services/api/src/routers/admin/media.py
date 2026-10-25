@@ -184,7 +184,7 @@ async def get_media_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
         SELECT COUNT(*), COALESCE(SUM(file_size), 0)
         FROM media_files
     """))
-    row = total_result.fetchone()
+    row = total_result.one()
     total_files = row[0] or 0
     total_size_bytes = row[1] or 0
     total_size_gb = total_size_bytes / (1024 ** 3)

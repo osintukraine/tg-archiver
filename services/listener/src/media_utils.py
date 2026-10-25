@@ -46,7 +46,7 @@ def get_media_type(message: TelegramMessage) -> Optional[str]:
     # Refine document type based on MIME type (video, audio, image, etc.)
     if media_type == "document" and hasattr(media, "document"):
         doc = media.document
-        if hasattr(doc, "mime_type"):
+        if doc is not None and hasattr(doc, "mime_type"):
             if "video" in doc.mime_type:
                 return "video"
             elif "audio" in doc.mime_type:

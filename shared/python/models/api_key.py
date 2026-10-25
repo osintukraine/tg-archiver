@@ -103,7 +103,7 @@ class ApiKey(Base):
 
     def has_scope(self, scope: str) -> bool:
         """Check if API key has a specific scope."""
-        return self.scopes and scope in self.scopes
+        return bool(self.scopes) and scope in self.scopes
 
     def __repr__(self) -> str:
         status = "active" if self.is_active and not self.is_expired else "inactive"

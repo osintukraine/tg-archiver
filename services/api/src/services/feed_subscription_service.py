@@ -78,7 +78,7 @@ class FeedSubscriptionService:
         token_id: UUID,
         feed_type: str,
         params: dict,
-    ) -> UUID:
+    ) -> int:
         """Record or update a feed subscription on access."""
         params_hash = self.hash_params(params)
         summary = self.build_summary(feed_type, params)

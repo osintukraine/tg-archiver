@@ -101,7 +101,7 @@ async def create_category(
     })
     await db.commit()
 
-    row = result.fetchone()
+    row = result.one()
     return CategoryResponse(
         id=row[0],
         name=row[1],
@@ -164,7 +164,7 @@ async def update_category(
         GROUP BY cc.id
     """), {"id": category_id})
 
-    row = result.fetchone()
+    row = result.one()
     return CategoryResponse(
         id=row[0],
         name=row[1],

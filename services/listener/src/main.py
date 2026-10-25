@@ -115,7 +115,6 @@ See Also
 import asyncio
 import signal
 import sys
-from typing import NoReturn
 
 from minio import Minio
 from telethon import TelegramClient
@@ -153,7 +152,7 @@ logger = get_logger(__name__)
 shutdown_event = asyncio.Event()
 
 
-async def main() -> NoReturn:
+async def main() -> None:
     """
     Main entry point for the Telegram listener service.
 
@@ -262,7 +261,7 @@ async def main() -> NoReturn:
 
     Returns
     -------
-    NoReturn
+    None
         Function runs indefinitely until shutdown signal received.
 
     Raises
@@ -516,7 +515,7 @@ async def main() -> NoReturn:
             await listener.stop()
 
         if telegram_client:
-            await telegram_client.disconnect()
+            await telegram_client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
 
         await redis_queue.disconnect()
 

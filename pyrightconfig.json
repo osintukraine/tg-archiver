@@ -1,0 +1,21 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "basic",
+  "include": ["services", "shared/python", "scripts"],
+  "exclude": ["**/node_modules", "**/__pycache__", ".venv"],
+  "reportMissingModuleSource": false,
+  "reportMissingTypeStubs": false,
+  "reportCallIssue": "warning",
+  "reportArgumentType": "warning",
+  "reportAttributeAccessIssue": "warning",
+  "executionEnvironments": [
+    { "root": "services/api", "extraPaths": ["shared/python"] },
+    { "root": "services/listener", "extraPaths": ["shared/python"] },
+    { "root": "services/processor", "extraPaths": ["services/processor/src", "shared/python"] },
+    { "root": "shared/python" },
+    { "root": "scripts", "extraPaths": ["shared/python"] }
+  ]
+}

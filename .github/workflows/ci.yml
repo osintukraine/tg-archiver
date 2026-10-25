@@ -46,6 +46,23 @@ jobs:
           $GL dir /repo -c /repo/.gitleaks.toml --no-banner
           $GL git /repo -c /repo/.gitleaks.toml --no-banner
 
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v6
+      - name: Build venv with deps + pyright
+        run: |
+          uv venv --python 3.14 .venv
+          uv pip install --python .venv/bin/python \
+            -r shared/python/requirements.txt -r services/api/requirements.txt \
+            -r services/listener/requirements.txt -r services/processor/requirements.txt \
+            -r services/listener/requirements-dev.txt -r services/processor/requirements-dev.txt \
+            pyright
+      - name: Pyright (whole repo, 0 errors; warnings allowed)
+        run: .venv/bin/pyright
+
   python-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30

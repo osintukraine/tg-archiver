@@ -56,7 +56,7 @@ async def get_about_stats(db: AsyncSession = Depends(get_db)) -> AboutStats:
             (SELECT COUNT(*) FROM messages) as messages,
             (SELECT COALESCE(SUM(file_size), 0) FROM media_files) as media_size
     """))
-    row = result.fetchone()
+    row = result.one()
 
     return AboutStats(
         channels=row.channels or 0,
@@ -169,7 +169,7 @@ async def get_activity(
         "today_start": today_start,
         "day_ago": day_ago,
     })
-    pulse_row = pulse_result.fetchone()
+    pulse_row = pulse_result.one()
 
     messages_last_hour = pulse_row.messages_last_hour or 0
     # Determine status based on message rate
@@ -271,7 +271,7 @@ async def get_activity(
                 percent=round(percent, 1),
             ))
         else:
-            other_count += row.count
+            other_count += row.count  # pyright: ignore[reportOperatorIssue]  # SQLAlchemy Row resolves the "count" column; stubs see tuple.count
 
     # Add "other" if there are more than 8 topics
     if other_count > 0:

@@ -81,7 +81,7 @@ async def get_kanban_board(
         {date_filter}
     """  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     threshold_result = await db.execute(text(threshold_query), {"days": days})
-    thresholds = threshold_result.fetchone()
+    thresholds = threshold_result.one()
     p90_views = thresholds[0] or 10000
     p90_forwards = thresholds[1] or 100
     p50_views = thresholds[2] or 1000
@@ -210,7 +210,7 @@ async def get_kanban_stats(
         {date_filter}
     """  # noqa: S608  date/media filter fragments are constants chosen by code; values are bound params
     threshold_result = await db.execute(text(threshold_query), {"days": days})
-    thresholds = threshold_result.fetchone()
+    thresholds = threshold_result.one()
     p90_views = thresholds[0] or 10000
     p90_forwards = thresholds[1] or 100
     p50_views = thresholds[2] or 1000

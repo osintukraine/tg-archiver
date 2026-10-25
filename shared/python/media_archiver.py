@@ -118,6 +118,8 @@ class MediaArchiver:
 
     def _ensure_bucket(self):
         """Ensure MinIO bucket exists."""
+        if self.minio is None:  # only called when a client was provided
+            raise RuntimeError("MinIO client not initialised")
         try:
             if not self.minio.bucket_exists(self.bucket_name):
                 self.minio.make_bucket(self.bucket_name)
@@ -473,7 +475,7 @@ class MediaArchiver:
             # Special handling for webpage previews (OpenGraph thumbnails)
             # Telethon's download_media() returns None for MessageMediaWebPage,
             # so we need to explicitly extract and download the thumbnail photo
-            if hasattr(message.media, 'webpage') and message.media.webpage:
+            if message.media is not None and hasattr(message.media, 'webpage') and message.media.webpage:
                 webpage = message.media.webpage
                 if hasattr(webpage, 'photo') and webpage.photo:
                     # Download the webpage's OpenGraph thumbnail

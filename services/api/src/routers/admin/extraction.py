@@ -187,7 +187,7 @@ async def create_pattern(
     })
     await db.commit()
 
-    row = result.fetchone()
+    row = result.one()
     return PatternResponse(
         id=row[0],
         name=row[1],
@@ -276,7 +276,7 @@ async def update_pattern(
         WHERE id = :id
     """), {"id": pattern_id})
 
-    row = result.fetchone()
+    row = result.one()
     return PatternResponse(
         id=row[0],
         name=row[1],

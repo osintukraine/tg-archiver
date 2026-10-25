@@ -42,7 +42,7 @@ import logging
 import socket
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from telethon import TelegramClient
@@ -240,10 +240,11 @@ class MessageProcessor:
                                     logger.info(f"Archived album: {len(media_file_ids)} files")
                             else:
                                 # SINGLE MESSAGE: Download one media file
-                                telegram_messages = await self.telegram_client.get_messages(
+                                # ids=[...] returns a TotalList; Telethon's stub also allows a single Message
+                                telegram_messages = cast(list, await self.telegram_client.get_messages(
                                     entity=message.channel_id,
                                     ids=[message.message_id]
-                                )
+                                ))
 
                                 if telegram_messages and telegram_messages[0]:
                                     media_file_id = await self.media_archiver.archive_media(
@@ -545,6 +546,8 @@ class MessageProcessor:
             telegram_date: When our copy was posted (forward time)
             session: Database session
         """
+        if message.forward_from_channel_id is None:
+            return  # caller only calls this for forwards
         from sqlalchemy.dialects.postgresql import insert
         from sqlalchemy import select
 

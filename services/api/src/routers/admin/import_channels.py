@@ -448,7 +448,7 @@ async def upload_csv(
                 Channel.username.in_(usernames_to_check)
             )
         )
-        existing_usernames = {r[0].lower() for r in result.fetchall() if r[0]}
+        existing_usernames = {u.lower() for u in result.scalars().all() if u}
 
     # Extract client IP (strip port if present)
     client_ip = None

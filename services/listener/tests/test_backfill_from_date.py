@@ -48,9 +48,10 @@ async def test_backfill_uses_channel_from_date(monkeypatch, stored, expected):
     row = SimpleNamespace(telegram_id=1, name="c", backfill_from_date=stored)
     monkeypatch.setattr(channel_discovery, "AsyncSessionLocal", lambda: FakeSession(row))
     discovery = ChannelDiscovery.__new__(ChannelDiscovery)  # only backfill_service is used
-    discovery.backfill_service = FakeBackfill()
+    backfill = FakeBackfill()
+    discovery.backfill_service = backfill
 
     await discovery._run_backfill_with_error_handling(SimpleNamespace(telegram_id=1, name="c"))
 
     # None means "use BACKFILL_START_DATE" inside backfill_channel
-    assert discovery.backfill_service.calls == [expected]
+    assert backfill.calls == [expected]

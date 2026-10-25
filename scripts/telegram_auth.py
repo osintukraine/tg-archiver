@@ -128,7 +128,7 @@ async def authenticate():
         # Show folders
         await show_folders(client)
 
-        await client.disconnect()
+        await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
         return
 
     # Not authorized - need to authenticate
@@ -140,7 +140,7 @@ async def authenticate():
 
     if not phone:
         print("❌ Error: Phone number required")
-        await client.disconnect()
+        await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
         sys.exit(1)
 
     # Send code request
@@ -152,7 +152,7 @@ async def authenticate():
 
     if not code:
         print("❌ Error: Verification code required")
-        await client.disconnect()
+        await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
         sys.exit(1)
 
     # Sign in (with 2FA support)
@@ -166,19 +166,19 @@ async def authenticate():
 
         if not password:
             print("❌ Error: 2FA password required")
-            await client.disconnect()
+            await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
             sys.exit(1)
 
         try:
             await client.sign_in(password=password)
         except Exception as e:
             print(f"\n❌ 2FA authentication failed: {e}")
-            await client.disconnect()
+            await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
             sys.exit(1)
 
     except Exception as e:
         print(f"\n❌ Authentication failed: {e}")
-        await client.disconnect()
+        await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
         sys.exit(1)
 
     # Success - show user info
@@ -205,7 +205,7 @@ async def authenticate():
     print("   3. Start the platform: docker-compose up -d")
     print("=" * 60)
 
-    await client.disconnect()
+    await client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
 
 
 def main():

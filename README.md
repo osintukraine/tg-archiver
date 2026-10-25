@@ -737,7 +737,8 @@ database, re-run, existing deployment, failing migration) against throwaway Post
 
 ### Linting and CI
 
-CI (`.github/workflows/ci.yml`) runs on every push to `main`/`develop` and on pull requests: ruff, the
+CI (`.github/workflows/ci.yml`) runs on every push to `main`/`develop` and on pull requests: ruff,
+pyright (Python type-check, see below), the
 env audit (`.env.example` against compose and code) and gitleaks, the Python test suites (against real Redis 8 / Postgres 18, schema applied with
 `migrate.sh`), the migration runner test, frontend lint/type-check/vitest, and a Docker build of all
 four services. Dependabot (`.github/dependabot.yml`) opens weekly grouped update PRs.
@@ -752,6 +753,33 @@ ruff check .               # config + documented baseline of ignored rules in py
 pre-commit install         # gitleaks, ruff, hygiene hooks, eslint on changed frontend files
 pre-commit run --all-files
 ```
+
+### Type checking (Python)
+
+The Python code type-checks clean under [pyright](https://microsoft.github.io/pyright/)
+(`pyrightconfig.json`): **0 errors**. Warnings are allowed on purpose — `reportArgumentType`,
+`reportAttributeAccessIssue` and `reportCallIssue` are downgraded to warnings because legacy
+SQLAlchemy `Column` code produces false positives on them. The import paths in `pyrightconfig.json`
+mirror each service's `PYTHONPATH` in its Docker image, so pyright — and any editor that uses it,
+e.g. VS Code/Pylance — resolves `models`, `config` and the shared package the way the containers do.
+
+pyright is enforced in both pre-commit and CI. To run it locally, build a virtualenv with the
+dependencies and pyright (needs [uv](https://docs.astral.sh/uv/)), then run it:
+
+```bash
+uv venv --python 3.14 .venv
+uv pip install --python .venv/bin/python \
+  -r shared/python/requirements.txt -r services/api/requirements.txt \
+  -r services/listener/requirements.txt -r services/processor/requirements.txt \
+  -r services/listener/requirements-dev.txt -r services/processor/requirements-dev.txt \
+  pyright
+.venv/bin/pyright          # whole repo; exits non-zero on any error, warnings pass
+```
+
+The pre-commit `pyright` hook runs `.venv/bin/pyright`, so build the venv before committing.
+PyCharm/IntelliJ has its own checker and does not read `pyrightconfig.json`; set its interpreter to
+`.venv` and mark `shared/python` (and `services/processor/src`) as source roots so imports resolve.
+The type annotations throughout the code help every IDE regardless.
 
 ### AI-assisted development
 

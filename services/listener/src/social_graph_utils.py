@@ -121,8 +121,8 @@ async def extract_social_metadata(message: TelegramMessage) -> Dict[str, Any]:
             )
 
     # Extract reply metadata
-    if message.reply_to:
-        reply: MessageReplyHeader = message.reply_to
+    if isinstance(message.reply_to, MessageReplyHeader):
+        reply = message.reply_to
 
         # Parent message ID (message being replied to)
         if reply.reply_to_msg_id:

@@ -89,7 +89,7 @@ def test_stream_label_and_processed_counter():
     before = {s: sample("tg_processed_total", stream=s) or 0 for s in ("realtime", "backfill", "legacy")}
     for stream in (RT, BF, BF, LEGACY, ""):
         metrics.record_message_processed_by_stream(stream)
-    after = {s: sample("tg_processed_total", stream=s) for s in before}
+    after = {s: sample("tg_processed_total", stream=s) or 0 for s in before}
     assert {s: after[s] - before[s] for s in before} == {"realtime": 1, "backfill": 2, "legacy": 2}
 
 

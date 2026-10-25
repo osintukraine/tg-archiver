@@ -8,7 +8,7 @@ Messages include:
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -28,6 +28,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 # from pgvector.sqlalchemy import Vector
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .channel import Channel
+    from .media import MessageMedia
+    from .tag import MessageTag
+    from .message_comment import MessageComment
+    from .message_reaction import MessageReaction
+    from .message_forward import MessageForward
 
 
 class Message(Base):

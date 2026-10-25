@@ -47,6 +47,7 @@ async def test_returns_listener_result_and_sends_request(r):
         fake_listener(r, {"success": True, "folder_name": "News"}))
     out = await promotion.request_promotion("chan_name", "News", discovered_channel_id=5)
     sent = await listener
+    assert sent is not None
     assert out["folder_name"] == "News"
     assert (sent["username"], sent["folder"], sent["discovered_channel_id"]) == ("chan_name", "News", "5")
 
@@ -55,6 +56,7 @@ async def test_default_folder_and_no_discovered_id(r):
     listener = asyncio.create_task(fake_listener(r, {"success": True}))
     await promotion.request_promotion("chan_name", None)
     sent = await listener
+    assert sent is not None
     assert sent["folder"] == settings.FOLDER_ARCHIVE_ALL_PATTERN
     assert "discovered_channel_id" not in sent
 

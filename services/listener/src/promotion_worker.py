@@ -126,7 +126,7 @@ class PromotionWorker:
                     continue
 
                 for _stream_name, stream_messages in messages:
-                    for message_id, data in stream_messages:
+                    for message_id, data in stream_messages:  # pyright: ignore[reportGeneralTypeIssues] - redis asyncio stubs type xreadgroup's result too broadly
                         await self._process_promotion(message_id, data)
 
             except RedisError as e:

@@ -265,7 +265,7 @@ async def feed_search(
     messages = result.scalars().unique().all()
 
     # Log authenticated vs anonymous access
-    if feed_auth.authenticated:
+    if feed_auth.authenticated and feed_auth.token:
         logger.debug(f"Authenticated feed access: user={feed_auth.user_id}, token={feed_auth.token.token_prefix}")
 
     # Generate feed URL for autodiscovery

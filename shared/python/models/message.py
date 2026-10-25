@@ -24,15 +24,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-# Removed for tg-archiver (no embeddings)
-# from pgvector.sqlalchemy import Vector
+# Embeddings/pgvector intentionally not used in tg-archiver (no AI/ML).
 
 from .base import Base
 
 if TYPE_CHECKING:
     from .channel import Channel
     from .media import MessageMedia
-    from .tag import MessageTag
     from .message_comment import MessageComment
     from .message_reaction import MessageReaction
     from .message_forward import MessageForward
@@ -194,9 +192,6 @@ class Message(Base):
     channel: Mapped["Channel"] = relationship("Channel", back_populates="messages", lazy="selectin")
     media: Mapped[list["MessageMedia"]] = relationship(
         "MessageMedia", back_populates="message", cascade="all, delete-orphan"
-    )
-    tags: Mapped[list["MessageTag"]] = relationship(
-        "MessageTag", back_populates="message", cascade="all, delete-orphan"
     )
     # Comments from discussion groups
     comments: Mapped[list["MessageComment"]] = relationship(

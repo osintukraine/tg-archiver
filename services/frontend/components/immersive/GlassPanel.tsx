@@ -141,26 +141,6 @@ export function GlassPanel({ message }: GlassPanelProps) {
                 </div>
               )}
 
-              {/* Location */}
-              {message.location && (
-                <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Location
-                  </h4>
-                  <div className="flex items-center gap-2 text-cyan-400 text-sm">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                    </svg>
-                    <span>{message.location.location_name}</span>
-                    {message.location.confidence !== null && (
-                      <span className="text-gray-500 text-xs">
-                        {Math.round(message.location.confidence * 100)}% confidence
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Forward source */}
               {message.forward_from_channel_id && (
                 <div>

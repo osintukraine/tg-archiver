@@ -74,11 +74,6 @@ function getCleanMessageData(message: Message): Record<string, unknown> {
     clean.entities = message.entities;
   }
 
-  // AI-generated tags
-  if (message.tags?.length) {
-    clean.tags = message.tags;
-  }
-
   // Content authenticity hashes (only if present)
   if (message.content_hash || message.metadata_hash) {
     clean.hashes = {

@@ -643,6 +643,27 @@ docker-compose logs listener | grep -i flood
 
 ## Development
 
+### Prebuilt images vs. building locally
+
+The four app services (`listener`, `processor`, `api`, `frontend`) are published to GHCR by CI
+(`ghcr.io/osintukraine/tg-archiver-<service>`). You can either pull them or build locally — the
+`docker-compose.yml` services carry both `image:` and `build:`.
+
+```bash
+# Use GitHub's prebuilt images (no local build):
+docker compose pull && docker compose up -d
+# `latest` tracks main. To track develop or pin a commit, set TG_IMAGE_TAG in .env:
+#   TG_IMAGE_TAG=develop        (or)   TG_IMAGE_TAG=sha-abc1234
+
+# Build locally instead (unchanged workflow):
+docker compose build && docker compose up -d
+```
+
+`docker compose build` tags the local image with the same GHCR name, so `up` uses whichever you
+produced last (pulled or built). The three Python images are fully portable; the **frontend image
+bakes `NEXT_PUBLIC_*` at build time**, so the published frontend image carries default (`localhost`)
+URLs — for a custom production domain, build the frontend locally so your `PUBLIC_BASE_URL` is baked in.
+
 ### Directory Structure
 
 ```
@@ -712,23 +733,23 @@ ENV="-e POSTGRES_HOST=tgtest-pg -e POSTGRES_USER=archiver -e POSTGRES_PASSWORD=t
 # processor (Redis Streams retry / dead-letter)
 docker run --rm -u root --network tgtest $ENV -e TEST_REDIS_URL=redis://tgtest-redis:6379/15 \
   -v $PWD/services/processor/tests:/app/tests:ro -v $PWD/services/processor/requirements-dev.txt:/tmp/rd.txt:ro \
-  tg-archiver-processor sh -c "pip install -q -r /tmp/rd.txt && python -m pytest -o asyncio_mode=auto tests"
+  ghcr.io/osintukraine/tg-archiver-processor:${TG_IMAGE_TAG:-latest} sh -c "pip install -q -r /tmp/rd.txt && python -m pytest -o asyncio_mode=auto tests"
 
 # listener (channel join worker, import/promotion worker Redis reads)
 docker run --rm -u root --network tgtest $ENV -e PYTHONPATH=/shared/python:/app -w /app \
   -e TEST_REDIS_URL=redis://tgtest-redis:6379/13 \
   -v $PWD/services/listener/tests:/app/tests:ro -v $PWD/services/listener/requirements-dev.txt:/tmp/rd.txt:ro \
-  tg-archiver-listener sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"
+  ghcr.io/osintukraine/tg-archiver-listener:${TG_IMAGE_TAG:-latest} sh -c "pip install -q -r /tmp/rd.txt && python -m pytest tests"
 
 # api (DLQ, discovered-channel approval, channel submissions, middleware, media URLs, logout blacklist)
 docker run --rm -u root --network tgtest $ENV -e TEST_REDIS_URL=redis://tgtest-redis:6379/14 -w /app \
   -v $PWD/services/api/tests:/app/tests:ro \
-  tg-archiver-api sh -c "pip install -q pytest pytest-asyncio && python -m pytest tests -c tests/pytest-approval.ini"
+  ghcr.io/osintukraine/tg-archiver-api:${TG_IMAGE_TAG:-latest} sh -c "pip install -q pytest pytest-asyncio && python -m pytest tests -c tests/pytest-approval.ini"
 
 docker rm -f tgtest-redis tgtest-pg && docker network rm tgtest
 ```
 
-Image names follow the compose project name (`tg-archiver-*` when the checkout directory is `tg-archiver`).
+Compose builds tag images as `ghcr.io/osintukraine/tg-archiver-<service>:${TG_IMAGE_TAG:-latest}` (default tag `latest`); the test commands above use that name.
 
 Database tests: `sh infrastructure/postgres/tests/test_migrate.sh` checks the migration runner (fresh
 database, re-run, existing deployment, failing migration) against throwaway Postgres 18 containers.

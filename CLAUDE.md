@@ -186,6 +186,11 @@ docker-compose build api && docker-compose up -d --force-recreate api
 docker-compose build frontend && docker-compose up -d --force-recreate frontend
 ```
 
+The four app services carry both `image:` (GHCR) and `build:`. `docker compose build` builds locally
+and tags the image as `ghcr.io/osintukraine/tg-archiver-<service>:${TG_IMAGE_TAG:-latest}`;
+`docker compose pull` fetches CI-published images instead. CI pushes `latest` (main), the branch name,
+and `sha-<short>` on every push to main/develop. Set `TG_IMAGE_TAG` in `.env` to choose a tag.
+
 **IMPORTANT:** Always use `--force-recreate` when restarting after a build. Without it, Docker may reuse the old container and ignore the new image.
 
 Never run `bun run build` or Python directly for production testing. Always use Docker containers.

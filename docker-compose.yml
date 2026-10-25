@@ -88,6 +88,7 @@ services:
   # ==========================================================================
 
   listener:
+    image: ghcr.io/osintukraine/tg-archiver-listener:${TG_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/listener/Dockerfile
@@ -154,6 +155,7 @@ services:
     restart: unless-stopped
 
   processor:
+    image: ghcr.io/osintukraine/tg-archiver-processor:${TG_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/processor/Dockerfile
@@ -212,6 +214,7 @@ services:
     restart: unless-stopped
 
   api:
+    image: ghcr.io/osintukraine/tg-archiver-api:${TG_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/api/Dockerfile
@@ -287,6 +290,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: ghcr.io/osintukraine/tg-archiver-frontend:${TG_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: services/frontend/Dockerfile

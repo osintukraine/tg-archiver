@@ -172,6 +172,8 @@ class CommentTranslator:
         return self._clock() >= self._deepl_cooldown_until
 
     def _deepl_translate(self, text: str, source_lang: Optional[str]) -> str:
+        if self._deepl is None:  # callers check _deepl_usable() first
+            raise RuntimeError("DeepL client not initialised")
         source = source_lang.upper() if source_lang in DEEPL_EXPLICIT_SOURCES else None
         target = DEEPL_TARGETS.get(self.target_language, self.target_language.upper())
         return self._deepl.translate_text(text, source_lang=source, target_lang=target).text

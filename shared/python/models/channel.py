@@ -6,13 +6,18 @@ Telegram folders and automatically synced to the database.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .channel_category import ChannelCategory
+    from .message import Message
+    from .message_quarantine import MessageQuarantine
 
 
 class Channel(Base):

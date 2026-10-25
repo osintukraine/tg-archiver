@@ -5,7 +5,7 @@ Shared formatting functions used across the API.
 """
 
 
-def format_bytes(size: int) -> str:
+def format_bytes(size: float) -> str:
     """
     Format bytes to human readable string.
 

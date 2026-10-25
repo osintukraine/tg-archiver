@@ -8,6 +8,7 @@ given by TEST_REDIS_URL. They flush the database - never point it at real data.
 import asyncio
 import json
 import os
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -63,6 +64,7 @@ async def deliver(c: RedisConsumer) -> ProcessedMessage:
 
 
 async def pending(c: RedisConsumer, stream: str = RT) -> int:
+    assert c.client is not None
     return (await c.client.xpending(stream, GROUP))["pending"]
 
 
@@ -164,7 +166,7 @@ async def test_old_format_dlq_entries_are_still_readable(consumer):
 # ---- unit tests (mocked client) ------------------------------------------------
 
 
-def unit_consumer() -> RedisConsumer:
+def unit_consumer() -> Any:  # client/dlq are mocks; tests call MagicMock assertions on them
     c = RedisConsumer()
     c.client = MagicMock()
     c.client.xack = AsyncMock(return_value=1)

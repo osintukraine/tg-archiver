@@ -168,7 +168,7 @@ class TelegramListener:
         self._shutdown = True
 
         if self.client:
-            await self.client.disconnect()
+            await self.client.disconnect()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
             telegram_connections.set(0)
 
         logger.info("Telegram Listener stopped")
@@ -202,6 +202,8 @@ class TelegramListener:
 
         Requires user interaction (phone number, code, 2FA password).
         """
+        if self.client is None:
+            raise RuntimeError("Telegram client not started")
         phone = input("Enter phone number (with country code, e.g., +1234567890): ")
         await self.client.send_code_request(phone)
 
@@ -222,10 +224,12 @@ class TelegramListener:
         Uses Telethon's event handler system. Handlers can be re-registered
         when channels change via _resubscribe_to_channels().
         """
+        if self.client is None:
+            raise RuntimeError("Telegram client not started")
         await self._register_event_handlers()
 
         # Keep client running
-        await self.client.run_until_disconnected()
+        await self.client.run_until_disconnected()  # pyright: ignore[reportGeneralTypeIssues] - Telethon returns a coroutine inside a running loop
 
     async def _get_channel_entities(self) -> list:
         """
@@ -234,6 +238,8 @@ class TelegramListener:
         Returns:
             List of TelegramChannel entities
         """
+        if self.client is None:
+            raise RuntimeError("Telegram client not started")
         channel_entities = []
 
         for channel in self.active_channels.values():
@@ -264,6 +270,8 @@ class TelegramListener:
 
         Stores handler references so they can be removed later.
         """
+        if self.client is None:
+            raise RuntimeError("Telegram client not started")
         channel_entities = await self._get_channel_entities()
 
         # Define handler functions
@@ -306,6 +314,8 @@ class TelegramListener:
         Called when channels are added/removed to update the subscription
         without restarting the listener.
         """
+        if self.client is None:
+            raise RuntimeError("Telegram client not started")
         # Remove old handlers if they exist
         if self._album_handler:
             self.client.remove_event_handler(self._album_handler)
@@ -549,6 +559,8 @@ class TelegramListener:
         try:
             # Fetch messages in a window around the known message_id
             # Albums typically have sequential message IDs, so +/-30 is safe margin
+            if self.client is None:
+                raise RuntimeError("Telegram client not started")
             all_messages = await self.client.get_messages(
                 entity=channel_telegram_id,
                 min_id=message_id - 30,
@@ -557,7 +569,7 @@ class TelegramListener:
             )
 
             # Filter to messages with matching grouped_id
-            album_messages = [m for m in all_messages if m.grouped_id == grouped_id]
+            album_messages = [m for m in all_messages if m.grouped_id == grouped_id]  # pyright: ignore[reportOptionalIterable, reportGeneralTypeIssues] - Telethon stubs type get_messages(limit=...) as Message, it returns a TotalList
 
             return album_messages
 

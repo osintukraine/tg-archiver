@@ -207,12 +207,12 @@ class ForwardSocialFetcher:
 
             # Fetch the original message
             messages = await self.client.get_messages(entity, ids=[message_id])
-            if not messages or not messages[0]:
+            if not messages or not messages[0]:  # pyright: ignore[reportIndexIssue] - Telethon stubs type get_messages(ids=[...]) as Message, it returns a TotalList
                 logger.warning(f"Original message {message_id} not found in channel {channel_id}")
                 await self._mark_fetched(forward_id, error="Message not found")
                 return False
 
-            original_msg = messages[0]
+            original_msg = messages[0]  # pyright: ignore[reportIndexIssue] - see get_messages note above
             if not isinstance(original_msg, TelegramMessage):
                 await self._mark_fetched(forward_id, error="Invalid message type")
                 return False

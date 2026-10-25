@@ -3,7 +3,7 @@
 import asyncio
 import json
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import redis.asyncio as redis
 from fastapi import HTTPException
@@ -35,7 +35,8 @@ async def request_promotion(
         await client.xadd("channels:promote", fields)
         for _ in range(PROMOTE_TIMEOUT_SECONDS):
             await asyncio.sleep(1)
-            streams = await client.xread({"channels:promote:result": "0"}, count=100)
+            # redis-py types xread as int | list; with no BLOCK it always returns a list
+            streams = cast(List[Any], await client.xread({"channels:promote:result": "0"}, count=100))
             for _stream, entries in streams:
                 for _id, data in entries:
                     if data.get("request_id") == request_id:

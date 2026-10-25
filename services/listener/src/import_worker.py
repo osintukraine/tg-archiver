@@ -153,7 +153,7 @@ class ImportWorker:
                     continue
 
                 for stream_name, messages in result:
-                    for msg_id, msg_data in messages:
+                    for msg_id, msg_data in messages:  # pyright: ignore[reportGeneralTypeIssues] - redis asyncio stubs type this as Awaitable[T] | T
                         job_id = msg_data.get("job_id")
                         if not job_id:
                             logger.warning(f"Invalid message in {stream_name}: {msg_data}")

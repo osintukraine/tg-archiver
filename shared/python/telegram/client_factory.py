@@ -108,7 +108,7 @@ async def create_telegram_client(
 
     logger.info("Starting Telegram client connection...")
 
-    await client.start(phone=phone)
+    await client.start(phone=phone)  # pyright: ignore[reportGeneralTypeIssues]  # Telethon stub types start() as sync; it returns a coroutine
 
     # Log connection status
     me = await client.get_me()

@@ -13,6 +13,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 if TYPE_CHECKING:
+    from .original_message import OriginalMessage
+    from .forward_reaction import ForwardReaction
+    from .forward_comment import ForwardComment
     from .message import Message
     from .discovered_channel import DiscoveredChannel
 

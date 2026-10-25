@@ -5,12 +5,15 @@ Simple categorization system for channels (e.g., "News", "Technology", "Communit
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .channel import Channel
 
 
 class ChannelCategory(Base):

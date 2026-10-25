@@ -27,7 +27,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import redis.asyncio as redis
 from redis.asyncio.client import Redis
@@ -127,6 +127,8 @@ class RedisQueue:
         """
         # Priority streams for new deployments
         streams_to_init = [self.STREAM_REALTIME, self.STREAM_BACKFILL]
+        if self.client is None:  # only called from connect()
+            raise RuntimeError("Redis client not connected")
 
         for stream_name in streams_to_init:
             try:
@@ -228,7 +230,7 @@ class RedisQueue:
                 f"has_media={bool(media_type)}, trace_id={trace_id}"
             )
 
-            return stream_id
+            return cast(str, stream_id)  # decode_responses=True
 
         except RedisError as e:
             logger.error(

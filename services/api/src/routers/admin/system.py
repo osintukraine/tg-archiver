@@ -282,7 +282,7 @@ async def get_audit_stats(admin: AdminUser, db: AsyncSession = Depends(get_db)):
                 (SELECT COUNT(*) FROM messages WHERE is_hidden = true) as hidden_messages
         """))
 
-        row = result.fetchone()
+        row = result.one()
 
         return {
             "channels": {

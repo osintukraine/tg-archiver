@@ -23,6 +23,7 @@ import asyncio
 import logging
 import time
 from collections import Counter
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -75,9 +76,9 @@ class ChannelDiscovery:
         self.backfill_service = backfill_service
         self._discovery_count = 0
         # Callback to notify when channels change (set by main.py after TelegramListener init)
-        self._on_channels_changed: Optional[callable] = None
+        self._on_channels_changed: Optional[Callable[[], Awaitable[object]]] = None
 
-    def set_channels_changed_callback(self, callback: callable) -> None:
+    def set_channels_changed_callback(self, callback: Callable[[], Awaitable[object]]) -> None:
         """
         Set callback to be called when channels are added or removed.
 
@@ -628,6 +629,8 @@ class ChannelDiscovery:
         Args:
             channel: Channel to backfill
         """
+        if self.backfill_service is None:  # callers check this before scheduling the task
+            raise RuntimeError("BackfillService not available")
         try:
             # Create new database session for the background task
             async with AsyncSessionLocal() as session:
@@ -748,6 +751,8 @@ class ChannelDiscovery:
         for channel in channels_with_gaps:
             # Ensure last_message_at is timezone-aware
             last_msg = channel.last_message_at
+            if last_msg is None:  # excluded by the query above
+                continue
             if last_msg.tzinfo is None:
                 last_msg = last_msg.replace(tzinfo=timezone.utc)
 
@@ -811,6 +816,8 @@ class ChannelDiscovery:
             try:
                 # Calculate backfill start time (from last message + small buffer)
                 last_msg = channel.last_message_at
+                if last_msg is None:  # detect_message_gaps only returns channels with a last message
+                    continue
                 if last_msg.tzinfo is None:
                     last_msg = last_msg.replace(tzinfo=timezone.utc)
 
@@ -856,6 +863,8 @@ class ChannelDiscovery:
             channel: Channel to backfill
             from_date: Start time for backfill (usually last_message_at - 5min)
         """
+        if self.backfill_service is None:  # callers check this before scheduling the task
+            raise RuntimeError("BackfillService not available")
         try:
             async with AsyncSessionLocal() as session:
                 # Re-fetch channel to avoid detached instance

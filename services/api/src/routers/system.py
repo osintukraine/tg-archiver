@@ -358,7 +358,7 @@ async def check_processing_status(db: AsyncSession) -> Dict[str, Any]:
                 MAX(created_at) as latest
             FROM messages
         """))
-        row = result.fetchone()
+        row = result.one()
 
         last_hour = row[0] or 0
         last_10min = row[1] or 0
@@ -395,7 +395,7 @@ async def check_translation_status(db: AsyncSession) -> Dict[str, Any]:
             FROM messages
             WHERE created_at > NOW() - INTERVAL '24 hours'
         """))
-        row = result.fetchone()
+        row = result.one()
 
         pending = row[0] or 0
         completed = row[1] or 0
@@ -428,7 +428,7 @@ async def check_media_status(db: AsyncSession) -> Dict[str, Any]:
             FROM messages
             WHERE created_at > NOW() - INTERVAL '24 hours'
         """))
-        row = result.fetchone()
+        row = result.one()
 
         not_archived = row[0] or 0
         archived = row[1] or 0
@@ -470,7 +470,7 @@ async def check_processing_status_standalone() -> Dict[str, Any]:
                     MAX(created_at) as latest
                 FROM messages
             """))
-            row = result.fetchone()
+            row = result.one()
 
             last_hour = row[0] or 0
             last_10min = row[1] or 0
@@ -506,7 +506,7 @@ async def check_translation_status_standalone() -> Dict[str, Any]:
                 FROM messages
                 WHERE created_at > NOW() - INTERVAL '24 hours'
             """))
-            row = result.fetchone()
+            row = result.one()
 
             pending = row[0] or 0
             completed = row[1] or 0
@@ -541,7 +541,7 @@ async def check_media_status_standalone() -> Dict[str, Any]:
                 LEFT JOIN message_media mm ON m.id = mm.message_id
                 WHERE m.created_at > NOW() - INTERVAL '24 hours'
             """))
-            row = result.fetchone()
+            row = result.one()
 
             not_archived = row[0] or 0
             archived = row[1] or 0

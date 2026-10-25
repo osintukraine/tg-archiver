@@ -76,7 +76,7 @@ async def get_overview_stats(
             (SELECT COUNT(*) FROM messages WHERE telegram_date >= :week) as week,
             (SELECT COUNT(*) FROM messages WHERE telegram_date >= :hour_ago) as last_hour
     """), {"today": today_start, "week": week_start, "hour_ago": hour_ago})
-    row = db_result.fetchone()
+    row = db_result.one()
 
     total_messages = row[0] or 0
     messages_per_hour = float(row[5] or 0)
@@ -139,7 +139,7 @@ async def get_processing_metrics(
         FROM messages
         WHERE telegram_date >= :since
     """), {"since": since})
-    summary_row = summary_result.fetchone()
+    summary_row = summary_result.one()
 
     return {
         "period_hours": hours,
@@ -203,7 +203,7 @@ async def get_storage_metrics(admin: AdminUser, db: AsyncSession = Depends(get_d
     total_result = await db.execute(text("""
         SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM media_files
     """))
-    total_row = total_result.fetchone()
+    total_row = total_result.one()
 
     return {
         "database": {

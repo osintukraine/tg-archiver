@@ -14,7 +14,6 @@ NO LLM classification - all messages from monitored channels are archived.
 import asyncio
 import signal
 import sys
-from typing import NoReturn
 
 from minio import Minio
 from telethon import TelegramClient
@@ -42,6 +41,8 @@ from audit.audit_logger import AuditLogger
 from translation import build_translator
 
 from .translation_worker import TranslationWorker
+
+audit = AuditLogger("processor")
 
 audit = AuditLogger("processor")
 
@@ -132,7 +133,7 @@ async def update_queue_depth(redis_consumer: RedisConsumer) -> None:
     logger.info("Queue depth metrics updater stopped")
 
 
-async def main() -> NoReturn:
+async def main() -> None:
     """Main entry point for the processor service."""
     logger.info("Starting Message Processor Service v1.0.0 (No AI - Archives Everything)")
 
@@ -365,7 +366,7 @@ async def main() -> NoReturn:
 
         if telegram_client and telegram_client.is_connected():
             logger.info("Disconnecting Telegram client...")
-            await telegram_client.disconnect()
+            await telegram_client.disconnect()  # pyright: ignore[reportGeneralTypeIssues]  # Telethon: returns a coroutine inside a running loop
 
         # Print statistics and log to audit
         if processor:

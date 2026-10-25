@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 from redis.asyncio import Redis
 
@@ -87,12 +87,13 @@ class DeadLetterQueue:
         Returns:
             List of DLQ entries
         """
-        messages = await self.redis.xrange(
+        # Stub allows None; XRANGE always returns a list (decode_responses=True)
+        messages = cast(List[Any], await self.redis.xrange(
             self.DLQ_STREAM_KEY,
             min=start,
             max=end,
             count=count,
-        )
+        ))
 
         result = []
         for msg_id, data in messages:

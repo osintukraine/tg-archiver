@@ -248,6 +248,7 @@ async def test_deepl_quota_exceeded_pauses_deepl(sessions, redis_client):
 
     assert len(fake.calls) == 1  # paused after the first rejection
     assert len(google.calls) == 3
+    assert t._deepl_paused_until is not None
     assert t._deepl_paused_until > datetime.now(timezone.utc)
     assert await t.deepl_chars_today() == 0  # rejected characters are refunded
 

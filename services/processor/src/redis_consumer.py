@@ -22,7 +22,7 @@ import asyncio
 import logging
 import os
 import socket
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, cast
 
 import redis.asyncio as redis
 from redis.asyncio.client import Redis
@@ -248,6 +248,8 @@ class RedisConsumer:
 
     async def _ensure_consumer_group(self):
         """Create consumer groups for all priority streams."""
+        if self.client is None:
+            raise RedisError("Redis client not connected")
         for stream_name in self.PRIORITY_STREAMS:
             try:
                 # Try to create consumer group
@@ -282,6 +284,8 @@ class RedisConsumer:
         Args:
             max_idle_ms: Maximum idle time in milliseconds before removal
         """
+        if self.client is None:
+            raise RedisError("Redis client not connected")
         total_removed = 0
 
         for stream_name in self.PRIORITY_STREAMS:
@@ -392,14 +396,17 @@ class RedisConsumer:
         Returns:
             List of (stream_name, stream_id, data) tuples
         """
+        if self.client is None:
+            raise RedisError("Redis client not connected")
         try:
-            messages = await self.client.xreadgroup(
+            # Stub return type also allows int; XREADGROUP (RESP2) returns [[stream, entries]]
+            messages = cast(list, await self.client.xreadgroup(
                 groupname=self.CONSUMER_GROUP,
                 consumername=self.consumer_name,
                 streams={stream_name: ">"},
                 count=count,
                 block=block_ms if block_ms > 0 else None,
-            )
+            ))
 
             if not messages:
                 return []
@@ -429,6 +436,8 @@ class RedisConsumer:
         Returns:
             List of (stream_name, stream_id, data) tuples to process
         """
+        if self.client is None:
+            raise RedisError("Redis client not connected")
         all_claimed = []
 
         for stream_name in self.PRIORITY_STREAMS:
@@ -478,6 +487,8 @@ class RedisConsumer:
 
     async def _get_delivery_counts(self, stream_name: str, stream_ids: list[str]) -> dict[str, int]:
         """Delivery counts (XPENDING) for the given ids of one stream."""
+        if self.client is None:
+            raise RedisError("Redis client not connected")
         details = await self.client.xpending_range(
             name=stream_name,
             groupname=self.CONSUMER_GROUP,
@@ -486,7 +497,8 @@ class RedisConsumer:
             count=len(stream_ids) + 1000,  # the id range may also contain other pending ids
         )
         wanted = set(stream_ids)
-        return {d["message_id"]: d["times_delivered"] for d in details if d["message_id"] in wanted}
+        # Stub types every value as bytes | str | int; times_delivered is always an int
+        return {d["message_id"]: cast(int, d["times_delivered"]) for d in details if d["message_id"] in wanted}
 
     async def _dead_letter(
         self, stream_name: str, stream_id: str, fields: dict, error: str, retry_count: int
@@ -496,6 +508,8 @@ class RedisConsumer:
 
         If the DLQ write fails the message stays pending (nothing is lost).
         """
+        if self.dlq is None:
+            raise RedisError("Redis client not connected")  # dlq is created in connect()
         if not await self.dlq.send_to_dlq(
             stream_id=stream_id,
             fields=fields,
@@ -510,6 +524,8 @@ class RedisConsumer:
 
     async def _xack(self, stream_id: str, stream_name: Optional[str] = None) -> int:
         """XACK on the known stream, or (tolerant fallback) on every stream."""
+        if self.client is None:
+            raise RedisError("Redis client not connected")
         for name in [stream_name] if stream_name else self.PRIORITY_STREAMS:
             if await self.client.xack(name, self.CONSUMER_GROUP, stream_id) > 0:
                 return 1

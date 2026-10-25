@@ -248,30 +248,12 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      const errorMessage = error.detail || `API error: ${response.status}`;
-
-      // Don't log expected errors (missing embeddings, etc.) to console
-      const isExpectedError =
-        errorMessage.includes('no embedding') ||
-        errorMessage.includes('Cannot find similar') ||
-        errorMessage.includes('Wait for enricher');
-
-      if (!isExpectedError) {
-        console.error('API request failed:', { url, error: errorMessage });
-      }
-
-      throw new Error(errorMessage);
+      throw new Error(error.detail || `API error: ${response.status}`);
     }
 
     return response.json();
   } catch (error) {
-    // Only log if not already logged above
-    if (error instanceof Error &&
-        !error.message.includes('no embedding') &&
-        !error.message.includes('Cannot find similar') &&
-        !error.message.includes('Wait for enricher')) {
-      console.error('API request failed:', { url, error });
-    }
+    console.error('API request failed:', { url, error });
     throw error;
   }
 }

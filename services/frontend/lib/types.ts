@@ -102,9 +102,6 @@ export interface Message {
   archive_triggered_at: string | null;
   archive_priority: number | null;
 
-  // AI-generated tags (from semantic API)
-  tags?: MessageTag[];
-
   // Metadata
   is_backfilled: boolean;
   grouped_id: number | null;
@@ -120,35 +117,6 @@ export interface Message {
 
   // Relations (optional)
   channel?: Channel;
-
-  // Geolocation (from message_locations table)
-  location?: MessageLocation | null;
-}
-
-/**
- * Geocoded location for a message
- */
-export interface MessageLocation {
-  id: number;
-  message_id: number;
-  location_name: string | null;
-  latitude: number;
-  longitude: number;
-  extraction_method: 'gazetteer' | 'llm_relative' | 'nominatim' | 'manual' | null;
-  confidence: number | null;  // 0.0-1.0
-  gazetteer_id: number | null;
-  raw_location_text: string | null;
-  created_at: string;
-}
-
-export interface MessageTag {
-  id: number;
-  message_id: number;
-  tag: string;
-  tag_type: 'keywords' | 'topics' | 'entities' | 'emotions' | 'urgency';
-  confidence: number;
-  generated_by: string;
-  created_at: string;
 }
 
 export interface SearchResult {

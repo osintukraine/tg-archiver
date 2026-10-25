@@ -341,22 +341,6 @@ CREATE INDEX IF NOT EXISTS idx_message_media_message ON message_media(message_id
 CREATE INDEX IF NOT EXISTS idx_message_media_media ON message_media(media_file_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_message_media_unique ON message_media(message_id, media_file_id);
 
--- ===========================================================================
--- MESSAGE TAGS
--- ===========================================================================
-CREATE TABLE IF NOT EXISTS message_tags (
-    id SERIAL PRIMARY KEY,
-    message_id BIGINT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-    tag VARCHAR(100) NOT NULL,
-    tag_type VARCHAR(50) DEFAULT 'keyword',
-    confidence REAL DEFAULT 1.0,
-    source VARCHAR(50) DEFAULT 'llm',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_message_tags_message ON message_tags(message_id);
-CREATE INDEX IF NOT EXISTS idx_message_tags_tag ON message_tags(tag);
-CREATE INDEX IF NOT EXISTS idx_message_tags_type ON message_tags(tag_type);
 
 -- ===========================================================================
 -- MESSAGE COMMENTS
@@ -710,22 +694,6 @@ VALUES
     ('api', 'api.rate_limit_requests', '100', 'Rate limit requests per minute', 'integer', false, false)
 ON CONFLICT (key) DO NOTHING;
 
--- ===========================================================================
--- TAG STATS (aggregate tag statistics)
--- ===========================================================================
-CREATE TABLE IF NOT EXISTS tag_stats (
-    id SERIAL PRIMARY KEY,
-    tag VARCHAR(100) NOT NULL,
-    tag_type VARCHAR(50) DEFAULT 'keyword',
-    message_count INTEGER DEFAULT 0,
-    last_used_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-
-    CONSTRAINT uq_tag_stats UNIQUE (tag, tag_type)
-);
-
-CREATE INDEX IF NOT EXISTS idx_tag_stats_tag ON tag_stats(tag);
-CREATE INDEX IF NOT EXISTS idx_tag_stats_count ON tag_stats(message_count DESC);
 
 -- ===========================================================================
 -- ADMIN ACTIONS (audit log for moderation actions)
@@ -785,7 +753,6 @@ ON CONFLICT (name) DO NOTHING;
 --   messages          - Message storage with full-text search
 --   media_files       - SHA-256 content-addressed media storage
 --   message_media     - Junction table for message-to-media links
---   message_tags      - Generated tags
 --   message_comments  - Discussion group comments
 --
 -- Classification:
@@ -810,5 +777,5 @@ ON CONFLICT (name) DO NOTHING;
 --   import_job_logs    - Import event timeline
 --
 -- Utilities:
---   export_jobs, tag_stats, platform_config
+--   export_jobs, platform_config
 --   admin_actions, schema_migrations

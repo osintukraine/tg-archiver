@@ -26,11 +26,11 @@ REQUIRED_RELATIONS = ["top_forwarded_messages"]
 # run raw SQL against these tables, which a separate check validates). Their
 # models are stale relative to init.sql; not worth migrating the DB to match.
 UNUSED_MODEL_TABLES = {
-    "channel_submissions", "storage_boxes", "tag_stats",
+    "channel_submissions", "storage_boxes",
     "message_quarantine", "message_comments",
 }
 # Harmless width/precision differences, "table.column".
-IGNORED = {"message_tags.confidence"}  # REAL in DB, NUMERIC(3,2) in model
+IGNORED: set[str] = set()  # no width/precision differences to ignore
 
 ALIASES = {
     "character varying": "varchar", "timestamp with time zone": "timestamptz",

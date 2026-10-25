@@ -26,23 +26,6 @@ class MediaItemSimple(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class MessageLocation(BaseModel):
-    """Geocoded location for a message."""
-
-    id: int
-    message_id: int
-    location_name: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    extraction_method: Optional[str] = None  # gazetteer, llm_relative, nominatim, manual
-    confidence: Optional[float] = None
-    sequence_order: int = 0  # Order in message text (0=first, 1=second, etc.)
-    location_type: str = "point"  # point, origin, destination, waypoint
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class ChannelSummary(BaseModel):
     """Lightweight channel info for embedding in message responses."""
 
@@ -106,16 +89,6 @@ class MessageBase(BaseModel):
     # Media availability tracking
     media_was_available: Optional[bool] = Field(None, description="Whether media was available on Telegram")
     media_expired_at: Optional[datetime] = Field(None, description="When media URL expired")
-
-    # Geocoded locations (supports multiple locations per message)
-    location: Optional[MessageLocation] = Field(
-        None,
-        description="Primary geocoded location (first in sequence, for backward compatibility)"
-    )
-    locations: list[MessageLocation] = Field(
-        default_factory=list,
-        description="All geocoded locations with sequence order and trajectory type (origin/destination/waypoint)"
-    )
 
     # Media
     media_type: Optional[str] = None

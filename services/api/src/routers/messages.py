@@ -381,8 +381,7 @@ async def get_message(message_id: int, db: AsyncSession = Depends(get_db)):
         .where(or_(Message.is_hidden.is_(False), Message.is_hidden.is_(None)))  # Skip hidden messages
         .options(
             selectinload(Message.media).selectinload(MessageMedia.media_file),
-            selectinload(Message.channel),
-            selectinload(Message.tags)
+            selectinload(Message.channel)
         )
     )
     message = result.scalar_one_or_none()
@@ -390,29 +389,11 @@ async def get_message(message_id: int, db: AsyncSession = Depends(get_db)):
     if not message:
         raise HTTPException(status_code=404, detail=f"Message {message_id} not found")
 
-    # Convert to dict and add media URLs, tags, and channel manually
+    # Convert to dict and add media URLs and channel manually
     msg_dict = {c.name: getattr(message, c.name) for c in message.__table__.columns}
     msg_dict['media_urls'] = [mm.media_file.s3_key for mm in message.media] if message.media else []
     msg_dict['media_items'] = _build_media_items(message.media)
     msg_dict['first_media_url'] = msg_dict['media_urls'][0] if msg_dict['media_urls'] else None
-
-    # Add AI-generated tags
-    msg_dict['tags'] = [
-        {
-            'id': tag.id,
-            'message_id': tag.message_id,
-            'tag': tag.tag,
-            'tag_type': tag.tag_type,
-            'confidence': float(tag.confidence) if tag.confidence else 0.0,
-            'generated_by': tag.generated_by,
-            'created_at': tag.created_at,
-        }
-        for tag in message.tags
-    ] if message.tags else []
-
-    # Geolocation not implemented in tg-archiver
-    msg_dict['locations'] = []
-    msg_dict['location'] = None
 
     # Add channel info for Telegram URL generation and country indicators
     if message.channel:
@@ -543,11 +524,10 @@ async def search_messages(
     Raises:
         No exceptions raised (empty results return SearchResult with items=[])
     """
-    # Build query with eager loading of media, channel, and tags relationships
+    # Build query with eager loading of media and channel relationships
     query = select(Message).options(
         selectinload(Message.media).selectinload(MessageMedia.media_file),
-        selectinload(Message.channel),
-        selectinload(Message.tags)
+        selectinload(Message.channel)
     )
 
     # Apply filters
@@ -676,30 +656,13 @@ async def search_messages(
 
     # Entity matching removed in tg-archiver (no AI)
 
-    # Convert messages to dict and add media URLs, tags, channel
+    # Convert messages to dict and add media URLs and channel
     items = []
     for msg in messages:
         msg_dict = {c.name: getattr(msg, c.name) for c in msg.__table__.columns}
         msg_dict['media_urls'] = [mm.media_file.s3_key for mm in msg.media] if msg.media else []
         msg_dict['media_items'] = _build_media_items(msg.media)
         msg_dict['first_media_url'] = msg_dict['media_urls'][0] if msg_dict['media_urls'] else None
-
-        # Add AI-generated tags
-        msg_dict['tags'] = [
-            {
-                'id': tag.id,
-                'message_id': tag.message_id,
-                'tag': tag.tag,
-                'tag_type': tag.tag_type,
-                'confidence': float(tag.confidence) if tag.confidence else 0.0,
-                'generated_by': tag.generated_by,
-                'created_at': tag.created_at,
-            }
-            for tag in msg.tags
-        ] if msg.tags else []
-
-        # Geolocation not implemented in tg-archiver
-        msg_dict['location'] = None
 
         # Add channel info for country indicators and metadata
         if msg.channel:

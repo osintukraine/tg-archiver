@@ -20,7 +20,6 @@ from .message_reaction import MessageReaction
 from .message_topic import MessageTopic
 from .message_quarantine import MessageQuarantine
 from .rss_feed import RSSFeed
-from .tag import MessageTag, TagStats
 from .user import User
 # Forward chain tracking (discovered channels + social data from originals)
 from .discovered_channel import DiscoveredChannel
@@ -52,8 +51,6 @@ __all__ = [
     "StorageBox",
     "MediaFile",
     "MessageMedia",
-    "MessageTag",
-    "TagStats",
     # RSS Layer
     "RSSFeed",
     "ExternalNews",

@@ -31,7 +31,6 @@ from .base import Base
 if TYPE_CHECKING:
     from .channel import Channel
     from .media import MessageMedia
-    from .tag import MessageTag
     from .message_comment import MessageComment
     from .message_reaction import MessageReaction
     from .message_forward import MessageForward
@@ -193,9 +192,6 @@ class Message(Base):
     channel: Mapped["Channel"] = relationship("Channel", back_populates="messages", lazy="selectin")
     media: Mapped[list["MessageMedia"]] = relationship(
         "MessageMedia", back_populates="message", cascade="all, delete-orphan"
-    )
-    tags: Mapped[list["MessageTag"]] = relationship(
-        "MessageTag", back_populates="message", cascade="all, delete-orphan"
     )
     # Comments from discussion groups
     comments: Mapped[list["MessageComment"]] = relationship(

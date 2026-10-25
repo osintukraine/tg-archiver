@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Callable, Optional, TypeVar
+from typing import Awaitable, Callable, Optional, TypeVar
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ T = TypeVar('T')
 
 
 async def execute_with_timeout(
-    query_fn: Callable[[AsyncSession], T],
+    query_fn: Callable[[AsyncSession], Awaitable[T]],
     timeout: float = 5.0,
     session: Optional[AsyncSession] = None,
 ) -> T:
@@ -50,8 +50,8 @@ async def execute_with_timeout(
             return await query_fn(session)
         else:
             # Lazy import - only needed when no session provided
-            from models.base import async_session_factory
-            async with async_session_factory() as new_session:
+            from models.base import AsyncSessionLocal
+            async with AsyncSessionLocal() as new_session:
                 return await query_fn(new_session)
 
     try:
@@ -82,9 +82,9 @@ async def get_db_with_timeout(timeout_ms: int = 5000):
             # Queries will timeout after 5 seconds
             ...
     """
-    from models.base import async_session_factory
+    from models.base import AsyncSessionLocal
 
-    async with async_session_factory() as session:
+    async with AsyncSessionLocal() as session:
         # Set PostgreSQL statement timeout for this session
         await session.execute(text(f"SET statement_timeout = {timeout_ms}"))
         yield session

@@ -9,7 +9,7 @@ pydantic>=2.14.1
 pydantic-settings>=2.16.0
 
 # Database
-sqlalchemy[asyncio]>=2.1.5
+sqlalchemy[asyncio]>=2.1.6
 asyncpg>=0.32.0
 alembic>=1.20.0
 # Note: pgvector removed - not needed without AI/semantic search

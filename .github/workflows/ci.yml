@@ -167,7 +167,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Image metadata (tags + labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/osintukraine/tg-archiver-${{ matrix.service }}
           tags: |

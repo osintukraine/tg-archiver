@@ -1,7 +1,7 @@
 # Telegram Listener Service Dockerfile
 # Handles real-time Telegram message ingestion
 
-FROM python:3.14-slim AS base
+FROM python:3.15-slim AS base
 
 # Prevent Python from buffering stdout and stderr
 ENV PYTHONUNBUFFERED=1 \
